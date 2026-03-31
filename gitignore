@@ -1,0 +1,5 @@
+.forty-man-cache.json
+node_modules/
+.env
+*.log
+.DS_Store

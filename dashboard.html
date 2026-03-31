@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dynasty Pitcher Scout</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff; --bg2: #f5f5f3; --bg3: #eeede8;
+    --text: #1a1a1a; --text2: #666660; --text3: #999990;
+    --border: rgba(0,0,0,0.12); --border2: rgba(0,0,0,0.22);
+    --blue: #185FA5; --blue-bg: #E6F1FB; --blue-text: #0C447C;
+    --green-bg: #EAF3DE; --green-text: #3B6D11;
+    --amber-bg: #FAEEDA; --amber-text: #854F0B;
+    --red-bg: #FCEBEB; --red-text: #A32D2D;
+    --teal-bg: #E1F5EE; --teal-text: #0F6E56;
+    --gray-bg: #F1EFE8; --gray-text: #5F5E5A;
+    --radius: 8px; --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a; --bg2: #252523; --bg3: #2e2e2b;
+      --text: #f0ede8; --text2: #9a9990; --text3: #666660;
+      --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.2);
+      --blue-bg: #0c2a4a; --blue-text: #85B7EB;
+      --green-bg: #1a2e0a; --green-text: #97C459;
+      --amber-bg: #2e1f06; --amber-text: #FAC775;
+      --red-bg: #2e0a0a; --red-text: #F09595;
+      --teal-bg: #042e1e; --teal-text: #5DCAA5;
+      --gray-bg: #2a2a28; --gray-text: #B4B2A9;
+    }
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg3); color: var(--text); font-size: 14px; line-height: 1.5; }
+  .shell { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+  .header { margin-bottom: 20px; }
+  .header h1 { font-size: 20px; font-weight: 500; }
+  .header p { font-size: 13px; color: var(--text2); margin-top: 3px; }
+  .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 20px; flex-wrap: wrap; }
+  .tab { padding: 8px 16px; font-size: 13px; cursor: pointer; color: var(--text2); border: none; border-bottom: 2px solid transparent; background: none; font-family: inherit; margin-bottom: -1px; }
+  .tab.active { color: var(--text); font-weight: 500; border-bottom-color: var(--text); }
+  .tab:hover { color: var(--text); }
+  .pane { display: none; } .pane.active { display: block; }
+  .card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 16px; }
+  .slabel { font-size: 11px; font-weight: 600; color: var(--text2); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 10px; }
+  .form-row { margin-bottom: 12px; }
+  .flabel { font-size: 12px; color: var(--text2); margin-bottom: 5px; display: block; }
+  input[type=text], input[type=password], select, textarea {
+    width: 100%; padding: 8px 10px; font-size: 13px; font-family: inherit;
+    border: 1px solid var(--border2); border-radius: var(--radius);
+    background: var(--bg); color: var(--text); outline: none;
+  }
+  input:focus, select:focus, textarea:focus { border-color: var(--blue); }
+  textarea { min-height: 80px; resize: vertical; }
+  select { cursor: pointer; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  button { padding: 8px 16px; border-radius: var(--radius); border: 1px solid var(--border2); font-size: 13px; font-family: inherit; cursor: pointer; background: var(--bg); color: var(--text); }
+  button:hover { background: var(--bg2); }
+  button.pri { background: var(--blue); color: #fff; border-color: var(--blue); }
+  button.pri:hover { background: var(--blue-text); }
+  .st { font-size: 12px; margin-top: 10px; padding: 8px 12px; border-radius: var(--radius); display: none; }
+  .ok { background: var(--green-bg); color: var(--green-text); }
+  .er { background: var(--red-bg); color: var(--red-text); }
+  .inf { background: var(--blue-bg); color: var(--blue-text); }
+  .filter-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .filter-row label { font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .filter-row select { width: auto; }
+  .table-wrap { overflow-x: auto; border-radius: var(--radius-lg); border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--bg); }
+  th { text-align: left; font-size: 11px; font-weight: 600; color: var(--text2); padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--bg2); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--bg2); }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 500; }
+  .bg { background: var(--green-bg); color: var(--green-text); }
+  .bb { background: var(--blue-bg); color: var(--blue-text); }
+  .ba { background: var(--amber-bg); color: var(--amber-text); }
+  .br { background: var(--red-bg); color: var(--red-text); }
+  .bt { background: var(--teal-bg); color: var(--teal-text); }
+  .bgy { background: var(--gray-bg); color: var(--gray-text); }
+  .mine-tag { font-size: 10px; padding: 1px 5px; border-radius: 3px; background: var(--blue-bg); color: var(--blue-text); margin-left: 5px; font-weight: 600; }
+  .tpill { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--bg2); color: var(--text2); font-weight: 500; }
+  .bar-wrap { display: flex; align-items: center; gap: 6px; }
+  .bar-bg { width: 52px; height: 5px; background: var(--bg3); border-radius: 3px; flex-shrink: 0; }
+  .bar-fill { height: 5px; border-radius: 3px; }
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .metric { background: var(--bg2); border-radius: var(--radius); padding: 12px 14px; }
+  .metric-label { font-size: 11px; color: var(--text2); margin-bottom: 3px; }
+  .metric-val { font-size: 22px; font-weight: 500; }
+  .ai-box { background: var(--bg2); border-radius: var(--radius-lg); border: 1px solid var(--border); padding: 16px; font-size: 13px; line-height: 1.75; white-space: pre-wrap; min-height: 100px; }
+  .ai-muted { color: var(--text2); font-style: italic; }
+  .key-note { font-size: 12px; color: var(--text2); background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 14px; }
+  .key-note a { color: var(--blue); }
+  .ai-btn { padding:5px 10px; border-radius:var(--radius); border:1px solid var(--border2); background:var(--bg2); color:var(--text); font-size:12px; font-family:inherit; cursor:pointer; white-space:nowrap; }
+  .ai-btn:hover { border-color:var(--blue); color:var(--blue); }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="header">
+    <h1>Dynasty pitcher scout</h1>
+    <p id="leagueHeader">Connect your Fantrax league to get started</p>
+  </div>
+
+  <div id="credBar" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+    <div>
+      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">Fantrax Secret ID</label>
+      <input type="password" id="secretIdBar" placeholder="e.g. 24pscnquxwekzngy" style="width:220px;padding:6px 9px;font-size:13px;font-family:inherit;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text)" />
+    </div>
+    <div>
+      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">Anthropic API key</label>
+      <input type="password" id="apiKeyBar" placeholder="sk-ant-..." style="width:220px;padding:6px 9px;font-size:13px;font-family:inherit;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text)" />
+    </div>
+    <button onclick="saveCredentials()" style="padding:6px 16px;border-radius:var(--radius);border:1px solid var(--blue);background:var(--blue);color:#fff;font-size:13px;font-family:inherit;cursor:pointer">Save &amp; load</button>
+    <button onclick="document.getElementById('credBar').style.display='none'" style="padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg);color:var(--text2);font-size:13px;font-family:inherit;cursor:pointer">Hide</button>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:var(--text2)">
+    <span>Season:</span>
+    <button id="yr2026" onclick="setYear('2026')" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--blue);background:var(--blue);color:#fff;font-size:12px;font-family:inherit;cursor:pointer">2026</button>
+    <button id="yr2025" onclick="setYear('2025')" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg);color:var(--text2);font-size:12px;font-family:inherit;cursor:pointer">2025</button>
+    <span id="yearLabel" style="color:var(--text2)">Showing 2026 season data</span>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="sw('freeagents')">Pitcher free agents</button>
+    <button class="tab" onclick="sw('rosters')">Pitching rosters</button>
+    <button class="tab" onclick="sw('savant')">Savant stats</button>
+    <button class="tab" onclick="sw('ai')">AI scout</button>
+    <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+      <button onclick="refreshLeague()" id="refreshBtn" style="font-size:12px;padding:5px 12px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg);color:var(--text2);cursor:pointer">Refresh data</button>
+      <button onclick="toggleCredBar()" title="Settings" style="font-size:13px;padding:5px 9px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg);color:var(--text2);cursor:pointer">&#9881;</button>
+    </div>
+  </div>
+
+  
+  <div id="pane-freeagents" class="pane">
+    <div class="filter-row">
+      <label>Pos:</label>
+      <select id="faPos" onchange="renderFA()"><option value="all" selected>All</option><option value="SP">SP</option><option value="RP">RP</option></select>
+      <label>Min BF:</label>
+      <select id="faMinBF" onchange="renderFA()">
+        <option value="0" selected>Any</option>
+        <option value="10">10 BF</option>
+        <option value="25">25 BF</option>
+        <option value="50">50 BF</option>
+        <option value="100">100 BF</option>
+        <option value="200">200 BF</option>
+      </select>
+
+      <input id="faSearch" type="text" placeholder="Search pitcher..." oninput="renderFA()" style="padding:4px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);width:140px"/>
+      <button onclick="sendToAI('fa')" style="margin-left:auto">Analyze with AI →</button>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr id="faHead">
+        <th>#</th>
+        <th onclick="faSort('name')" style="cursor:pointer">Pitcher <span id="fsn"></span></th>
+        <th>MLB</th>
+        <th>Pos</th>
+        <th onclick="faSort('xera')"  style="cursor:pointer">xERA <span id="fse"></span></th>
+        <th onclick="faSort('kbb')"   style="cursor:pointer">K-BB% <span id="fsk"></span></th>
+        <th onclick="faSort('kbb7')"  style="cursor:pointer">L7 K-BB% <span id="fsk7"></span></th>
+        <th onclick="faSort('xba')"   style="cursor:pointer">xBA <span id="fsb"></span></th>
+        <th onclick="faSort('whiff')" style="cursor:pointer">Whiff% <span id="fsw"></span></th>
+        <th>Pitch mix</th>
+      </tr></thead>
+      <tbody id="faBody"></tbody>
+    </table></div>
+    <p id="faEmpty" style="font-size:13px;color:var(--text2);margin-top:14px;display:none">No FA pitchers found — load your league first.</p>
+  </div>
+
+  <div id="pane-rosters" class="pane">
+    <div class="filter-row">
+      <label>Sort by:</label>
+      <select id="rosterSort" onchange="renderRosters()">
+        <option value="xera" selected>xERA</option>
+        <option value="kbb">K-BB%</option>
+        <option value="whiff">Whiff%</option>
+        <option value="xba">xBA</option>
+      </select>
+      <button onclick="sendToAI('rosters')" style="margin-left:auto">Analyze with AI →</button>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th>Team</th>
+        <th>xERA <span style="font-weight:400;font-size:10px;color:var(--text2)">(wtd)</span></th>
+        <th>K-BB% <span style="font-weight:400;font-size:10px;color:var(--text2)">(wtd)</span></th>
+        <th>Whiff% <span style="font-weight:400;font-size:10px;color:var(--text2)">(wtd)</span></th>
+        <th>xBA <span style="font-weight:400;font-size:10px;color:var(--text2)">(wtd)</span></th>
+        <th>Matched</th>
+      </tr></thead>
+      <tbody id="rosterBody"></tbody>
+    </table></div>
+    <p style="font-size:11px;color:var(--text2);margin-top:8px">Averages weighted by batters faced — pitchers with more appearances carry more weight.</p>
+    <p id="rosterEmpty" style="font-size:13px;color:var(--text2);margin-top:14px;display:none">Load your league first.</p>
+  </div>
+
+  
+  <div id="pane-savant" class="pane">
+    <div class="filter-row">
+      <label>Min IP:</label>
+      <select id="svIP" onchange="renderSavant()">
+        <option value="0" selected>Any</option>
+        <option value="10">10 BF</option>
+        <option value="25">25 BF</option>
+        <option value="50">50 BF</option>
+        <option value="100">100 BF</option>
+        <option value="200">200 BF</option>
+      </select>
+      <label>Role:</label>
+      <select id="svRole" onchange="renderSavant()"><option value="all">All</option><option value="SP">SP</option><option value="RP">RP</option></select>
+      <label>Status:</label>
+      <select id="svStatus" onchange="renderSavant()"><option value="all">All</option><option value="fa">FA only</option><option value="rostered">Rostered only</option></select>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th>#</th>
+        <th onclick="svSort('name')" style="cursor:pointer">Pitcher <span id="ssn"></span></th>
+        <th>MLB</th>
+        <th>Pos</th>
+        <th>Fantasy status</th>
+        <th onclick="svSort('xera')"  style="cursor:pointer">xERA <span id="sse"></span></th>
+        <th onclick="svSort('kbb')"   style="cursor:pointer">K-BB% <span id="ssk"></span></th>
+        <th onclick="svSort('xba')"   style="cursor:pointer">xBA <span id="ssb"></span></th>
+        <th onclick="svSort('whiff')" style="cursor:pointer">Whiff% <span id="ssw"></span></th>
+      </tr></thead>
+      <tbody id="savantBody"></tbody>
+    </table></div>
+  </div>
+
+  <div id="pane-ai" class="pane">
+    <div class="key-note">Enter your credentials below — saved automatically after first use.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div class="form-row" style="margin:0">
+        <label class="flabel">Anthropic API key</label>
+        <input type="password" id="apiKey" placeholder="sk-ant-..." onchange="localStorage.setItem('anthropic_key',this.value)" />
+      </div>
+      <div class="form-row" style="margin:0">
+        <label class="flabel">Fantrax Secret ID</label>
+        <input type="password" id="secretIdAi" placeholder="e.g. 24pscnquxwekzngy"
+          value=""
+          onchange="localStorage.setItem('fantrax_secret_id',this.value)" />
+      </div>
+    </div>
+    <div class="form-row" style="margin-top:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px">
+        <label style="color:var(--text2)">My team:</label>
+        <select id="myTeamPicker" onchange="localStorage.setItem('fantrax_my_team', this.value)" style="padding:4px 8px;font-size:13px;font-family:inherit;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text)">
+          <option value="">— select your team —</option>
+        </select>
+      </div>
+      <textarea id="aiQ" placeholder="Ask about your league — e.g.:&#10;- Which free agent pitchers should I target this week?&#10;- Who on my roster is underperforming their xERA?&#10;- Compare my pitching staff to the rest of the league"></textarea>
+    </div>
+    <div class="btn-row" style="margin-bottom:14px">
+      <button class="pri" onclick="runAI()">Analyze →</button>
+      <button onclick="setQ('Which free agent pitchers have the best Statcast profiles? Give me top 3 pickups with specific reasoning.')">Best FA pickups →</button>
+      <button onclick="setQ('Which rostered pitchers are overperforming their xERA — potential sell-high trade targets?')">Sell-high targets →</button>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+        <div style="font-size:11px;color:var(--text2);width:100%;margin-bottom:2px">FA TARGETING</div>
+        <button class="ai-btn" onclick="setQ('Which FA pitchers have the biggest gap between their xERA and actual ERA? Flag both outperformers (xERA much lower than ERA — due for regression down) and underperformers (xERA much higher than ERA — buy low candidates).')">xERA vs ERA gap →</button>
+        <button class="ai-btn" onclick="setQ('Which FA relievers have elite Whiff% (above 30%) but might be flying under the radar? Focus on guys with solid K-BB% too.')">Hidden gem relievers →</button>
+        <button class="ai-btn" onclick="setQ('Which FA pitchers improved the most in K-BB% over the last 7 days vs their season average? Who is trending up right now?')">Trending up L7 →</button>
+        <button class="ai-btn" onclick="setQ('Which FA pitchers added a new pitch type in 2026 that was not in their 2025 arsenal? A new breaking ball or sweeper could be a breakout signal.')">New pitch types →</button>
+        <button class="ai-btn" onclick="setQ('Who are the top 5 FA pitchers by K-BB% with at least 25 batters faced this season? Give me names and stats.')">Top K-BB% FAs →</button>
+
+        <div style="font-size:11px;color:var(--text2);width:100%;margin-top:4px;margin-bottom:2px">MY ROSTER</div>
+        <button class="ai-btn" onclick="setQ('Evaluate my pitching staff using Statcast stats. Where are my strengths and weaknesses vs the league average?')">My staff review →</button>
+        <button class="ai-btn" onclick="setQ('Which pitchers on my roster are underperforming their xERA (ERA much higher than xERA)? These are sell-high candidates before the market corrects.')">Sell-high candidates →</button>
+        <button class="ai-btn" onclick="setQ('Which of my pitchers has the worst L7 K-BB% trend compared to their season average? Should I be concerned about any of them?')">Roster warning signs →</button>
+        <button class="ai-btn" onclick="setQ('Compare my pitching staff weighted xERA to the rest of the league. Where do I rank and what moves could improve my standing?')">Staff vs league →</button>
+
+        <div style="font-size:11px;color:var(--text2);width:100%;margin-top:4px;margin-bottom:2px">LEAGUE SCOUTING</div>
+        <button class="ai-btn" onclick="setQ('Which teams have the weakest pitching staff by xERA? Who might be desperate to trade pitching and what could I offer?')">Trade targets →</button>
+        <button class="ai-btn" onclick="setQ('Looking at the full league standings and pitching stats, which teams are overperforming their xERA and likely to regress? And which are underperforming and due to improve?')">League regression →</button>
+      </div>
+    </div>
+    <div class="ai-box" id="aiOut"><span class="ai-muted">Load your league, enter your API key, then ask a question above...</span></div>
+  </div>
+</div>
+
+<script>
+  // Auto-detect proxy URL — localhost in dev, same origin in cloud
+  // Use localhost proxy when running locally (file:// or localhost), cloud origin when deployed
+  const isLocal = !window.location.hostname || 
+                  window.location.hostname === 'localhost' || 
+                  window.location.hostname === '127.0.0.1' ||
+                  window.location.protocol === 'file:';
+  const PROXY = isLocal ? 'http://localhost:3001' : window.location.origin;
+
+const savant = [
+  {name:"Zack Wheeler",mlb:"PHI",role:"SP",ip:192,kbb:22.1,xera:2.89,xba:.218,whiff:31.2,chase:33.1,stuff:118},
+  {name:"Logan Gilbert",mlb:"SEA",role:"SP",ip:185,kbb:18.4,xera:3.21,xba:.228,whiff:28.7,chase:30.4,stuff:112},
+  {name:"Dylan Cease",mlb:"SD",role:"SP",ip:178,kbb:19.8,xera:3.45,xba:.231,whiff:33.4,chase:28.9,stuff:115},
+  {name:"MacKenzie Gore",mlb:"WSH",role:"SP",ip:155,kbb:17.2,xera:3.62,xba:.237,whiff:29.8,chase:27.6,stuff:108},
+  {name:"Taj Bradley",mlb:"TB",role:"SP",ip:148,kbb:15.6,xera:3.78,xba:.243,whiff:27.3,chase:26.8,stuff:104},
+  {name:"Reese Olson",mlb:"DET",role:"SP",ip:145,kbb:17.5,xera:3.49,xba:.235,whiff:30.2,chase:27.2,stuff:111},
+  {name:"Kyle Harrison",mlb:"SF",role:"SP",ip:140,kbb:16.9,xera:3.55,xba:.239,whiff:31.0,chase:25.4,stuff:110},
+  {name:"Colin Rea",mlb:"MIL",role:"SP",ip:162,kbb:13.1,xera:3.91,xba:.251,whiff:24.1,chase:29.3,stuff:98},
+  {name:"Bryce Miller",mlb:"SEA",role:"SP",ip:152,kbb:14.8,xera:3.84,xba:.248,whiff:26.4,chase:32.1,stuff:103},
+  {name:"Shane Baz",mlb:"TB",role:"SP",ip:122,kbb:16.1,xera:3.71,xba:.241,whiff:28.9,chase:25.8,stuff:107},
+  {name:"AJ Smith-Shawver",mlb:"ATL",role:"SP",ip:118,kbb:15.3,xera:3.82,xba:.245,whiff:29.4,chase:24.9,stuff:109},
+  {name:"Grant Holmes",mlb:"OAK",role:"SP",ip:108,kbb:13.7,xera:3.98,xba:.254,whiff:25.6,chase:26.3,stuff:100},
+  {name:"Tobias Myers",mlb:"MIL",role:"SP",ip:138,kbb:12.4,xera:4.02,xba:.258,whiff:23.8,chase:28.7,stuff:96},
+  {name:"Mitch Spence",mlb:"OAK",role:"SP",ip:135,kbb:11.2,xera:4.22,xba:.264,whiff:22.1,chase:28.4,stuff:94},
+  {name:"Quinn Priester",mlb:"PIT",role:"SP",ip:130,kbb:11.8,xera:4.18,xba:.262,whiff:22.6,chase:26.1,stuff:93},
+  {name:"Cade Povich",mlb:"BAL",role:"SP",ip:112,kbb:10.9,xera:4.31,xba:.268,whiff:21.4,chase:27.8,stuff:91},
+  {name:"Jacob Lopez",mlb:"DET",role:"SP",ip:102,kbb:12.6,xera:4.08,xba:.256,whiff:23.2,chase:27.1,stuff:97},
+  {name:"Mason Miller",mlb:"OAK",role:"RP",ip:62,kbb:24.1,xera:2.78,xba:.209,whiff:38.4,chase:31.2,stuff:122},
+  {name:"Erik Miller",mlb:"SF",role:"RP",ip:68,kbb:20.4,xera:3.12,xba:.222,whiff:35.8,chase:29.6,stuff:116},
+  {name:"Jhony Brito",mlb:"NYY",role:"SP",ip:95,kbb:9.8,xera:4.45,xba:.272,whiff:20.3,chase:25.9,stuff:88},
+];
+
+savant.forEach(p => {
+  p.score = calcScore(p);
+  p.fxStatus = 'unknown'; p.fxTeam = '';
+});
+
+// Compare pitch mix between two seasons, return new/significantly changed pitch types
+function detectPitchChanges(mix26, mix25) {
+  if(!mix26 || !mix25) return [];
+  const changes = [];
+  Object.entries(mix26).forEach(([pitch, pct26]) => {
+    const pct25 = mix25[pitch] || 0;
+    if(pct25 === 0 && pct26 >= 5) {
+      changes.push(`NEW: ${pitch} (${pct26}%)`);
+    } else if(pct26 - pct25 >= 10) {
+      changes.push(`+${pitch} (${pct25}%→${pct26}%)`);
+    }
+  });
+  return changes;
+}
+
+function normName(n){
+  // Normalize name for fuzzy matching: lowercase, remove periods, collapse spaces
+  return n.toLowerCase()
+    .replace(/\./g,'')       // A.J. -> AJ
+    .replace(/\s+/g,' ')     // multiple spaces -> one
+    .replace(/ jr$| sr$| ii$| iii$/, '') // remove suffixes
+    .trim();
+}
+
+function findSavant(name){
+  const norm = normName(name);
+  return savant.find(s => normName(s.name) === norm);
+}
+
+function calcScore(p){
+  const s = ((p.kbb-8)/17*.30 + (1-(p.xera-2.5)/2.3)*.25 + (p.whiff-18)/22*.20 + (p.stuff-85)/40*.15 + (p.chase-22)/13*.10);
+  return Math.round(Math.max(0, Math.min(100, s*100)));
+}
+
+let G = { leagueId:'', leagueName:'', leagues:[], teams:{}, rosters:{}, standings:[], faNames:new Set() };
+
+function tier(s){ if(s>=75)return['Elite','bg']; if(s>=55)return['Strong','bb']; if(s>=35)return['Average','ba']; return['Fade','br']; }
+
+function bar(v, mn, mx, inv=false){
+  const p = Math.max(0, Math.min(100, ((v-mn)/(mx-mn))*100));
+  const f = inv ? 100-p : p;
+  const c = f>65 ? '#1D9E75' : f>35 ? '#BA7517' : '#E24B4A';
+  return `<div class="bar-wrap"><div class="bar-bg"><div class="bar-fill" style="width:${f.toFixed(0)}%;background:${c}"></div></div><span style="font-size:12px">${v}</span></div>`;
+}
+
+function setStatus(id, msg, cls){
+  const el = document.getElementById(id);
+  if(el){ el.className = 'st ' + cls; el.textContent = msg; el.style.display = 'block'; }
+  // Also echo to leagueHeader for visibility
+  const hdr = document.getElementById('leagueHeader');
+  if(hdr && (id === 'st2' || id === 'st1')) hdr.textContent = msg;
+}
+
+async function testProxy(){
+  setStatus('st1','Testing proxy at localhost:3001...','inf');
+  try {
+    const r = await fetch(`${PROXY}/fxea/general/getAdp?sport=MLB`);
+    if(r.ok) setStatus('st1','Proxy is working correctly.','ok');
+    else setStatus('st1',`Proxy responded HTTP ${r.status}.`,'er');
+  } catch(e) { setStatus('st1',`Cannot reach proxy: ${e.message}`,'er'); }
+}
+
+async function fx(path, params={}){
+  const qs = Object.entries(params).map(([k,v])=>`${k}=${encodeURIComponent(v)}`).join('&');
+  const r = await fetch(`${PROXY}/fxea/general/${path}${qs?'?'+qs:''}`);
+  if(!r.ok) throw new Error(`HTTP ${r.status} on ${path}`);
+  return r.json();
+}
+
+async function fetchLeagues(){
+  const sid = localStorage.getItem('fantrax_secret_id') || '';
+  if(!sid) return;
+  const data = await fx('getLeagues', {userSecretId: sid});
+  G.leagues = data.leagues || [];
+}
+
+async function loadLeague(){
+  // Get stored credentials
+  const sid = localStorage.getItem('fantrax_secret_id');
+  if(!sid){ document.getElementById('leagueHeader').textContent = 'No Secret ID saved — enter it below'; showCredentialPrompt(); return; }
+
+  // Fetch leagues if not already loaded
+  document.getElementById('leagueHeader').textContent = 'Connecting to Fantrax...';
+  if(!G.leagues.length){
+    const data = await fx('getLeagues', {userSecretId: sid});
+    G.leagues = data.leagues || [];
+    if(!G.leagues.length){ document.getElementById('leagueHeader').textContent = 'No leagues found — check your Secret ID'; return; }
+  }
+  document.getElementById('leagueHeader').textContent = 'Loading rosters and stats...';
+  // Use first league (or stored leagueId)
+  const storedLeagueId = localStorage.getItem('fantrax_league_id');
+  const league = (storedLeagueId && G.leagues.find(l=>l.leagueId===storedLeagueId)) || G.leagues[0];
+  G.leagueId = league.leagueId;
+  G.leagueName = league.leagueName || 'My league';
+  localStorage.setItem('fantrax_league_id', G.leagueId);
+  try {
+    const [info, rosterData, standData, adpData] = await Promise.all([
+      fx('getLeagueInfo', {leagueId: G.leagueId}),
+      fx('getTeamRosters', {leagueId: G.leagueId}),
+      fx('getStandings', {leagueId: G.leagueId}),
+      fx('getAdp', {sport: 'MLB'}),
+    ]);
+    const adpSample = (adpData.players||adpData.playerInfo||Object.values(adpData)[0]||[]);
+
+    const teams = {};
+    const rosters = {};
+
+    if(rosterData.players) {
+      const sample = Object.values(rosterData.players).slice(0,2);
+    }
+    // teamInfo is { teamId: { name, teamName, ... } }
+    const teamInfo = info.teamInfo || {};
+    Object.entries(teamInfo).forEach(([tid, t]) => {
+      teams[tid] = t.name || t.teamName || tid;
+    });
+
+    
+
+    const playerInfo = info.playerInfo || {};
+    const rosterObj = rosterData.rosters || {};
+    const rosteredNames = new Set();
+    const faNames = new Set();
+
+    // Build idToName and nameToTeam from ADP — entries have {id, name, pos, team}
+    const idToName = {};
+    const nameToTeam = {};
+    Object.values(adpData).forEach(entry => {
+      if(!entry || !entry.id || !entry.name) return;
+      const raw = entry.name;
+      const normalized = raw.includes(',')
+        ? raw.split(',').map(s => s.trim()).reverse().join(' ')
+        : raw;
+      idToName[entry.id] = normalized;
+      if(entry.team) nameToTeam[normalized.toLowerCase()] = entry.team;
+    });
+
+    // Build rosters — rosterItems are player IDs, look up names via idToName
+    Object.entries(rosterObj).forEach(([tid, teamRoster]) => {
+      const tname = teams[tid] || tid;
+      rosters[tid] = { teamName: tname, players: [] };
+      const items = teamRoster.rosterItems || teamRoster.players || [];
+      items.forEach(item => {
+        const pid = typeof item === 'string' ? item : (item.playerId || item.id || '');
+        const name = idToName[pid] || '';
+        const pdata = playerInfo[pid] || {};
+        const pos = pdata.eligiblePos?.split(',')?.[0] || '';
+        const status = pdata.status || '';
+        if(name){ rosters[tid].players.push({name, pos, status}); rosteredNames.add(name.toLowerCase()); }
+      });
+    });
+
+    // Build full FA name set from ADP (idToName already built above)
+    const adpArr = Object.values(adpData);
+    const allAdpNames = new Set();
+    adpArr.forEach(entry => {
+      if(!entry || !entry.name) return;
+      const raw = entry.name;
+      const normalized = raw.includes(',')
+        ? raw.split(',').map(s=>s.trim()).reverse().join(' ')
+        : raw;
+      allAdpNames.add(normalized.toLowerCase());
+    });
+
+    // Build FA position map from ADP data for pitcher filtering
+    const adpPosMap = {};
+    Object.values(adpData).forEach(entry => {
+      if(!entry || !entry.name || !entry.pos) return;
+      const raw = entry.name;
+      const nm = raw.includes(',') ? raw.split(',').map(s=>s.trim()).reverse().join(' ') : raw;
+      adpPosMap[nm.toLowerCase()] = entry.pos;
+    });
+    G.adpPosMap = adpPosMap;
+
+    // Cross-reference playerInfo (has status + id) with idToName to find FAs
+    Object.entries(playerInfo).forEach(([pid, p]) => {
+      const st = p.status || p.leagueRosterStatus || '';
+      if(st === 'FA' || st === 'W' || st === 'FreeAgent') {
+        const name = idToName[pid] || '';
+        if(name) faNames.add(name.toLowerCase());
+      }
+    });
+
+    // Fallback: if playerInfo status didn't yield enough, use ADP minus rostered
+    if(faNames.size < 10) {
+      allAdpNames.forEach(name => {
+        const lower = name.toLowerCase();
+        if(!rosteredNames.has(lower)) faNames.add(lower);
+      });
+    }
+
+    // Debug: show how savant players are being matched
+    savant.forEach(p => {
+      if(p.name.toLowerCase().includes('miller') || p.name.toLowerCase().includes('cease') || p.name.toLowerCase().includes('wheeler')) {
+      }
+    });
+    const rosterCheck = Array.from(rosteredNames).filter(n => n.includes('miller'));
+
+    // Pre-populate MLB team for hardcoded savant entries from ADP data
+    savant.forEach(p => {
+      if(p.mlb === '—' || !p.mlb) {
+        const team = nameToTeam[p.name.toLowerCase()] || '';
+        if(team) p.mlb = team;
+      }
+    });
+
+    // Initial tagging — fetchSavantData will do a full re-tag after Savant loads
+    savant.forEach(p => {
+      const ln = p.name.toLowerCase();
+      if(rosteredNames.has(ln)){
+        p.fxStatus='rostered';
+        for(const [tid,t] of Object.entries(rosters)){
+          if(t.players.some(r=>normName(r.name)===normName(p.name))){ p.fxTeam=t.teamName; break; }
+        }
+      } else if(faNames.has(ln)){
+        p.fxStatus='fa'; p.fxTeam='Free agent';
+      } else { p.fxStatus='unknown'; p.fxTeam=''; }
+    });
+    G.rosteredNames = rosteredNames;
+
+    console.log('[scout] ADP sample entry:', JSON.stringify(Object.values(adpData).find(e=>e&&e.name)));
+    console.log('[scout] nameToTeam size:', Object.keys(nameToTeam).length, '| sample:', JSON.stringify(Object.entries(nameToTeam).slice(0,5)));
+    G.teams = teams; G.rosters = rosters; G.faNames = faNames; G.playerInfo = playerInfo; G.nameToTeam = nameToTeam;
+
+    // Populate team picker in AI tab
+    const picker = document.getElementById('myTeamPicker');
+    if(picker){
+      const saved = localStorage.getItem('fantrax_my_team') || '';
+      picker.innerHTML = '<option value="">— select your team —</option>' +
+        Object.entries(teams).map(([tid, tname]) =>
+          `<option value="${tid}" ${tid === saved ? 'selected' : ''}>${tname}</option>`
+        ).join('');
+    }
+
+    // standData is { "0": {teamId, teamName, rank, points, winPercentage, gamesBack}, "1": ... }
+    G.standings = Object.values(standData)
+      .filter(v => v && typeof v === 'object' && v.teamId)
+      .sort((a,b) => (a.rank||99) - (b.rank||99));
+
+    // Count actual pitcher FAs from the full Fantrax pool using adpPosMap
+    const PPOS_COUNT = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
+    const faCount = Array.from(faNames).filter(name => {
+      const adpPos = adpPosMap[name] || '';
+      return adpPos.split(',').some(p => PPOS_COUNT.has(p.trim()));
+    }).length;
+    const matched = savant.filter(p=>p.fxStatus!=='unknown').length;
+    const myId = getMyTeam();
+    const myR = G.rosters[myId];
+    const minePitchers = myR ? myR.players.filter(p=>['SP','RP','P'].includes(p.pos)).length : 0;
+
+
+    document.getElementById('leagueHeader').textContent = `${G.leagueName} · ${Object.keys(teams).length} teams · Live`;
+
+    // Fetch live Savant data and merge with league FA info
+    setStatus('st2','Fetching Baseball Savant pitcher stats...','inf');
+    try { await fetchSavantData(); } catch(e){ console.warn('Savant fetch skipped:', e.message); }
+
+    document.getElementById('leagueHeader').textContent = `${G.leagueName} · ${Object.keys(teams).length} teams · ${faCount} pitcher FAs · Live`;
+    renderFA(); renderRosters(); renderStandings(); renderSavant();
+    sw('freeagents'); // ensure active tab renders
+  } catch(e) { document.getElementById('leagueHeader').textContent = 'Error: ' + e.message; throw e; }
+}
+
+function getMyTeam(){
+  const picker = document.getElementById('myTeamPicker');
+  if(picker && picker.value) return picker.value;
+  return localStorage.getItem('fantrax_my_team') || '';
+}
+
+const PITCHER_POS = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
+
+function isPitcherFA(name) {
+  const lower = name.toLowerCase();
+  if(!G.faNames || !G.faNames.has(lower)) return false;
+  // Check ADP position map
+  const adpPos = G.adpPosMap ? (G.adpPosMap[lower] || '') : '';
+  if(adpPos) {
+    return adpPos.split(',').some(p => PITCHER_POS.has(p.trim()));
+  }
+  // If no position info, include if they're in our savant pitcher list
+  return savant.some(s => s.name.toLowerCase() === lower);
+}
+
+let faSortCol = 'xera';
+let faSortAsc = true; // xERA ascending = best first
+
+function faSort(col){
+  if(faSortCol === col){
+    faSortAsc = !faSortAsc;
+  } else {
+    faSortCol = col;
+    // Default direction per column
+    faSortAsc = (col === 'xera' || col === 'xba'); // lower is better for these
+  }
+  renderFA();
+}
+
+function renderFA(){
+  const pos    = document.getElementById('faPos').value;
+  const minBF  = parseInt(document.getElementById('faMinBF')?.value || '0');
+  const search = (document.getElementById('faSearch')?.value || '').toLowerCase().trim();
+
+  // Only show pitchers that are FAs — savant array now only contains pitchers
+  const PPOS = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
+  let list = savant.filter(p => {
+    if(p.fxStatus !== 'fa') return false;
+    if(pos !== 'all' && p.role !== pos) return false;
+    if(minBF > 0 && (p.pa || 0) < minBF) return false;
+    if(search && !p.name.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  const dir = faSortAsc ? 1 : -1;
+  list.sort((a,b) => {
+    if(faSortCol === 'name')  return dir * a.name.localeCompare(b.name);
+    if(faSortCol === 'xera')  return dir * ((a.xera||99) - (b.xera||99));
+    if(faSortCol === 'kbb')   return dir * ((a.kbb||0)   - (b.kbb||0));
+    if(faSortCol === 'kbb7')  return dir * ((a.kbb7||0)  - (b.kbb7||0));
+    if(faSortCol === 'xba')   return dir * ((a.xba||1)   - (b.xba||1));
+    if(faSortCol === 'whiff') return dir * ((a.whiff||0) - (b.whiff||0));
+    return 0;
+  });
+  // Update sort indicators
+  ['n','e','k','k7','b','w'].forEach(id => {
+    const el = document.getElementById('fs'+id);
+    if(el) el.textContent = '';
+  });
+  const colToId = {name:'n',xera:'e',kbb:'k',kbb7:'k7',xba:'b',whiff:'w'};
+  const activeEl = document.getElementById('fs' + (colToId[faSortCol]||''));
+  if(activeEl) activeEl.textContent = faSortAsc ? ' ▲' : ' ▼';
+  const empty = document.getElementById('faEmpty');
+  if(!list.length){ empty.style.display='block'; return; } empty.style.display='none';
+  document.getElementById('faBody').innerHTML = list.map((p,i) => {
+    const trend = p.kbb7 != null && p.kbb != null
+      ? (p.kbb7 > p.kbb + 3 ? '<span style="color:#1D9E75;font-size:11px"> ▲</span>'
+       : p.kbb7 < p.kbb - 3 ? '<span style="color:#E24B4A;font-size:11px"> ▼</span>'
+       : '<span style="color:var(--text2);font-size:11px"> —</span>')
+      : '';
+    const l7 = p.kbb7 != null ? `${p.kbb7}%${trend}` : `<span style="color:var(--text2)">—</span>`;
+    // Build pitch mix display — top 3 pitches by usage
+    const mix = p.pitchMix || {};
+    const topPitches = Object.entries(mix)
+      .filter(([,pct]) => pct >= 5)
+      .sort((a,b) => b[1]-a[1])
+      .slice(0,3)
+      .map(([name,pct]) => `${name} ${pct}%`)
+      .join(', ') || '—';
+    return `<tr><td style="color:var(--text2)">${i+1}</td><td style="font-weight:500">${p.name}</td><td><span class="tpill">${p.mlb}</span></td><td>${p.role}</td><td>${bar(p.xera,2.5,4.8,true)}</td><td>${bar(p.kbb,8,25)}</td><td>${l7}</td><td>${p.xba!=null?p.xba.toFixed(3):'—'}</td><td>${bar(p.whiff,18,40)}</td><td style="font-size:11px;color:var(--text2)">${topPitches}</td></tr>`;
+  }).join('');
+}
+
+function renderRosters(){
+  const sortCol = document.getElementById('rosterSort')?.value || 'xera';
+  const empty = document.getElementById('rosterEmpty');
+  const myTeam = getMyTeam();
+
+  if(!G.rosters || !Object.keys(G.rosters).length){
+    empty.style.display='block';
+    return;
+  }
+  empty.style.display='none';
+
+  const PITCH_POS = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
+
+  const teamRows = Object.entries(G.rosters).map(([tid, team]) => {
+    // Get pitchers on this roster
+    const pitchers = team.players.filter(p => {
+      if(!p.name) return false;
+      const pos = (p.pos||'').split(',').map(s=>s.trim());
+      return pos.some(po => PITCH_POS.has(po));
+    });
+
+    // Match each pitcher to Savant data
+    const matched = pitchers.map(p => {
+      return findSavant(p.name);
+    }).filter(Boolean);
+
+    // Compute averages
+    // Weighted average by batters faced (pa field) — more innings = more weight
+    const avg = (arr, key) => {
+      const pairs = arr.map(p => ({val: p[key], w: p.pa||p.ip||1}))
+                       .filter(x => x.val != null && !isNaN(x.val));
+      if(!pairs.length) return null;
+      const totalW = pairs.reduce((s,x) => s + x.w, 0);
+      if(!totalW) return null;
+      return pairs.reduce((s,x) => s + x.val * x.w, 0) / totalW;
+    };
+
+    const avgXera  = avg(matched, 'xera');
+    const avgKbb   = avg(matched, 'kbb');
+    const avgWhiff = avg(matched, 'whiff');
+    const avgXba   = avg(matched, 'xba');
+    const isMe = tid === myTeam;
+
+    return { tid, teamName: team.teamName, pitchers, matched, avgXera, avgKbb, avgWhiff, avgXba, isMe };
+  });
+
+  // Sort
+  teamRows.sort((a, b) => {
+    if(sortCol === 'xera') return (a.avgXera||9) - (b.avgXera||9);
+    if(sortCol === 'kbb')  return (b.avgKbb||0) - (a.avgKbb||0);
+    if(sortCol === 'whiff') return (b.avgWhiff||0) - (a.avgWhiff||0);
+    return 0;
+  });
+
+  function fmt(val, decimals=2) {
+    return val != null ? val.toFixed(decimals) : '—';
+  }
+  function tier(s){ if(s>=75)return['Elite','bg']; if(s>=55)return['Strong','bb']; if(s>=35)return['Average','ba']; return['Fade','br']; }
+
+  document.getElementById('rosterBody').innerHTML = teamRows.map((row, i) => {
+
+    const highlight = row.isMe ? 'style="background:var(--blue-bg)"' : '';
+    return `<tr ${highlight}>
+      <td style="font-weight:500">${row.teamName}${row.isMe?'<span class="mine-tag">mine</span>':''}</td>
+      <td>${fmt(row.avgXera)}</td>
+      <td>${fmt(row.avgKbb, 1)}%</td>
+      <td>${fmt(row.avgWhiff, 1)}%</td>
+      <td>${fmt(row.avgXba, 3)}</td>
+      <td style="color:var(--text2)">${row.matched.length}/${row.pitchers.length}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderStandings(){} // removed
+
+let svSortCol = 'xera';
+let svSortAsc = true;
+
+function svSort(col){
+  if(svSortCol === col){ svSortAsc = !svSortAsc; }
+  else { svSortCol = col; svSortAsc = (col === 'xera' || col === 'xba'); }
+  renderSavant();
+}
+
+function renderSavant(){
+  const minIP = parseInt(document.getElementById('svIP').value)||0;
+  const role = document.getElementById('svRole').value;
+  const st = document.getElementById('svStatus').value;
+  let list = savant.filter(p => {
+    if(minIP > 0 && (p.pa||0) < minIP) return false;
+    if(role!=='all' && p.role!==role) return false;
+    if(st==='fa' && p.fxStatus!=='fa') return false;
+    if(st==='rostered' && p.fxStatus!=='rostered') return false;
+    return true;
+  }).sort((a,b) => {
+    const dir = svSortAsc ? 1 : -1;
+    if(svSortCol === 'name')  return dir * a.name.localeCompare(b.name);
+    if(svSortCol === 'xera')  return dir * ((a.xera||99) - (b.xera||99));
+    if(svSortCol === 'kbb')   return dir * ((a.kbb||0)   - (b.kbb||0));
+    if(svSortCol === 'xba')   return dir * ((a.xba||1)   - (b.xba||1));
+    if(svSortCol === 'whiff') return dir * ((a.whiff||0) - (b.whiff||0));
+    return 0;
+  });
+  // Update sort indicators
+  ['n','e','k','b','w'].forEach(id => { const el=document.getElementById('ss'+id); if(el) el.textContent=''; });
+  const svColToId = {name:'n',xera:'e',kbb:'k',xba:'b',whiff:'w'};
+  const svEl = document.getElementById('ss'+(svColToId[svSortCol]||''));
+  if(svEl) svEl.textContent = svSortAsc ? ' ▲' : ' ▼';
+  document.getElementById('savantBody').innerHTML = list.map((p,i) => {
+    const sb = p.fxStatus==='fa' ? '<span class="badge bt">Free agent</span>'
+             : p.fxStatus==='rostered' ? `<span class="badge bgy">${p.fxTeam||'Rostered'}</span>`
+             : '<span class="badge bgy">Unknown</span>';
+    return `<tr><td style="color:var(--text2)">${i+1}</td><td style="font-weight:500">${p.name}</td><td><span class="tpill">${p.mlb}</span></td><td>${p.role}</td><td>${sb}</td><td>${bar(p.xera,2.5,4.8,true)}</td><td>${bar(p.kbb,8,25)}</td><td>${p.xba!=null?p.xba.toFixed(3):'—'}</td><td>${p.whiff!=null?bar(p.whiff,18,40):'—'}</td></tr>`;
+  }).join('');
+}
+
+async function fetchSavantData(){
+  // Baseball Savant expected stats leaderboard for pitchers — current season
+  // Returns CSV with columns: last_name, first_name, player_id, pa, bip, ba, est_ba, est_ba_minus_ba_diff,
+  // slg, est_slg, est_slg_minus_slg_diff, woba, est_woba, est_woba_minus_woba_diff, era, xera, ...
+  const year = G.dataYear || '2026';
+  const url = `/savant/leaderboard/expected_statistics?type=pitcher&year=${year}&position=&team=&min=1&csv=true`;
+  try {
+    const r = await fetch(PROXY + url);
+    const csv = await r.text();
+    const lines = csv.trim().split('\n');
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g,''));
+
+    // Map all available columns
+    const idx = {
+      last: headers.indexOf('last_name'),
+      first: headers.indexOf('first_name'),
+      pa: headers.indexOf('pa'),
+      era: headers.indexOf('era'),
+      xera: headers.indexOf('xera') >= 0 ? headers.indexOf('xera') : headers.indexOf('est_era'),
+      xba: headers.indexOf('est_ba') >= 0 ? headers.indexOf('est_ba') : headers.indexOf('xba'),
+      xwoba: headers.indexOf('est_woba'),
+      woba: headers.indexOf('woba'),
+      whiff: headers.indexOf('whiff_percent'),
+      k_pct: headers.indexOf('k_percent'),
+      bb_pct: headers.indexOf('bb_percent'),
+      team: headers.indexOf('team_name_alt') >= 0 ? headers.indexOf('team_name_alt')
+          : headers.indexOf('team_name') >= 0 ? headers.indexOf('team_name')
+          : headers.indexOf('team') >= 0 ? headers.indexOf('team') : -1,
+    };
+
+    // Also fetch whiff/chase/k-bb from pitch arsenal leaderboard
+    const liveData = {};
+    for(let i = 1; i < lines.length; i++){
+      const cols = lines[i].split(',').map(c => c.trim().replace(/"/g,''));
+      const last = cols[idx.last] || '';
+      const first = cols[idx.first] || '';
+      if(!last && !first) continue;
+      const fullName = `${first} ${last}`.trim().toLowerCase();
+      const xeraVal = idx.xera >= 0 ? parseFloat(cols[idx.xera]) : null;
+      const kpct = idx.k_pct >= 0 ? parseFloat(cols[idx.k_pct]) : null;
+      const bbpct = idx.bb_pct >= 0 ? parseFloat(cols[idx.bb_pct]) : null;
+      const teamVal = idx.team >= 0 ? (cols[idx.team]||'').trim() : '';
+      liveData[fullName] = {
+        name: `${first} ${last}`.trim(),
+        mlbTeam: teamVal,
+        xera: xeraVal || null,
+        xba: idx.xba >= 0 ? parseFloat(cols[idx.xba]) : null,
+        xwoba: idx.xwoba >= 0 ? parseFloat(cols[idx.xwoba]) : null,
+        era: idx.era >= 0 ? parseFloat(cols[idx.era]) : null,
+        pa: parseInt(cols[idx.pa]) || 0,
+        k_pct: kpct,
+        bb_pct: bbpct,
+        kbb: (kpct && bbpct) ? parseFloat((kpct - bbpct).toFixed(1)) : null,
+        whiff: idx.whiff >= 0 ? parseFloat(cols[idx.whiff]) : null,
+      };
+    }
+
+    console.log('[scout] liveData size:', Object.keys(liveData).length, '| sample kbb:', Object.values(liveData).slice(0,3).map(d=>({name:d.name,kbb:d.kbb,k_pct:d.k_pct,bb_pct:d.bb_pct})));
+    console.log('[scout] all Savant headers:', headers);
+
+    // Fetch aggregated K%, BB%, Whiff% from proxy statcast aggregation
+    try {
+      const [r2, r3] = await Promise.all([
+        fetch(`${PROXY}/savant-stats?year=${G.dataYear||'2026'}`),
+        fetch('http://localhost:3001/savant-recent'),
+      ]);
+      const statsJson = await r2.json();
+      const recentJson = await r3.json();
+      G.recentStats = recentJson;
+      // Merge 7-day recent stats into liveData
+      Object.entries(recentJson).forEach(([lname, s]) => {
+        const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
+        const key = match || lname;
+        if(liveData[key]){
+          liveData[key].kbb7   = s.kbb;
+          liveData[key].whiff7 = s.whiff_pct;
+          liveData[key].bf7    = s.bf;
+        } else {
+          liveData[key] = { name: s.name, kbb7: s.kbb, whiff7: s.whiff_pct, bf7: s.bf };
+        }
+      });
+
+      console.log('[scout] savant-stats pitchers:', Object.keys(statsJson).length);
+      // Store year for comparison
+      const isCurrentYear = (G.dataYear || '2026') === '2026';
+
+      Object.entries(statsJson).forEach(([lname, s]) => {
+        const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
+        const key = match || lname;
+        if(liveData[key]){
+          liveData[key].k_pct    = s.k_pct;
+          liveData[key].bb_pct   = s.bb_pct;
+          liveData[key].kbb      = s.kbb;
+          liveData[key].whiff    = s.whiff_pct;
+          liveData[key].pitchMix = s.pitchMix || {};
+          liveData[key].pa       = s.bf || liveData[key].pa || 0;
+          if(s.team && !liveData[key].mlbTeam) liveData[key].mlbTeam = s.team;
+        } else {
+          liveData[key] = {
+            name: s.name, mlbTeam: s.team||'',
+            k_pct: s.k_pct, bb_pct: s.bb_pct, kbb: s.kbb,
+            whiff: s.whiff_pct, xera: null, xba: null, pa: s.bf || 0,
+            pitchMix: s.pitchMix || {},
+          };
+        }
+      });
+    } catch(e){ console.log('[scout] savant-stats failed:', e.message); }
+
+
+    // Merge into global savant array — update existing entries and add new ones
+    const existingNames = new Set(savant.map(p=>p.name.toLowerCase()));
+    const PITCHER_POSITIONS = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
+    Object.entries(liveData).forEach(([lname, d]) => {
+      if(!d.name || !d.xera) return;
+      // Only process pitchers — check ADP position map
+      const adpPos = (G.adpPosMap || {})[lname] || '';
+      const isPitcher = adpPos.split(',').some(p => PITCHER_POSITIONS.has(p.trim()))
+        || savant.some(s => s.name.toLowerCase() === lname); // already in our pitcher list
+      if(!isPitcher && adpPos) return; // skip hitters that have a known non-pitcher position
+
+      const existing = findSavant(d.name);
+      const adpTeam = (G.nameToTeam || {})[lname] || d.mlbTeam || '';
+      if(existing){
+        if(d.xera)   existing.xera   = d.xera;
+        if(d.xba)    existing.xba    = d.xba;
+        if(d.kbb)    existing.kbb    = d.kbb;
+        if(d.whiff)  existing.whiff  = d.whiff;
+        if(d.chase)  existing.chase  = d.chase;
+        if(adpTeam)  existing.mlb    = adpTeam;
+        if(d.kbb7 != null)   existing.kbb7     = d.kbb7;
+        if(d.whiff7 != null) existing.whiff7   = d.whiff7;
+        if(d.bf7)            existing.bf7      = d.bf7;
+        if(d.pitchMix)       existing.pitchMix = d.pitchMix;
+        existing.pa = d.pa || existing.pa || 0;
+        existing.score = calcScore(existing);
+      } else {
+        // Only add if confirmed pitcher
+        if(!adpPos || !adpPos.split(',').some(p => PITCHER_POSITIONS.has(p.trim()))) return;
+        const role = adpPos.includes('SP') ? 'SP' : 'RP';
+        const newP = {
+          name: d.name, mlb: adpTeam || '—', role,
+          pitchMix: d.pitchMix || {},
+          ip: Math.round((d.pa||0)/4),
+          kbb: d.kbb||0, xera: d.xera||4.50, xba: d.xba||.260,
+          whiff: d.whiff||20, chase: d.chase||26, stuff: 95,
+          fxStatus: 'unknown', fxTeam: '',
+        };
+        newP.score = calcScore(newP);
+        savant.push(newP);
+      }
+    });
+
+    // Re-tag ALL savant pitchers with current league status
+    const rn = G.rosteredNames || new Set();
+    const fn = G.faNames || new Set();
+    savant.forEach(p => {
+      const ln = normName(p.name);
+      const inRosters = rn.has(p.name.toLowerCase()) || Array.from(rn).some(n=>normName(n)===ln);
+      const inFAs = fn.has(p.name.toLowerCase()) || Array.from(fn).some(n=>normName(n)===ln);
+      if(inRosters){
+        p.fxStatus='rostered';
+        for(const [tid,t] of Object.entries(G.rosters)){
+          if(t.players.some(r=>normName(r.name)===ln)){ p.fxTeam=t.teamName; break; }
+        }
+      } else if(inFAs){
+        p.fxStatus='fa'; p.fxTeam='Free agent';
+      } else {
+        p.fxStatus='unknown'; p.fxTeam='';
+      }
+    });
+    renderFA(); renderSavant(); renderRosters();
+  } catch(e){
+    console.error('Savant fetch failed:', e.message);
+  }
+}
+
+function buildCtx(){
+  const mine = getMyTeam();
+  const myR = G.rosters[mine];
+  const PITCHER_POS = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
+  const myPs = myR ? myR.players.filter(p => PITCHER_POS.has(p.pos)) : [];
+
+  // Savant-matched FAs with full stats
+  const savantFAs = savant.filter(p=>p.fxStatus==='fa').sort((a,b)=>(a.xera||99)-(b.xera||99));
+
+  // All FA pitcher names from Fantrax (including those not in Savant list)
+  const allFANames = Array.from(G.faNames)
+    .filter(n => {
+      // include if looks like a pitcher (in savant or in any roster with SP/RP pos)
+      return true; // include all FA names — Claude will filter
+    })
+    .map(n => {
+      // capitalize first letter of each word for readability
+      return n.replace(/\w/g, c => c.toUpperCase());
+    });
+
+  // FA names NOT in our Savant list (no advanced stats, but still available)
+  const savantFANames = new Set(savantFAs.map(p=>p.name.toLowerCase()));
+  const otherFAs = allFANames.filter(n=>!savantFANames.has(n.toLowerCase())).slice(0,60);
+
+  return `LEAGUE: ${G.leagueName||'Unknown'}
+MY TEAM: ${myR?.teamName||'Not selected'}
+MY PITCHERS (with Statcast): ${myPs.map(p=>{const sv=findSavant(p.name);return sv?`${p.name}[${sv.role||p.pos}/${sv.mlb||'?'}](xERA:${sv.xera},K-BB%:${sv.kbb},L7K-BB%:${sv.kbb7||'—'},Whiff%:${sv.whiff},xBA:${sv.xba})`:p.name+'['+p.pos+']'}).join('; ')||'None matched'}
+FREE AGENTS WITH STATCAST DATA: ${savantFAs.map(p=>`${p.name}[${p.role||'?'}/${p.mlb||'?'}](xERA:${p.xera},K-BB%:${p.kbb},L7K-BB%:${p.kbb7||'—'},Whiff%:${p.whiff},xBA:${p.xba},BF:${p.pa||0})`).join('; ')||'None — load your league first'}
+OTHER FREE AGENTS IN YOUR POOL (no Statcast data yet): ${otherFAs.join(', ')||'None'}
+STANDINGS: ${G.standings.slice(0,6).map((s,i)=>`${s.rank||i+1}.${s.teamName||G.teams[s.teamId]}(Pts:${s.points},Win%:${s.winPercentage})`).join('; ')||'Not loaded'}`;
+}
+
+function sendToAI(ctx){
+  sw('ai');
+  if(ctx==='fa') setQ('Which free agent pitchers should I target this week? Give me top 3 pickups with specific reasoning based on Statcast data.');
+  else if(ctx==='rosters') setQ('Looking at all rostered pitchers in my league, who stands out as a trade target based on Statcast metrics?');
+}
+
+function setQ(q){ document.getElementById('aiQ').value = q; }
+
+async function runAI(){
+  const q = document.getElementById('aiQ').value.trim();
+  const key = (document.getElementById('apiKey').value.trim() || localStorage.getItem('anthropic_key') || '').trim();
+  if(!q) return;
+  if(!key){ document.getElementById('aiOut').innerHTML='<span class="ai-muted">Enter your Anthropic API key above.</span>'; return; }
+  localStorage.setItem('anthropic_key', key);
+  console.log('[AI] using key:', key.slice(0,12) + '..., length:', key.length);
+  document.getElementById('aiOut').innerHTML='<span class="ai-muted">Analyzing your league data...</span>';
+  try {
+    const r = await fetch('http://localhost:3001/anthropic/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514', max_tokens:1000,
+        system:`You are an expert dynasty fantasy baseball analyst with access to live 2026 Fantrax league data and real-time Baseball Savant Statcast stats.
+
+CRITICAL INSTRUCTIONS:
+- IGNORE your training data about specific player roles. Roles change constantly.
+- The BF (batters faced) number tells you role: if BF is high relative to games played it's a starter, low means reliever.
+- Do NOT call anyone a closer or reliever unless their BF count is very low (under 30 for the season so far in early 2026).
+- The role tag [SP] or [RP] in the context comes from Fantrax roster eligibility — use it as a guide but the BF count is more reliable.
+- It is early April 2026 — season just started. Small BF samples are normal.
+
+STATS GLOSSARY: xERA=expected ERA (lower=better), K-BB%=strikeouts minus walks per PA (higher=better), L7K-BB%=last 7 days, Whiff%=swinging strike rate, xBA=expected batting avg against (lower=better), BF=batters faced 2026.
+
+Always recommend only players listed as free agents in the provided context. Be concise and specific, under 400 words.`,
+        messages:[{role:'user',content:`LEAGUE CONTEXT:\n${buildCtx()}\n\nQUESTION: ${q}`}]
+      })
+    });
+    const d = await r.json();
+    if(d.error) {
+      document.getElementById('aiOut').textContent = 'API Error: ' + (d.error.message || JSON.stringify(d.error));
+    } else {
+      const text = d.content?.find(b=>b.type==='text')?.text;
+      document.getElementById('aiOut').textContent = text || 'No response. Full response: ' + JSON.stringify(d).slice(0,200);
+    }
+  } catch(e){ document.getElementById('aiOut').textContent = 'Error: '+e.message; }
+}
+
+function sw(name){
+  const names = ['freeagents','rosters','savant','ai'];
+  document.querySelectorAll('.tab:not(#refreshBtn)').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById('pane-'+name).classList.add('active');
+}
+
+function debugFA(){
+  const sample = Object.values(G.playerInfo||{}).slice(0,3);
+  const faCount = G.faNames.size;
+  const faList = Array.from(G.faNames).slice(0,10).join(', ');
+  const msg = `playerInfo sample (first 3):\n${JSON.stringify(sample,null,2)}\n\nG.faNames count: ${faCount}\nFirst 10: ${faList}`;
+  alert(msg);
+  console.log(msg);
+}
+
+// Restore API key
+// Restore saved credentials into all inputs
+function restoreCredentials(){
+  const sid = localStorage.getItem('fantrax_secret_id') || '';
+  const key = localStorage.getItem('anthropic_key') || '';
+  ['secretIdBar','secretIdAi'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = sid;
+  });
+  ['apiKey','apiKeyBar'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = key;
+  });
+  // Hide cred bar if both already saved
+  if(sid && key) document.getElementById('credBar').style.display = 'none';
+}
+
+function saveCredentials(){
+  const sid = document.getElementById('secretIdBar').value.trim();
+  const key = document.getElementById('apiKeyBar').value.trim();
+  if(!sid){ alert('Please enter your Fantrax Secret ID'); return; }
+  localStorage.setItem('fantrax_secret_id', sid);
+  if(key) localStorage.setItem('anthropic_key', key);
+  // sync api key to AI tab
+  const akEl = document.getElementById('apiKey');
+  if(akEl && key) akEl.value = key;
+  // hide the bar and trigger load
+  document.getElementById('credBar').style.display = 'none';
+  refreshLeague();
+}
+
+restoreCredentials();
+
+// Auto-load league on open
+async function setYear(year){
+  G.dataYear = year;
+  // Update button styles
+  document.getElementById('yr2026').style.background = year==='2026' ? 'var(--blue)' : 'var(--bg)';
+  document.getElementById('yr2026').style.color = year==='2026' ? '#fff' : 'var(--text2)';
+  document.getElementById('yr2026').style.borderColor = year==='2026' ? 'var(--blue)' : 'var(--border2)';
+  document.getElementById('yr2025').style.background = year==='2025' ? 'var(--blue)' : 'var(--bg)';
+  document.getElementById('yr2025').style.color = year==='2025' ? '#fff' : 'var(--text2)';
+  document.getElementById('yr2025').style.borderColor = year==='2025' ? 'var(--blue)' : 'var(--border2)';
+  document.getElementById('yearLabel').textContent = `Showing ${year} season data`;
+  // Reset savant data and re-fetch for new year
+  savant.forEach(p => { p.xera=null; p.xba=null; p.kbb=null; p.whiff=null; p.fxStatus='unknown'; p.fxTeam=''; });
+  document.getElementById('leagueHeader').textContent = `Loading ${year} Statcast data...`;
+  try { await fetchSavantData(); } catch(e){ console.warn('Savant fetch failed:', e.message); }
+  document.getElementById('leagueHeader').textContent = `${G.leagueName} · ${Object.keys(G.teams).length} teams · ${year} data`;
+}
+
+function toggleCredBar(){
+  const bar = document.getElementById('credBar');
+  bar.style.display = bar.style.display === 'none' ? 'flex' : 'none';
+  if(bar.style.display === 'flex') document.getElementById('secretIdBar').focus();
+}
+
+function showCredentialPrompt(){
+  document.getElementById('credBar').style.display = 'flex';
+  document.getElementById('secretIdBar').focus();
+}
+
+async function refreshLeague(){
+  const btn = document.getElementById('refreshBtn');
+  btn.textContent = 'Loading...';
+  btn.disabled = true;
+  document.getElementById('leagueHeader').textContent = 'Loading league data...';
+  try {
+    await loadLeague();
+  } catch(e) {
+    document.getElementById('leagueHeader').textContent = 'Error: ' + e.message;
+    console.error('loadLeague failed:', e);
+  }
+  btn.textContent = 'Refresh data';
+  btn.disabled = false;
+}
+
+renderSavant();
+refreshLeague();
+</script>
+</body>
+</html>

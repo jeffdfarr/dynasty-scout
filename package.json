@@ -1,0 +1,15 @@
+{
+  "name": "fantrax-proxy",
+  "version": "1.0.0",
+  "description": "Local CORS proxy for Fantrax API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=14"
+  },
+  "dependencies": {
+    "nodemailer": "^8.0.4"
+  }
+}
