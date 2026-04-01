@@ -663,7 +663,7 @@ if(process.env.ENABLE_CRON === 'true') {
 }
 // ────────────────────────────────────────────────────────────────────────────
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('  Proxy running at http://localhost:' + PORT);
   console.log('  /fxea/*       -> https://www.fantrax.com');
