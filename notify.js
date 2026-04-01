@@ -226,13 +226,14 @@ async function run() {
 
   // 2. Fetch Statcast data (both years in parallel)
   console.log('Fetching Statcast data...');
-  const [stats26, stats25, xera26, xera25, recent, aaaStats] = await Promise.all([
+  const [stats26, stats25, xera26, xera25, recent, aaaStats, mlbStats26] = await Promise.all([
     fetchJSON(`${CONFIG.proxyBase}/savant-stats?year=${CURRENT_YEAR}`, 120000),
     fetchJSON(`${CONFIG.proxyBase}/savant-stats?year=${PREV_YEAR}`, 120000),
     fetchXERA(CURRENT_YEAR),
     fetchXERA(PREV_YEAR),
     fetchJSON(`${CONFIG.proxyBase}/savant-recent`, 120000),
     fetchJSON(`${CONFIG.proxyBase}/aaa-stats`, 60000),
+    fetchJSON(`${CONFIG.proxyBase}/mlb-stats?year=${CURRENT_YEAR}`, 60000),
   ]);
   console.log(`Statcast loaded — 2026: ${Object.keys(stats26).length}, 2025: ${Object.keys(stats25).length}, L7: ${Object.keys(recent).length}, AAA: ${Object.keys(aaaStats).length} pitchers`);
 
@@ -278,16 +279,16 @@ async function run() {
     if(faCacheData[nn]) return;
 
     // 🔥 HOT: dominant with real sample, whiff% confirms stuff
-    const isDominating = bf26 >= 15 && kbb26 >= 20 && (whiff == null || whiff >= 28);
-    // 🆕 NEW: fresh callup, elite K-BB% immediately
-    const isCallup     = bf26 >= 4 && bf26 < 60 && kbb26 >= 20;
+    // 🔥 HOT: dominant with real sample, whiff% is primary signal
+    const isDominating = bf26 >= 15 && whiff >= 30 && kbb26 >= 15;
+    // 🆕 NEW: fresh callup, high whiff% immediately
+    const isCallup     = bf26 >= 4 && bf26 < 60 && whiff >= 28 && kbb26 >= 15;
     // 📈 TRENDING: last 7 days significantly better than season
     const isTrending   = bf7 >= 5 && kbb7 != null && kbb26 != null && kbb7 > kbb26 + 6;
-    // ✅ SOLID: reliable option, good sample, whiff% check
-    const isStrongSP   = bf26 >= 8 && kbb26 >= 20 && (whiff == null || whiff >= 24);
-    // 💤 SLEEPER: great 2025, no 2026 data yet
-    const isSleeper    = bf26 === 0 && bf25 >= 100 && kbb25 >= 20 && (whiff25 == null || whiff25 >= 28);
-
+    // ✅ SOLID: reliable option, good sample, decent whiff%
+    const isStrongSP   = bf26 >= 8 && whiff >= 24 && kbb26 >= 15;
+    // 💤 SLEEPER: great 2025 whiff%, no 2026 data yet
+    const isSleeper    = bf26 === 0 && bf25 >= 100 && whiff25 >= 28 && kbb25 >= 15;
     if(!isDominating && !isCallup && !isTrending && !isStrongSP && !isSleeper) return;
 
 
@@ -299,24 +300,44 @@ async function run() {
 
     // Build stat string
     const statParts = [];
-    if(kbb26 != null)  statParts.push(`K-BB:${kbb26}%`);
-    if(whiff != null)  statParts.push(`Whiff:${whiff}%`);
-    if(kbb7 != null && kbb26 != null && kbb7 > kbb26) statParts.push(`↑L7:${kbb7}%`);
-    if(bf26)           statParts.push(`${bf26}BF`);
-    if(!statParts.length && kbb25 != null)   statParts.push(`'25 K-BB:${kbb25}%`);
-    if(!statParts.length && whiff25 != null) statParts.push(`'25 Whiff:${whiff25}%`);
+    if(bf26)           statParts.push(`${(bf26/3).toFixed(1)}IP`);
+    if(whiff != null)  statParts.push(`${whiff}%Whiff`);
+    if(kbb26 != null)  statParts.push(`${kbb26}%K-BB`);
+    if(kbb7 != null && kbb26 != null && kbb7 > kbb26) statParts.push(`↑${kbb7}%L7`);
+    if(!statParts.length && kbb25 != null)   statParts.push(`${kbb25}%K-BB('25)`);
+    if(!statParts.length && whiff25 != null) statParts.push(`${whiff25}%Whiff('25)`);
 
       // Skip if seen in last 7 days
     if(faCacheData[nn]) { return; }
 
-    candidates.push({ name, pos, label, statStr: statParts.join(' '), kbb26, bf26, nn });
+    candidates.push({ name, pos, label, statStr: statParts.join(' '), kbb26, whiff, bf26, nn });
+  });
+
+  // Check for first saves among FA pitchers
+  const firstSaveCandidates = [];
+  faNames.forEach(nn => {
+    const adpPos = adpPosMap[nn] || '';
+    const isPitcher = adpPos.split(',').some(p => PITCHER_POS.has(p.trim()));
+    if(!isPitcher && adpPos) return;
+    const mlb = mlbStats26[nn] || Object.entries(mlbStats26).find(([k])=>normName(k)===normName(nn))?.[1];
+    if(!mlb) return;
+    if(mlb.saves >= 1 && mlb.saves <= 3) {
+      const s26 = stats26[nn] || Object.entries(stats26).find(([k])=>normName(k)===nn)?.[1];
+      firstSaveCandidates.push({
+        name: mlb.name,
+        saves: mlb.saves,
+        ip: mlb.ip,
+        kbb:   s26?.kbb       || null,
+        whiff: s26?.whiff_pct || null,
+      });
+    }
   });
 
   // Sort by label priority then K-BB%
   const labelOrder = {'🔥':0,'🆕':1,'📈':2,'✅':3,'💤':4};
   candidates.sort((a,b) => {
     const lo = (labelOrder[a.label]??9) - (labelOrder[b.label]??9);
-    return lo !== 0 ? lo : (b.kbb26||0) - (a.kbb26||0);
+    return lo !== 0 ? lo : (b.whiff||0) - (a.whiff||0);
   });
 
   // Save to FA cache — record timestamp for each candidate
@@ -370,36 +391,61 @@ async function run() {
 
   console.log(`AAA candidates: ${aaaCandidates.length} total, ${newAAA.length} new`);
 
-  // 4. Build notification message — keep short for ntfy (under 4KB)
+  // 4. Build notification message — Option A style with dividers
   const top = candidates.slice(0, 4);
   const date = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric'});
-  const parts = [];
+  const DIV = '━━━━━━━━━━━━';
+  const parts = [`📅 ${date}`, ''];
 
-  if(fortyManAdditions.length > 0) {
-    parts.push('📋 40-MAN ADDITION' + (fortyManAdditions.length > 1 ? 'S' : '') + ':');
-    fortyManAdditions.slice(0,3).forEach(p => parts.push(`  ➕ ${p.name} (${p.abbr})`));
-  }
-
-  if(top.length) parts.push('⚾ FA TARGETS:');
-  top.forEach(c => {
-    parts.push(`${c.label} ${c.name} ${c.statStr}`);
-  });
-
-  if(aaaToReport.length > 0) {
-    parts.push('');
-    parts.push('🌱 AAA WATCH:');
-    aaaToReport.forEach(p => {
-      const org = p.aaaTeam || p.mlbOrg.split(' ').pop();
-      parts.push(`  ${p.name} (${org}) K-BB:${p.kbb}% K/9:${p.k9} ERA:${p.era?.toFixed(2)||'—'} ${p.ip}IP`);
+  if(top.length) {
+    parts.push('⚾ FA TARGETS');
+    parts.push(DIV);
+    top.forEach(c => {
+      parts.push(`${c.label} ${c.name}`);
+      // Split each stat onto same line with clear spacing like AAA section
+      const statParts = c.statStr.split(' ').filter(Boolean);
+      parts.push('   ' + statParts.join('    '));
+      parts.push('');
     });
   }
 
-  const message = parts.join('\n');
+  if(fortyManAdditions.length > 0) {
+    if(top.length) parts.push('');
+    parts.push('📋 40-MAN ADDITION' + (fortyManAdditions.length > 1 ? 'S' : ''));
+    parts.push(DIV);
+    fortyManAdditions.slice(0,3).forEach(p => parts.push(`  ➕ ${p.name} (${p.abbr})`));
+    parts.push('');
+  }
+
+  if(firstSaveCandidates.length > 0) {
+    parts.push('');
+    parts.push('💾 FIRST SAVES');
+    parts.push(DIV);
+    firstSaveCandidates.slice(0,3).forEach(p => {
+      parts.push(`  🔐 ${p.name}`);
+      parts.push(`  ${p.ip}IP${p.whiff ? '    ' + p.whiff + '%Whiff' : ''}${p.kbb ? '    ' + p.kbb + '%K-BB' : ''}`);
+      parts.push('');
+    });
+  }
+
+  if(aaaToReport.length > 0) {
+    if(top.length || fortyManAdditions.length) parts.push('');
+    parts.push('🌱 AAA WATCH');
+    parts.push(DIV);
+    aaaToReport.forEach(p => {
+      const org = p.aaaTeam || p.mlbOrg.split(' ').pop();
+      parts.push(`  ${p.name} (${org})`);
+      parts.push(`  ${p.ip} IP    ${p.kbb}% K-BB    ${p.k9} K/9    ${p.era?.toFixed(2)||'—'} ERA`);
+      parts.push('');
+    });
+  }
+
+  const message = parts.join('\n').trimEnd();
 
   console.log('\nMessage:\n' + message);
 
   // Don't send if nothing to report
-  if(!fortyManAdditions.length && !candidates.length && !aaaToReport.length) {
+  if(!fortyManAdditions.length && !candidates.length && !aaaToReport.length && !firstSaveCandidates.length) {
     console.log('Nothing notable today — no notification sent.');
     return;
   }
