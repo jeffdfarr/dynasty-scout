@@ -32,6 +32,9 @@ if(!CONFIG.fantraxSecretId || !CONFIG.fantraxLeagueId) {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
+const CURRENT_YEAR = String(new Date().getFullYear());
+const PREV_YEAR    = String(new Date().getFullYear() - 1);
+
 const PITCHER_POS = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
 
 function fetchJSON(url, timeoutMs=30000) {
@@ -53,14 +56,16 @@ function fetchJSON(url, timeoutMs=30000) {
   });
 }
 
-function fetchCSV(url) {
+function fetchCSV(url, timeoutMs=60000) {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith('https') ? https : http;
-    lib.get(url, res => {
+    const req = lib.get(url, res => {
       let body = '';
       res.on('data', c => body += c);
       res.on('end', () => resolve(body));
-    }).on('error', reject);
+    });
+    req.on('error', reject);
+    req.setTimeout(timeoutMs, () => { req.destroy(); reject(new Error('CSV timeout: ' + url.split('?')[0])); });
   });
 }
 
@@ -85,7 +90,7 @@ function parseCSVLine(line) {
   return fields;
 }
 
-async function fetchXERA(year) {
+async function fetchXERA(year, timeoutMs=60000) {
   const url = `${CONFIG.proxyBase}/savant/leaderboard/expected_statistics?type=pitcher&year=${year}&position=&team=&min=1&csv=true`;
   const csv = await fetchCSV(url);
   const lines = csv.trim().split('\n');
@@ -222,12 +227,12 @@ async function run() {
   // 2. Fetch Statcast data (both years in parallel)
   console.log('Fetching Statcast data...');
   const [stats26, stats25, xera26, xera25, recent, aaaStats] = await Promise.all([
-    fetchJSON(`${CONFIG.proxyBase}/savant-stats?year=2026`),
-    fetchJSON(`${CONFIG.proxyBase}/savant-stats?year=2025`),
-    fetchXERA('2026'),
-    fetchXERA('2025'),
-    fetchJSON(`${CONFIG.proxyBase}/savant-recent`),
-    fetchJSON(`${CONFIG.proxyBase}/aaa-stats`),
+    fetchJSON(`${CONFIG.proxyBase}/savant-stats?year=${CURRENT_YEAR}`, 120000),
+    fetchJSON(`${CONFIG.proxyBase}/savant-stats?year=${PREV_YEAR}`, 120000),
+    fetchXERA(CURRENT_YEAR),
+    fetchXERA(PREV_YEAR),
+    fetchJSON(`${CONFIG.proxyBase}/savant-recent`, 120000),
+    fetchJSON(`${CONFIG.proxyBase}/aaa-stats`, 60000),
   ]);
   console.log(`Statcast loaded — 2026: ${Object.keys(stats26).length}, 2025: ${Object.keys(stats25).length}, L7: ${Object.keys(recent).length}, AAA: ${Object.keys(aaaStats).length} pitchers`);
 
