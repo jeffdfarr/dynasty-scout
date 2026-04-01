@@ -15,28 +15,41 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-// ── CONFIGURE THESE ──────────────────────────────────────────────────────────
+// ── CREDENTIALS — must be set as environment variables ───────────────────────
+// Local: create a .env file or export them in your shell
+// Cloud: set in Railway dashboard under Variables
 const CONFIG = {
-  ntfyTopic: 'jeffdynastyscout',
-  fantraxSecretId: 'yrhnzbzbkyypk78k',
-  fantraxLeagueId: 'bhbev187mhox8axz',
-  proxyBase: 'http://localhost:3001',
+  ntfyTopic:       process.env.NTFY_TOPIC        || 'jeffdynastyscout', // ok to hardcode topic
+  fantraxSecretId: process.env.FANTRAX_SECRET_ID || '',
+  fantraxLeagueId: process.env.FANTRAX_LEAGUE_ID || '',
+  proxyBase:       process.env.PROXY_BASE        || 'http://localhost:3001',
 };
+
+if(!CONFIG.fantraxSecretId || !CONFIG.fantraxLeagueId) {
+  console.error('ERROR: FANTRAX_SECRET_ID and FANTRAX_LEAGUE_ID must be set as environment variables.');
+  console.error('Local: export FANTRAX_SECRET_ID=yourkey FANTRAX_LEAGUE_ID=yourid');
+  process.exit(1);
+}
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PITCHER_POS = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
 
-function fetchJSON(url) {
+function fetchJSON(url, timeoutMs=30000) {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith('https') ? https : http;
-    lib.get(url, res => {
+    const req = lib.get(url, res => {
       let body = '';
       res.on('data', c => body += c);
       res.on('end', () => {
         try { resolve(JSON.parse(body)); }
-        catch(e) { reject(new Error('JSON parse failed for ' + url + ': ' + body.slice(0,100))); }
+        catch(e) { reject(new Error('JSON parse failed for ' + url.split('?')[0] + ': ' + body.slice(0,100))); }
       });
-    }).on('error', reject);
+    });
+    req.on('error', reject);
+    req.setTimeout(timeoutMs, () => {
+      req.destroy();
+      reject(new Error('Timeout fetching: ' + url.split('?')[0]));
+    });
   });
 }
 
@@ -149,10 +162,12 @@ async function run() {
 
   // 1. Fetch Fantrax data
   console.log('Fetching Fantrax league data...');
+  const sid = CONFIG.fantraxSecretId;
+  const lid = CONFIG.fantraxLeagueId;
   const [leagueInfo, adpData, rosterData] = await Promise.all([
-    fetchJSON(`${CONFIG.proxyBase}/fxea/general/getLeagueInfo?leagueId=${CONFIG.fantraxLeagueId}`),
-    fetchJSON(`${CONFIG.proxyBase}/fxea/general/getAdp?sport=MLB`),
-    fetchJSON(`${CONFIG.proxyBase}/fxea/general/getTeamRosters?leagueId=${CONFIG.fantraxLeagueId}`),
+    fetchJSON(`${CONFIG.proxyBase}/fxea/general/getLeagueInfo?leagueId=${lid}&userSecretId=${sid}`),
+    fetchJSON(`${CONFIG.proxyBase}/fxea/general/getAdp?sport=MLB&userSecretId=${sid}`),
+    fetchJSON(`${CONFIG.proxyBase}/fxea/general/getTeamRosters?leagueId=${lid}&userSecretId=${sid}`),
   ]);
 
   // Build id->name and position maps from ADP
@@ -200,14 +215,15 @@ async function run() {
 
   // 2. Fetch Statcast data (both years in parallel)
   console.log('Fetching Statcast data...');
-  const [stats26, stats25, xera26, xera25, recent] = await Promise.all([
+  const [stats26, stats25, xera26, xera25, recent, aaaStats] = await Promise.all([
     fetchJSON(`${CONFIG.proxyBase}/savant-stats?year=2026`),
     fetchJSON(`${CONFIG.proxyBase}/savant-stats?year=2025`),
     fetchXERA('2026'),
     fetchXERA('2025'),
     fetchJSON(`${CONFIG.proxyBase}/savant-recent`),
+    fetchJSON(`${CONFIG.proxyBase}/aaa-stats`),
   ]);
-  console.log(`Statcast loaded — 2026: ${Object.keys(stats26).length}, 2025: ${Object.keys(stats25).length}, L7: ${Object.keys(recent).length} pitchers`);
+  console.log(`Statcast loaded — 2026: ${Object.keys(stats26).length}, 2025: ${Object.keys(stats25).length}, L7: ${Object.keys(recent).length}, AAA: ${Object.keys(aaaStats).length} pitchers`);
 
   // Check for new 40-man pitcher additions
   console.log('Checking 40-man roster additions...');
@@ -215,6 +231,10 @@ async function run() {
 
   // 3. Merge all stats per pitcher and find FA candidates
   const candidates = [];
+
+  // Calculate season progress factor once before loop
+  const maxBF26 = Math.max(...Object.values(stats26).map(s=>s.bf||0), 1);
+  console.log(`[notify] Season progress: max BF=${maxBF26}, factor=${Math.min(1, maxBF26/150).toFixed(2)}`);
 
   faNames.forEach(nn => {
     // Check if pitcher position
@@ -243,48 +263,50 @@ async function run() {
     const pos    = adpPos.split(',')[0] || '?';
 
     // ── ALERT CRITERIA ──────────────────────────────────────────────
-    // 1. New call-up: appeared in 2026 (bf > 1) with elite K-BB% or xERA
-    const isCallup = bf26 > 1 && bf26 < 40 && (
-      (kbb26 != null && kbb26 >= 15) ||
+    // Scale thresholds by season progress
+    const earlyFactor = Math.min(1, maxBF26 / 150); // 0=opening day, 1=mid-season
+    const minCallupBF  = Math.max(8,  Math.round(25  * earlyFactor));
+    const minHotBF     = Math.max(15, Math.round(40  * earlyFactor));
+    const minSolidBF   = Math.max(20, Math.round(60  * earlyFactor));
+    const minKBBCallup = Math.max(18, Math.round(18  * earlyFactor));
+    const minKBBHot    = Math.max(20, Math.round(22  * earlyFactor));
+    const minTrendBF   = Math.max(5,  Math.round(15  * earlyFactor));
+    const minTrendJump = Math.max(5,  Math.round(8   * earlyFactor));
+
+    // 1. New call-up: small but meaningful sample, elite metrics
+    const isCallup = bf26 >= minCallupBF && bf26 < 80 && (
+      (kbb26 != null && kbb26 >= minKBBCallup) &&
       (xera26v != null && xera26v < 3.50)
     );
-    // 2. Dominating reliever: meaningful 2026 sample, elite K-BB% + good xERA
-    const isDominating = bf26 >= 15 && kbb26 >= 20 && (xera26v == null || xera26v < 3.75);
-    // 3. Strong SP: good 2026 sample, solid across both metrics
-    const isStrongSP   = bf26 >= 40 && kbb26 >= 15 && xera26v != null && xera26v < 3.75;
-    // 4. Sleeper: no 2026 data yet but dominant 2025 season
-    const isSleeper    = bf26 === 0 && bf25 >= 100 && kbb25 >= 18 && (xera25v == null || xera25v < 3.50);
-    // 5. Trending up: last 7 days K-BB% significantly better than season avg
-    const isTrending   = bf7 >= 5 && kbb7 != null && kbb26 != null && kbb7 > kbb26 + 5;
+    // 2. HOT: dominating with meaningful sample, MUST have xERA to confirm it's real
+    const isDominating = bf26 >= minHotBF && bf26 < 120 && kbb26 >= minKBBHot && xera26v != null && xera26v < 3.50;
+    // 3. SOLID SP: larger sample, consistent across both metrics
+    const isStrongSP   = bf26 >= minSolidBF && kbb26 >= 15 && xera26v != null && xera26v < 3.50;
+    // 4. Sleeper: no 2026 data yet but dominant full 2025 season
+    const isSleeper    = bf26 === 0 && bf25 >= 150 && kbb25 >= 20 && (xera25v == null || xera25v < 3.25);
+    // 5. Trending up: hot last 7 days
+    const isTrending   = bf7 >= minTrendBF && kbb7 != null && kbb26 != null && kbb7 > kbb26 + minTrendJump;
+    
+    // Early season debug
+    if(earlyFactor < 0.3 && false) console.log(`[early season] factor:${earlyFactor.toFixed(2)} minCallupBF:${minCallupBF} minHotBF:${minHotBF}`);
     // ────────────────────────────────────────────────────────────────
 
     if(!isCallup && !isDominating && !isStrongSP && !isSleeper && !isTrending) return;
 
-    const label = isCallup     ? 'NEW'
-                : isDominating ? 'HOT'
-                : isTrending   ? 'TRENDING'
-                : isStrongSP   ? 'SOLID'
-                : 'SLEEPER';
+    const label = isCallup     ? '🆕'
+                : isDominating ? '🔥'
+                : isTrending   ? '📈'
+                : isStrongSP   ? '✅'
+                : '💤';
 
     // Build stat string
     const statParts = [];
     if(kbb26 != null)   statParts.push(`K-BB:${kbb26}%`);
-    if(kbb7 != null)    statParts.push(`L7:${kbb7}%`);
     if(xera26v != null) statParts.push(`xERA:${xera26v}`);
+    if(kbb7 != null && kbb26 != null && kbb7 > kbb26) statParts.push(`↑L7:${kbb7}%`);
     if(bf26)            statParts.push(`${bf26}BF`);
-    if(!statParts.length && kbb25 != null)  statParts.push(`'25:K-BB:${kbb25}%`);
-    if(!statParts.length && xera25v != null) statParts.push(`'25:xERA:${xera25v}`);
-
-    // Detect new pitch types vs 2025
-    const mix26 = s26?.pitchMix || {};
-    const mix25 = s25?.pitchMix || {};
-    const newPitches = [];
-    Object.entries(mix26).forEach(([pitch, pct26]) => {
-      const pct25 = mix25[pitch] || 0;
-      if(pct25 === 0 && pct26 >= 5) newPitches.push(`NEW:${pitch}(${pct26}%)`);
-      else if(pct26 - pct25 >= 10) newPitches.push(`+${pitch}(${pct25}%→${pct26}%)`);
-    });
-    if(newPitches.length) statParts.push(newPitches.join(' '));
+    if(!statParts.length && kbb25 != null)  statParts.push(`'25 K-BB:${kbb25}%`);
+    if(!statParts.length && xera25v != null) statParts.push(`'25 xERA:${xera25v}`);
 
     candidates.push({ name, pos, label, statStr: statParts.join(' '), kbb26, xera26v, bf26 });
   });
@@ -298,25 +320,81 @@ async function run() {
 
   console.log(`Found ${candidates.length} candidates`);
 
+  // 3b. Find AAA pitchers worth watching — composite filter, no repeats
+  const AAA_CACHE = path.join(__dirname, '.aaa-notify-cache.json');
+  let prevAAANames = new Set();
+  try {
+    const prev = JSON.parse(fs.readFileSync(AAA_CACHE, 'utf8'));
+    prevAAANames = new Set(prev.names || []);
+    // Expire cache after 3 days so guys re-appear if still dominant
+    const age = Date.now() - (prev.timestamp || 0);
+    if(age > 3 * 24 * 60 * 60 * 1000) prevAAANames = new Set();
+  } catch(e) {}
+
+  // Scale AAA thresholds by season progress
+  const maxAAAIP = Math.max(...Object.values(aaaStats).map(s=>s.ip||0), 1);
+  const aaaFactor = Math.min(1, maxAAAIP / 40);
+  const minAAAIP  = Math.max(3,  Math.round(15 * aaaFactor));
+  const minAAAK9  = Math.max(7.0, 8.0 * aaaFactor);
+
+  const aaaCandidates = Object.values(aaaStats).filter(p => {
+    if(p.ip   < minAAAIP) return false;
+    if(p.kbb  < 15)       return false;
+    if(p.era  > 4.50)     return false;
+    if(p.k9   < minAAAK9) return false;
+    if(p.bb9  > 5.0)      return false;
+    return true;
+  }).sort((a, b) => {
+    // Composite score: weight K-BB% most, then K/9, then ERA
+    const scoreA = (a.kbb * 2) + (a.k9 * 1.5) + ((5.00 - (a.era||5)) * 10);
+    const scoreB = (b.kbb * 2) + (b.k9 * 1.5) + ((5.00 - (b.era||5)) * 10);
+    return scoreB - scoreA;
+  });
+
+  // Split into new finds vs returning
+  const newAAA = aaaCandidates.filter(p => !prevAAANames.has(normName(p.name)));
+  const aaaToReport = newAAA.length > 0 ? newAAA.slice(0,4) : []; // only report new finds
+
+  // Update cache with current candidates
+  try {
+    fs.writeFileSync(AAA_CACHE, JSON.stringify({
+      names: aaaCandidates.map(p => normName(p.name)),
+      timestamp: Date.now()
+    }, null, 2));
+  } catch(e) { console.warn('AAA cache write failed:', e.message); }
+
+  console.log(`AAA candidates: ${aaaCandidates.length} total, ${newAAA.length} new`);
+
   // 4. Build notification message — keep short for ntfy (under 4KB)
-  const top = candidates.slice(0, 5);
+  const top = candidates.slice(0, 4);
   const date = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric'});
   const parts = [];
 
   if(fortyManAdditions.length > 0) {
-    parts.push('40-MAN: ' + fortyManAdditions.slice(0,3).map(p=>`${p.name} (${p.abbr})`).join(', '));
+    parts.push('📋 40-MAN ADDITION' + (fortyManAdditions.length > 1 ? 'S' : '') + ':');
+    fortyManAdditions.slice(0,3).forEach(p => parts.push(`  ➕ ${p.name} (${p.abbr})`));
   }
 
+  if(top.length) parts.push('⚾ FA TARGETS:');
   top.forEach(c => {
-    parts.push(`[${c.label}] ${c.name} ${c.statStr}`);
+    parts.push(`${c.label} ${c.name} ${c.statStr}`);
   });
+
+  if(aaaToReport.length > 0) {
+    parts.push('');
+    parts.push('🌱 AAA WATCH:');
+    aaaToReport.forEach(p => {
+      const org = p.aaaTeam || p.mlbOrg.split(' ').pop();
+      parts.push(`  ${p.name} (${org}) K-BB:${p.kbb}% K/9:${p.k9} ERA:${p.era?.toFixed(2)||'—'} ${p.ip}IP`);
+    });
+  }
 
   const message = parts.join('\n');
 
   console.log('\nMessage:\n' + message);
 
   // Don't send if nothing to report
-  if(!fortyManAdditions.length && !candidates.length) {
+  if(!fortyManAdditions.length && !candidates.length && !aaaToReport.length) {
     console.log('Nothing notable today — no notification sent.');
     return;
   }

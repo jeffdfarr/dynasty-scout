@@ -7,8 +7,19 @@ const PORT = process.env.PORT || 3001;
 const FANTRAX_HOST = 'www.fantrax.com';
 const ANTHROPIC_HOST = 'api.anthropic.com';
 
-function setCORS(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+const IS_PRODUCTION = !!process.env.RAILWAY_PUBLIC_DOMAIN || !!process.env.ALLOWED_ORIGIN;
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 
+  (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null);
+
+function setCORS(res, reqOrigin) {
+  if(IS_PRODUCTION && ALLOWED_ORIGIN) {
+    // In production lock to specific origin
+    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+    res.setHeader('Vary', 'Origin');
+  } else {
+    // Locally allow everything (file://, localhost, etc.)
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, anthropic-version, Authorization');
 }
@@ -34,10 +45,16 @@ function proxyRequest(hostname, path, method, headers, body, res) {
       if (upstream.statusCode >= 400) {
         console.log(`[proxy] error body: ${responseBody.slice(0, 500)}`);
       }
-      setCORS(res);
+      // Set CORS headers directly in proxyRequest (reqOrigin not in scope here)
+      if(IS_PRODUCTION && ALLOWED_ORIGIN) {
+        res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+      } else {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+      }
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, anthropic-version, Authorization');
       res.writeHead(upstream.statusCode, {
         'Content-Type': upstream.headers['content-type'] || 'application/json',
-        'Access-Control-Allow-Origin': '*',
       });
       res.end(responseBody);
     });
@@ -45,7 +62,7 @@ function proxyRequest(hostname, path, method, headers, body, res) {
 
   proxy.on('error', (err) => {
     console.error('[proxy] request error:', err.message);
-    setCORS(res);
+    setCORS(res, reqOrigin);
     res.writeHead(502, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: err.message }));
   });
@@ -54,8 +71,21 @@ function proxyRequest(hostname, path, method, headers, body, res) {
   proxy.end();
 }
 
+const requestCounts = {};
+setInterval(() => { Object.keys(requestCounts).forEach(k => delete requestCounts[k]); }, 60000);
+
 const server = http.createServer(async (req, res) => {
-  setCORS(res);
+  const reqOrigin = req.headers.origin || '';
+  setCORS(res, reqOrigin);
+
+  // Basic rate limiting — 100 requests per minute per IP
+  const ip = req.socket.remoteAddress || 'unknown';
+  requestCounts[ip] = (requestCounts[ip] || 0) + 1;
+  if(requestCounts[ip] > 100) {
+    res.writeHead(429, {'Content-Type':'text/plain'});
+    res.end('Too many requests');
+    return;
+  }
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -103,7 +133,7 @@ const server = http.createServer(async (req, res) => {
   // /savant-stats -> fetch & aggregate 2026 pitcher K%, BB%, Whiff% from statcast
   if (path.startsWith('/savant-stats')) {
     const params = new URLSearchParams(path.includes('?') ? path.split('?')[1] : '');
-    const year = params.get('year') || '2026';
+    const year = params.get('year') || String(new Date().getFullYear());
     const statcastUrl = `/statcast_search/csv?all=true&hfGT=R%7C&hfSea=${year}%7C&player_type=pitcher&group_by=name&min_pitches=1&min_pas=1&sort_col=pitches&sort_order=desc&type=details&csv=true`;
     console.log(`[proxy] fetching statcast ${year} pitcher data...`);
     console.log('[proxy] fetching statcast pitch data for aggregation...');
@@ -195,7 +225,7 @@ const server = http.createServer(async (req, res) => {
           };
         });
 
-        setCORS(res);
+        setCORS(res, reqOrigin);
         res.writeHead(200, {'Content-Type':'application/json'});
         res.end(JSON.stringify(result));
       });
@@ -291,7 +321,7 @@ const server = http.createServer(async (req, res) => {
         });
 
         console.log(`[proxy] 7-day: aggregated ${Object.keys(result).length} pitchers`);
-        setCORS(res);
+        setCORS(res, reqOrigin);
         res.writeHead(200, {'Content-Type':'application/json'});
         res.end(JSON.stringify(result));
       });
@@ -305,7 +335,7 @@ const server = http.createServer(async (req, res) => {
 
   // /savant-debuts -> detect pitchers appearing in 2026 Statcast for first time
   if (path === '/savant-debuts') {
-    const knownFile = __dirname + '/known-pitchers-2026.json';
+    const knownFile = __dirname + `/known-pitchers-${new Date().getFullYear()}.json`;
 
     // Load previously seen pitchers
     let knownPitchers = {};
@@ -367,8 +397,8 @@ const server = http.createServer(async (req, res) => {
         try { fs.writeFileSync(knownFile, JSON.stringify(knownPitchers, null, 2)); }
         catch(e) { console.error('[proxy] could not save known pitchers:', e.message); }
 
-        console.log(`[proxy] debuts: ${debuts.length} new pitchers found in 2026`);
-        setCORS(res);
+        console.log(`[proxy] debuts: ${debuts.length} new pitchers found in ${new Date().getFullYear()}`);
+        setCORS(res, reqOrigin);
         res.writeHead(200, {'Content-Type':'application/json'});
         res.end(JSON.stringify(debuts));
       });
@@ -377,6 +407,127 @@ const server = http.createServer(async (req, res) => {
     pr.end();
     return;
   }
+
+  // /mlb-stats -> fetch MLB pitching traditional stats (WHIP, K/9, BB/9, GB%, IP)
+  if (path.startsWith('/mlb-stats')) {
+    const mlbYear = path.includes('year=2025') ? '2025' : String(new Date().getFullYear());
+    const fetchPage = (offset) => new Promise((resolve) => {
+      const mlbPath = `/api/v1/stats?stats=season&group=pitching&gameType=R&season=${mlbYear}&sportIds=1&limit=500&offset=${offset}&sortStat=strikeOuts&order=desc&hydrate=person,team`;
+      const opts = {hostname:'statsapi.mlb.com',port:443,path:mlbPath,method:'GET',headers:{'User-Agent':'Mozilla/5.0','Accept':'application/json'}};
+      const pr = https.request(opts, sr => {
+        let body=''; sr.on('data',c=>body+=c);
+        sr.on('end',()=>{ try { resolve(JSON.parse(body).stats?.[0]?.splits||[]); } catch(e){ resolve([]); } });
+      });
+      pr.on('error',()=>resolve([]));
+      pr.end();
+    });
+
+    Promise.all([fetchPage(0), fetchPage(500)]).then(([page1, page2]) => {
+      const splits = [...page1, ...page2];
+      const seen = new Set();
+      const result = {};
+      splits.filter(s => {
+        const id = s.player?.id;
+        if(!id || seen.has(id)) return false;
+        seen.add(id); return true;
+      }).forEach(s => {
+        const name = s.player?.fullName || '';
+        if(!name) return;
+        const st = s.stat || {};
+        const ip  = parseFloat(st.inningsPitched) || 0;
+        const k   = st.strikeOuts || 0;
+        const bb  = st.baseOnBalls || 0;
+        const go  = st.groundOuts || 0;
+        const ao  = st.airOuts || 0;
+        result[name.toLowerCase()] = {
+          name,
+          whip:  parseFloat(st.whip) || null,
+          ip,
+          k9:    ip > 0 ? parseFloat((k/ip*9).toFixed(1)) : null,
+          bb9:   ip > 0 ? parseFloat((bb/ip*9).toFixed(1)) : null,
+          gbPct: (go+ao) > 0 ? parseFloat((go/(go+ao)*100).toFixed(1)) : null,
+        };
+      });
+      console.log(`[proxy] MLB stats ${mlbYear}: ${Object.keys(result).length} pitchers`);
+      setCORS(res, reqOrigin);
+      res.writeHead(200,{'Content-Type':'application/json'});
+      res.end(JSON.stringify(result));
+    }).catch(()=>{ res.writeHead(200); res.end('{}'); });
+    return;
+  }
+
+  // /aaa-stats -> fetch AAA pitching leaderboard from MLB Stats API
+  if (path.startsWith('/aaa-stats')) {
+    const aaaYear = path.includes('year=2025') ? '2025' : String(new Date().getFullYear());
+    // Fetch two pages of 500 to get all AAA pitchers
+    // Sort by strikeOuts (counting stat — includes everyone, no min IP filter)
+    const fetchPage = (offset) => new Promise((resolve) => {
+      const mlbPath = `/api/v1/stats?stats=season&group=pitching&gameType=R&season=${aaaYear}&sportIds=11&limit=500&offset=${offset}&sortStat=strikeOuts&order=desc&hydrate=person,team`;
+      const opts = {hostname:'statsapi.mlb.com',port:443,path:mlbPath,method:'GET',headers:{'User-Agent':'Mozilla/5.0','Accept':'application/json'}};
+      const pr = https.request(opts, sr => {
+        let body=''; sr.on('data',c=>body+=c);
+        sr.on('end',()=>{ try { resolve(JSON.parse(body).stats?.[0]?.splits||[]); } catch(e){ resolve([]); } });
+      });
+      pr.on('error',()=>resolve([]));
+      pr.end();
+    });
+
+    Promise.all([fetchPage(0), fetchPage(500)]).then(([page1, page2]) => {
+      const splits = [...page1, ...page2];
+      console.log(`[proxy] AAA ${aaaYear}: ${splits.length} total splits`);
+      try {
+        // deduplicate by player id
+        const seen = new Set();
+        const unique = splits.filter(s => {
+          const id = s.player?.id;
+          if(!id || seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        });
+          const result = {};
+          unique.forEach(s => {
+            const name = s.player?.fullName || '';
+            if(!name) return;
+            const st = s.stat || {};
+            const bf = st.battersFaced || 0;
+            const k  = st.strikeOuts || 0;
+            const bb = st.baseOnBalls || 0;
+            const ip = parseFloat(st.inningsPitched) || 0;
+            const gs = st.gamesStarted || 0;
+            const gp = st.gamesPlayed || 0;
+            const kpct  = bf > 0 ? parseFloat((k/bf*100).toFixed(1)) : 0;
+            const bbpct = bf > 0 ? parseFloat((bb/bf*100).toFixed(1)) : 0;
+            const kbb   = bf > 0 ? parseFloat(((k-bb)/bf*100).toFixed(1)) : 0;
+            const k9    = ip > 0 ? parseFloat((k/ip*9).toFixed(1)) : 0;
+            const bb9   = ip > 0 ? parseFloat((bb/ip*9).toFixed(1)) : 0;
+            const go    = st.groundOuts || 0;
+            const ao    = st.airOuts    || 0;
+            const gbPct = (go + ao) > 0 ? parseFloat((go/(go+ao)*100).toFixed(1)) : null;
+            result[name.toLowerCase()] = {
+              name,
+              mlbOrg:    s.team?.parentOrgName || '',
+              aaaTeam:   s.team?.abbreviation  || '',
+              role:      gs > 0 ? 'SP' : 'RP',
+              era:       parseFloat(st.era)  || null,
+              whip:      parseFloat(st.whip) || null,
+              ip, bf, k, bb,
+              k_pct: kpct, bb_pct: bbpct, kbb,
+              k9, bb9, gbPct,
+              gp, gs,
+            };
+          });
+          console.log(`[proxy] AAA ${aaaYear}: ${Object.keys(result).length} pitchers after dedup`);
+          setCORS(res, reqOrigin);
+          res.writeHead(200,{'Content-Type':'application/json'});
+          res.end(JSON.stringify(result));
+        } catch(e) {
+          console.error('[proxy] AAA parse error:', e.message);
+          res.writeHead(200); res.end('{}');
+        }
+      }).catch(e=>{ res.writeHead(200); res.end('{}'); });
+    return;
+  }
+
 
   // /forty-man -> all 30 MLB 40-man rosters from MLB Stats API
   if (path === '/forty-man') {
@@ -429,7 +580,7 @@ const server = http.createServer(async (req, res) => {
     Promise.all(TEAM_IDS.map(t => fetchTeamRoster(t.id, t.abbr))).then(rosters => {
       const fortyMan = Object.assign({}, ...rosters);
       console.log(`[proxy] 40-man: ${Object.keys(fortyMan).length} players across 30 teams`);
-      setCORS(res);
+      setCORS(res, reqOrigin);
       res.writeHead(200, {'Content-Type':'application/json'});
       res.end(JSON.stringify(fortyMan));
     }).catch(e => { res.writeHead(200); res.end('{}'); });
@@ -453,7 +604,7 @@ const server = http.createServer(async (req, res) => {
   if (path === '/' || path === '/dashboard.html') {
     try {
       const file = fs.readFileSync(nodePath.join(__dirname, 'dashboard.html'), 'utf8');
-      setCORS(res);
+      setCORS(res, reqOrigin);
       res.writeHead(200, {'Content-Type':'text/html; charset=utf-8'});
       res.end(file);
     } catch(e) {

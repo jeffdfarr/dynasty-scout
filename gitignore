@@ -1,5 +1,7 @@
-.forty-man-cache.json
-node_modules/
 .env
+.forty-man-cache.json
+.aaa-notify-cache.json
+known-pitchers-*.json
+node_modules/
 *.log
 .DS_Store
