@@ -565,6 +565,7 @@ const server = http.createServer(async (req, res) => {
                   pos: p.position?.abbreviation||'?',
                   abbr,
                   jerseyNumber: p.jerseyNumber||'',
+                  age: p.person?.currentAge || null,
                 };
               });
               resolve(players);
@@ -635,8 +636,8 @@ const server = http.createServer(async (req, res) => {
 // ── CRON JOB — run daily notification at 8am Central Time ──────────────────
 function scheduleDaily() {
   const now = new Date();
-  // 8am CT = 14:00 UTC (13:00 UTC during CDT)
-  const targetHour = 13; // CDT (adjust to 14 for CST)
+  // Default 8am CT — set CRON_HOUR_UTC env var to override (13=CDT, 14=CST)
+  const targetHour = parseInt(process.env.CRON_HOUR_UTC || '13');
   const next = new Date(now);
   next.setUTCHours(targetHour, 0, 0, 0);
   if(next <= now) next.setUTCDate(next.getUTCDate() + 1);

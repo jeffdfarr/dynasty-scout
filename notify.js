@@ -116,14 +116,20 @@ async function fetchXERA(year) {
 const FORTY_MAN_CACHE = path.join(__dirname, '.forty-man-cache.json');
 const PITCHER_POS_40 = new Set(['P','SP','RP','CL']);
 
-async function checkFortyManAdditions() {
+async function checkFortyManAdditions(stats25) {
   try {
     const current = await fetchJSON(`${CONFIG.proxyBase}/forty-man`);
 
-    // Filter to pitchers only
+    // Filter to pitchers only AND prospects (age ≤ 26 or minimal 2025 MLB experience)
     const currentPitchers = {};
     Object.entries(current).forEach(([key, p]) => {
-      if(PITCHER_POS_40.has(p.pos)) currentPitchers[key] = p;
+      if(!PITCHER_POS_40.has(p.pos)) return; // pitchers only
+      // Age check — only care about prospects
+      if(p.age && p.age > 26) return;
+      // Also exclude veterans with significant 2025 MLB time (100+ BF)
+      const s25 = stats25[key] || Object.entries(stats25).find(([k])=>normName(k)===normName(key))?.[1];
+      if(s25 && s25.bf >= 100) return; // already an established MLB pitcher
+      currentPitchers[key] = p;
     });
 
     // Load previous snapshot
@@ -227,96 +233,90 @@ async function run() {
 
   // Check for new 40-man pitcher additions
   console.log('Checking 40-man roster additions...');
-  const fortyManAdditions = await checkFortyManAdditions();
+  const fortyManAdditions = await checkFortyManAdditions(stats25);
 
   // 3. Merge all stats per pitcher and find FA candidates
   const candidates = [];
 
-  // Calculate season progress factor once before loop
-  const maxBF26 = Math.max(...Object.values(stats26).map(s=>s.bf||0), 1);
-  console.log(`[notify] Season progress: max BF=${maxBF26}, factor=${Math.min(1, maxBF26/150).toFixed(2)}`);
+  // Load FA notification cache — skip pitchers seen in last 7 days
+  const FA_CACHE = path.join(__dirname, '.fa-notify-cache.json');
+  let faCacheData = {};
+  try { faCacheData = JSON.parse(fs.readFileSync(FA_CACHE, 'utf8')); } catch(e) {}
+  const now = Date.now();
+  const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+  Object.keys(faCacheData).forEach(k => { if(now - faCacheData[k] > SEVEN_DAYS) delete faCacheData[k]; });
 
   faNames.forEach(nn => {
-    // Check if pitcher position
     const adpPos = adpPosMap[nn] || '';
     const isPitcher = adpPos.split(',').some(p => PITCHER_POS.has(p.trim()));
-    if(!isPitcher && adpPos) return; // skip known non-pitchers
+    if(!isPitcher && adpPos) return;
 
-    // Match across all data sources by normalized name
-    const s26    = stats26[nn]  || Object.entries(stats26).find(([k])=>normName(k)===nn)?.[1];
-    const s25    = stats25[nn]  || Object.entries(stats25).find(([k])=>normName(k)===nn)?.[1];
-    const x26    = xera26[nn]   || Object.entries(xera26).find(([k])=>k===nn)?.[1];
-    const x25    = xera25[nn]   || Object.entries(xera25).find(([k])=>k===nn)?.[1];
-    const rec    = recent[nn]   || Object.entries(recent).find(([k])=>normName(k)===nn)?.[1];
+    const s26 = stats26[nn] || Object.entries(stats26).find(([k])=>normName(k)===nn)?.[1];
+    const s25 = stats25[nn] || Object.entries(stats25).find(([k])=>normName(k)===nn)?.[1];
+    const x25 = xera25[nn]  || Object.entries(xera25).find(([k])=>k===nn)?.[1];
+    const rec = recent[nn]  || Object.entries(recent).find(([k])=>normName(k)===nn)?.[1];
 
-    if(!s26 && !s25 && !x26 && !x25) return; // no data at all
+    if(!s26 && !s25) return;
 
-    const kbb26  = s26?.kbb      ?? null;
-    const kbb25  = s25?.kbb      ?? null;
-    const kbb7   = rec?.kbb      ?? null;
-    const xera26v= x26?.xera     ?? null;
-    const xera25v= x25?.xera     ?? null;
-    const bf26   = s26?.bf       || 0;
-    const bf25   = s25?.bf       || 0;
-    const bf7    = rec?.bf       || 0;
-    const name   = s26?.name || s25?.name || x26?.name || x25?.name || nn;
-    const pos    = adpPos.split(',')[0] || '?';
+    const kbb26   = s26?.kbb       ?? null;
+    const kbb25   = s25?.kbb       ?? null;
+    const kbb7    = rec?.kbb       ?? null;
+    const whiff   = s26?.whiff_pct ?? null;
+    const whiff25 = s25?.whiff_pct ?? null;
+    const bf26    = s26?.bf        || 0;
+    const bf25    = s25?.bf        || 0;
+    const bf7     = rec?.bf        || 0;
+    const name    = s26?.name || s25?.name || nn;
+    const pos     = adpPos.split(',')[0] || '?';
 
-    // ── ALERT CRITERIA ──────────────────────────────────────────────
-    // Scale thresholds by season progress
-    const earlyFactor = Math.min(1, maxBF26 / 150); // 0=opening day, 1=mid-season
-    const minCallupBF  = Math.max(8,  Math.round(25  * earlyFactor));
-    const minHotBF     = Math.max(15, Math.round(40  * earlyFactor));
-    const minSolidBF   = Math.max(20, Math.round(60  * earlyFactor));
-    const minKBBCallup = Math.max(18, Math.round(18  * earlyFactor));
-    const minKBBHot    = Math.max(20, Math.round(22  * earlyFactor));
-    const minTrendBF   = Math.max(5,  Math.round(15  * earlyFactor));
-    const minTrendJump = Math.max(5,  Math.round(8   * earlyFactor));
+    // Skip if notified in last 7 days
+    if(faCacheData[nn]) return;
 
-    // 1. New call-up: small but meaningful sample, elite metrics
-    const isCallup = bf26 >= minCallupBF && bf26 < 80 && (
-      (kbb26 != null && kbb26 >= minKBBCallup) &&
-      (xera26v != null && xera26v < 3.50)
-    );
-    // 2. HOT: dominating with meaningful sample, MUST have xERA to confirm it's real
-    const isDominating = bf26 >= minHotBF && bf26 < 120 && kbb26 >= minKBBHot && xera26v != null && xera26v < 3.50;
-    // 3. SOLID SP: larger sample, consistent across both metrics
-    const isStrongSP   = bf26 >= minSolidBF && kbb26 >= 15 && xera26v != null && xera26v < 3.50;
-    // 4. Sleeper: no 2026 data yet but dominant full 2025 season
-    const isSleeper    = bf26 === 0 && bf25 >= 150 && kbb25 >= 20 && (xera25v == null || xera25v < 3.25);
-    // 5. Trending up: hot last 7 days
-    const isTrending   = bf7 >= minTrendBF && kbb7 != null && kbb26 != null && kbb7 > kbb26 + minTrendJump;
-    
-    // Early season debug
-    if(earlyFactor < 0.3 && false) console.log(`[early season] factor:${earlyFactor.toFixed(2)} minCallupBF:${minCallupBF} minHotBF:${minHotBF}`);
-    // ────────────────────────────────────────────────────────────────
+    // 🔥 HOT: dominant with real sample, whiff% confirms stuff
+    const isDominating = bf26 >= 15 && kbb26 >= 20 && (whiff == null || whiff >= 28);
+    // 🆕 NEW: fresh callup, elite K-BB% immediately
+    const isCallup     = bf26 >= 4 && bf26 < 60 && kbb26 >= 20;
+    // 📈 TRENDING: last 7 days significantly better than season
+    const isTrending   = bf7 >= 5 && kbb7 != null && kbb26 != null && kbb7 > kbb26 + 6;
+    // ✅ SOLID: reliable option, good sample, whiff% check
+    const isStrongSP   = bf26 >= 8 && kbb26 >= 20 && (whiff == null || whiff >= 24);
+    // 💤 SLEEPER: great 2025, no 2026 data yet
+    const isSleeper    = bf26 === 0 && bf25 >= 100 && kbb25 >= 20 && (whiff25 == null || whiff25 >= 28);
 
-    if(!isCallup && !isDominating && !isStrongSP && !isSleeper && !isTrending) return;
+    if(!isDominating && !isCallup && !isTrending && !isStrongSP && !isSleeper) return;
 
-    const label = isCallup     ? '🆕'
-                : isDominating ? '🔥'
+
+    const label = isDominating ? '🔥'
+                : isCallup     ? '🆕'
                 : isTrending   ? '📈'
                 : isStrongSP   ? '✅'
                 : '💤';
 
     // Build stat string
     const statParts = [];
-    if(kbb26 != null)   statParts.push(`K-BB:${kbb26}%`);
-    if(xera26v != null) statParts.push(`xERA:${xera26v}`);
+    if(kbb26 != null)  statParts.push(`K-BB:${kbb26}%`);
+    if(whiff != null)  statParts.push(`Whiff:${whiff}%`);
     if(kbb7 != null && kbb26 != null && kbb7 > kbb26) statParts.push(`↑L7:${kbb7}%`);
-    if(bf26)            statParts.push(`${bf26}BF`);
-    if(!statParts.length && kbb25 != null)  statParts.push(`'25 K-BB:${kbb25}%`);
-    if(!statParts.length && xera25v != null) statParts.push(`'25 xERA:${xera25v}`);
+    if(bf26)           statParts.push(`${bf26}BF`);
+    if(!statParts.length && kbb25 != null)   statParts.push(`'25 K-BB:${kbb25}%`);
+    if(!statParts.length && whiff25 != null) statParts.push(`'25 Whiff:${whiff25}%`);
 
-    candidates.push({ name, pos, label, statStr: statParts.join(' '), kbb26, xera26v, bf26 });
+      // Skip if seen in last 7 days
+    if(faCacheData[nn]) { return; }
+
+    candidates.push({ name, pos, label, statStr: statParts.join(' '), kbb26, bf26, nn });
   });
 
-  // Sort: dominating/callups first, then by K-BB%
-  const labelOrder = { HOT: 0, NEW: 1, TRENDING: 2, SOLID: 3, SLEEPER: 4 };
-  candidates.sort((a, b) => {
-    if(labelOrder[a.label] !== labelOrder[b.label]) return labelOrder[a.label] - labelOrder[b.label];
-    return (b.kbb26||0) - (a.kbb26||0);
+  // Sort by label priority then K-BB%
+  const labelOrder = {'🔥':0,'🆕':1,'📈':2,'✅':3,'💤':4};
+  candidates.sort((a,b) => {
+    const lo = (labelOrder[a.label]??9) - (labelOrder[b.label]??9);
+    return lo !== 0 ? lo : (b.kbb26||0) - (a.kbb26||0);
   });
+
+  // Save to FA cache — record timestamp for each candidate
+  candidates.forEach(c => { faCacheData[c.nn] = now; });
+  try { fs.writeFileSync(FA_CACHE, JSON.stringify(faCacheData, null, 2)); } catch(e) {}
 
   console.log(`Found ${candidates.length} candidates`);
 
