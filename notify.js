@@ -56,7 +56,7 @@ function fetchJSON(url, timeoutMs=30000) {
 function fetchCSV(url) {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith('https') ? https : http;
-    http.get(url, res => {
+    lib.get(url, res => {
       let body = '';
       res.on('data', c => body += c);
       res.on('end', () => resolve(body));
