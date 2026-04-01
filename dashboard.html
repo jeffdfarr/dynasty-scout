@@ -1088,9 +1088,6 @@ function saveCredentials(){
   const sid = document.getElementById('secretIdBar').value.trim();
   if(!sid){ alert('Please enter your Fantrax Secret ID'); return; }
   localStorage.setItem('fantrax_secret_id', sid);
-  // sync api key to AI tab
-  if(akEl && key) akEl.value = key;
-  // hide the bar and trigger load
   document.getElementById('credBar').style.display = 'none';
   refreshLeague();
 }
