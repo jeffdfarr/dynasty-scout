@@ -133,7 +133,7 @@ async function checkFortyManAdditions(stats25, stats26) {
       const s25 = stats25[key] || Object.entries(stats25).find(([k])=>normName(k)===normName(key))?.[1];
       const s26 = stats26 && (stats26[key] || Object.entries(stats26).find(([k])=>normName(k)===normName(key))?.[1]);
       const totalBF = (s25?.bf || 0) + (s26?.bf || 0);
-      if(totalBF >= 75) return; // 75 BF ≈ 25 IP — skip established MLB pitchers
+      if(totalBF >= 15) return; // 15 BF ≈ 4 IP — skip anyone with meaningful MLB experience
       currentPitchers[key] = p;
     });
 
