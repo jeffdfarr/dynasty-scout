@@ -121,7 +121,7 @@ async function fetchXERA(year, timeoutMs=60000) {
 const FORTY_MAN_CACHE = path.join(__dirname, '.forty-man-cache.json');
 const PITCHER_POS_40 = new Set(['P','SP','RP','CL']);
 
-async function checkFortyManAdditions(stats25) {
+async function checkFortyManAdditions(stats25, stats26) {
   try {
     const current = await fetchJSON(`${CONFIG.proxyBase}/forty-man`);
 
@@ -129,11 +129,11 @@ async function checkFortyManAdditions(stats25) {
     const currentPitchers = {};
     Object.entries(current).forEach(([key, p]) => {
       if(!PITCHER_POS_40.has(p.pos)) return; // pitchers only
-      // Age check — only care about prospects
-      if(p.age && p.age > 26) return;
-      // Also exclude veterans with significant 2025 MLB time (100+ BF)
+      // Only flag pitchers with < 25 IP (~75 BF) combined MLB experience
       const s25 = stats25[key] || Object.entries(stats25).find(([k])=>normName(k)===normName(key))?.[1];
-      if(s25 && s25.bf >= 100) return; // already an established MLB pitcher
+      const s26 = stats26 && (stats26[key] || Object.entries(stats26).find(([k])=>normName(k)===normName(key))?.[1]);
+      const totalBF = (s25?.bf || 0) + (s26?.bf || 0);
+      if(totalBF >= 75) return; // 75 BF ≈ 25 IP — skip established MLB pitchers
       currentPitchers[key] = p;
     });
 
@@ -238,7 +238,7 @@ async function run() {
 
   // Check for new 40-man pitcher additions
   console.log('Checking 40-man roster additions...');
-  const fortyManAdditions = await checkFortyManAdditions(stats25);
+  const fortyManAdditions = await checkFortyManAdditions(stats25, stats26);
 
   // 3. Merge all stats per pitcher and find FA candidates
   const candidates = [];

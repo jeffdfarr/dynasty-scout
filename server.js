@@ -529,6 +529,30 @@ const server = http.createServer(async (req, res) => {
   }
 
 
+  // /test-fortyman -> return first 3 players with age to verify
+  if (path === '/test-fortyman') {
+    const opts = {hostname:'statsapi.mlb.com',port:443,path:'/api/v1/teams/133/roster/40Man',method:'GET',headers:{'User-Agent':'Mozilla/5.0'}};
+    const pr = https.request(opts, sr => {
+      let body=''; sr.on('data',c=>body+=c);
+      sr.on('end',()=>{
+        const data = JSON.parse(body);
+        const sample = (data.roster||[]).slice(0,3).map(p=>({
+          name: p.person?.fullName,
+          currentAge: p.person?.currentAge,
+          birthDate: p.person?.birthDate,
+          pos: p.position?.abbreviation,
+          jerseyNumber: p.jerseyNumber,
+        }));
+        setCORS(res, reqOrigin);
+        res.writeHead(200,{'Content-Type':'application/json'});
+        res.end(JSON.stringify(sample,null,2));
+      });
+    });
+    pr.on('error',e=>{res.writeHead(200);res.end('{}');});
+    pr.end();
+    return;
+  }
+
   // /forty-man -> all 30 MLB 40-man rosters from MLB Stats API
   if (path === '/forty-man') {
     // All 30 MLB team IDs
