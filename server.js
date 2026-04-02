@@ -446,6 +446,9 @@ const server = http.createServer(async (req, res) => {
           k9:    ip > 0 ? parseFloat((k/ip*9).toFixed(1)) : null,
           bb9:   ip > 0 ? parseFloat((bb/ip*9).toFixed(1)) : null,
           gbPct: (go+ao) > 0 ? parseFloat((go/(go+ao)*100).toFixed(1)) : null,
+          saves: st.saves || 0,
+          holds: st.holds || 0,
+          gamesFinished: st.gamesFinished || 0,
         };
       });
       console.log(`[proxy] MLB stats ${mlbYear}: ${Object.keys(result).length} pitchers`);
@@ -529,30 +532,6 @@ const server = http.createServer(async (req, res) => {
   }
 
 
-  // /test-fortyman -> return first 3 players with age to verify
-  if (path === '/test-fortyman') {
-    const opts = {hostname:'statsapi.mlb.com',port:443,path:'/api/v1/teams/133/roster/40Man',method:'GET',headers:{'User-Agent':'Mozilla/5.0'}};
-    const pr = https.request(opts, sr => {
-      let body=''; sr.on('data',c=>body+=c);
-      sr.on('end',()=>{
-        const data = JSON.parse(body);
-        const sample = (data.roster||[]).slice(0,3).map(p=>({
-          name: p.person?.fullName,
-          currentAge: p.person?.currentAge,
-          birthDate: p.person?.birthDate,
-          pos: p.position?.abbreviation,
-          jerseyNumber: p.jerseyNumber,
-        }));
-        setCORS(res, reqOrigin);
-        res.writeHead(200,{'Content-Type':'application/json'});
-        res.end(JSON.stringify(sample,null,2));
-      });
-    });
-    pr.on('error',e=>{res.writeHead(200);res.end('{}');});
-    pr.end();
-    return;
-  }
-
   // /forty-man -> all 30 MLB 40-man rosters from MLB Stats API
   if (path === '/forty-man') {
     // All 30 MLB team IDs
@@ -635,6 +614,20 @@ const server = http.createServer(async (req, res) => {
     } catch(e) {
       res.writeHead(404); res.end('dashboard.html not found');
     }
+    return;
+  }
+
+  // /explore/[endpoint] -> proxy to Fantrax and return raw JSON for exploration
+  if (path.startsWith('/explore/')) {
+    const fxPath = path.replace('/explore', '/fxea/general');
+    const body = await readBody(req);
+    console.log(`[explore] ${req.method} https://${FANTRAX_HOST}${fxPath}`);
+    const headers = {
+      'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (compatible; FantraxProxy/1.0)',
+      ...(req.headers.cookie ? { Cookie: req.headers.cookie } : {}),
+    };
+    proxyRequest(FANTRAX_HOST, fxPath, req.method, headers, body, res);
     return;
   }
 

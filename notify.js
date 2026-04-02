@@ -299,13 +299,17 @@ async function run() {
                 : '💤';
 
     // Build stat string
+    const k_pct26  = s26?.k_pct  ?? null;
+    const bb_pct26 = s26?.bb_pct ?? null;
+    const k_pct25  = s25?.k_pct  ?? null;
+    const bb_pct25 = s25?.bb_pct ?? null;
     const statParts = [];
-    if(bf26)           statParts.push(`${(bf26/3).toFixed(1)}IP`);
-    if(whiff != null)  statParts.push(`${whiff}%Whiff`);
-    if(kbb26 != null)  statParts.push(`${kbb26}%K-BB`);
-    if(kbb7 != null && kbb26 != null && kbb7 > kbb26) statParts.push(`↑${kbb7}%L7`);
-    if(!statParts.length && kbb25 != null)   statParts.push(`${kbb25}%K-BB('25)`);
-    if(!statParts.length && whiff25 != null) statParts.push(`${whiff25}%Whiff('25)`);
+    if(bf26)              statParts.push(`${(bf26/3).toFixed(1)}IP`);
+    if(k_pct26 != null)   statParts.push(`${k_pct26}%K`);
+    if(bb_pct26 != null)  statParts.push(`${bb_pct26}%BB`);
+    if(whiff != null)     statParts.push(`${whiff}%Whiff`);
+    if(!statParts.length && k_pct25 != null)  statParts.push(`${k_pct25}%K('25)`);
+    if(!statParts.length && bb_pct25 != null) statParts.push(`${bb_pct25}%BB('25)`);
 
       // Skip if seen in last 7 days
     if(faCacheData[nn]) { return; }
@@ -413,7 +417,12 @@ async function run() {
     if(top.length) parts.push('');
     parts.push('📋 40-MAN ADDITION' + (fortyManAdditions.length > 1 ? 'S' : ''));
     parts.push(DIV);
-    fortyManAdditions.slice(0,3).forEach(p => parts.push(`  ➕ ${p.name} (${p.abbr})`));
+    fortyManAdditions.slice(0,3).forEach(p => {
+      parts.push(`  ➕ ${p.name} (${p.abbr})`);
+      const aaa = Object.values(aaaStats).find(a => normName(a.name) === normName(p.name));
+      if(aaa) parts.push(`     ${aaa.ip}IP    ${aaa.k_pct != null ? aaa.k_pct+'%K' : '—'}    ${aaa.bb_pct != null ? aaa.bb_pct+'%BB' : '—'}    ${aaa.era != null ? aaa.era.toFixed(2)+' ERA' : '—'}`);
+      parts.push('');
+    });
     parts.push('');
   }
 
@@ -435,7 +444,7 @@ async function run() {
     aaaToReport.forEach(p => {
       const org = p.aaaTeam || p.mlbOrg.split(' ').pop();
       parts.push(`  ${p.name} (${org})`);
-      parts.push(`  ${p.ip} IP    ${p.kbb}% K-BB    ${p.k9} K/9    ${p.era?.toFixed(2)||'—'} ERA`);
+      parts.push(`  ${p.ip}IP    ${p.k_pct != null ? p.k_pct+'%K' : '—'}    ${p.bb_pct != null ? p.bb_pct+'%BB' : '—'}    ${p.era?.toFixed(2)||'—'} ERA`);
       parts.push('');
     });
   }

@@ -1,0 +1,2571 @@
+{
+  "braden nett": {
+    "name": "Braden Nett",
+    "pos": "P",
+    "abbr": "ATH",
+    "jerseyNumber": "78",
+    "age": null
+  },
+  "chen zhong-ao zhuang": {
+    "name": "Chen Zhong-Ao Zhuang",
+    "pos": "P",
+    "abbr": "ATH",
+    "jerseyNumber": "73",
+    "age": null
+  },
+  "eduarniel núñez": {
+    "name": "Eduarniel Núñez",
+    "pos": "P",
+    "abbr": "ATH",
+    "jerseyNumber": "54",
+    "age": null
+  },
+  "gunnar hoglund": {
+    "name": "Gunnar Hoglund",
+    "pos": "P",
+    "abbr": "ATH",
+    "jerseyNumber": "53",
+    "age": null
+  },
+  "henry baez": {
+    "name": "Henry Baez",
+    "pos": "P",
+    "abbr": "ATH",
+    "jerseyNumber": "76",
+    "age": null
+  },
+  "jack perkins": {
+    "name": "Jack Perkins",
+    "pos": "P",
+    "abbr": "ATH",
+    "jerseyNumber": "50",
+    "age": null
+  },
+  "joey estes": {
+    "name": "Joey Estes",
+    "pos": "P",
+    "abbr": "ATH",
+    "jerseyNumber": "68",
+    "age": null
+  },
+  "luis medina": {
+    "name": "Luis Medina",
+    "pos": "P",
+    "abbr": "ATH",
+    "jerseyNumber": "46",
+    "age": null
+  },
+  "tyler ferguson": {
+    "name": "Tyler Ferguson",
+    "pos": "P",
+    "abbr": "ATH",
+    "jerseyNumber": "44",
+    "age": null
+  },
+  "antwone kelly": {
+    "name": "Antwone Kelly",
+    "pos": "P",
+    "abbr": "PIT",
+    "jerseyNumber": "89",
+    "age": null
+  },
+  "brandan bidois": {
+    "name": "Brandan Bidois",
+    "pos": "P",
+    "abbr": "PIT",
+    "jerseyNumber": "77",
+    "age": null
+  },
+  "cam sanders": {
+    "name": "Cam Sanders",
+    "pos": "P",
+    "abbr": "PIT",
+    "jerseyNumber": "64",
+    "age": null
+  },
+  "evan sisk": {
+    "name": "Evan Sisk",
+    "pos": "P",
+    "abbr": "PIT",
+    "jerseyNumber": "48",
+    "age": null
+  },
+  "jared jones": {
+    "name": "Jared Jones",
+    "pos": "P",
+    "abbr": "PIT",
+    "jerseyNumber": "17",
+    "age": null
+  },
+  "josé urquidy": {
+    "name": "José Urquidy",
+    "pos": "P",
+    "abbr": "PIT",
+    "jerseyNumber": "65",
+    "age": null
+  },
+  "mason montgomery": {
+    "name": "Mason Montgomery",
+    "pos": "P",
+    "abbr": "PIT",
+    "jerseyNumber": "46",
+    "age": null
+  },
+  "ryan harbin": {
+    "name": "Ryan Harbin",
+    "pos": "P",
+    "abbr": "PIT",
+    "jerseyNumber": "84",
+    "age": null
+  },
+  "thomas harrington": {
+    "name": "Thomas Harrington",
+    "pos": "P",
+    "abbr": "PIT",
+    "jerseyNumber": "78",
+    "age": null
+  },
+  "wilber dotel": {
+    "name": "Wilber Dotel",
+    "pos": "P",
+    "abbr": "PIT",
+    "jerseyNumber": "86",
+    "age": null
+  },
+  "alek jacob": {
+    "name": "Alek Jacob",
+    "pos": "P",
+    "abbr": "SD",
+    "jerseyNumber": "37",
+    "age": null
+  },
+  "bryan hoeing": {
+    "name": "Bryan Hoeing",
+    "pos": "P",
+    "abbr": "SD",
+    "jerseyNumber": "78",
+    "age": null
+  },
+  "garrett hawkins": {
+    "name": "Garrett Hawkins",
+    "pos": "P",
+    "abbr": "SD",
+    "jerseyNumber": "59",
+    "age": null
+  },
+  "griffin canning": {
+    "name": "Griffin Canning",
+    "pos": "P",
+    "abbr": "SD",
+    "jerseyNumber": "17",
+    "age": null
+  },
+  "jason adam": {
+    "name": "Jason Adam",
+    "pos": "P",
+    "abbr": "SD",
+    "jerseyNumber": "40",
+    "age": null
+  },
+  "jhony brito": {
+    "name": "Jhony Brito",
+    "pos": "P",
+    "abbr": "SD",
+    "jerseyNumber": "76",
+    "age": null
+  },
+  "joe musgrove": {
+    "name": "Joe Musgrove",
+    "pos": "P",
+    "abbr": "SD",
+    "jerseyNumber": "44",
+    "age": null
+  },
+  "mason miller": {
+    "name": "Mason Miller",
+    "pos": "P",
+    "abbr": "SD",
+    "jerseyNumber": "22",
+    "age": null
+  },
+  "matt waldron": {
+    "name": "Matt Waldron",
+    "pos": "P",
+    "abbr": "SD",
+    "jerseyNumber": "61",
+    "age": null
+  },
+  "miguel mendez": {
+    "name": "Miguel Mendez",
+    "pos": "P",
+    "abbr": "SD",
+    "jerseyNumber": "62",
+    "age": null
+  },
+  "ty adcock": {
+    "name": "Ty Adcock",
+    "pos": "P",
+    "abbr": "SD",
+    "jerseyNumber": "52",
+    "age": null
+  },
+  "yuki matsui": {
+    "name": "Yuki Matsui",
+    "pos": "P",
+    "abbr": "SD",
+    "jerseyNumber": "1",
+    "age": null
+  },
+  "alex hoppe": {
+    "name": "Alex Hoppe",
+    "pos": "P",
+    "abbr": "SEA",
+    "jerseyNumber": "48",
+    "age": null
+  },
+  "blas castaño": {
+    "name": "Blas Castaño",
+    "pos": "P",
+    "abbr": "SEA",
+    "jerseyNumber": "62",
+    "age": null
+  },
+  "carlos vargas": {
+    "name": "Carlos Vargas",
+    "pos": "P",
+    "abbr": "SEA",
+    "jerseyNumber": "54",
+    "age": null
+  },
+  "cole wilcox": {
+    "name": "Cole Wilcox",
+    "pos": "P",
+    "abbr": "SEA",
+    "jerseyNumber": "43",
+    "age": null
+  },
+  "cooper criswell": {
+    "name": "Cooper Criswell",
+    "pos": "P",
+    "abbr": "SEA",
+    "jerseyNumber": "88",
+    "age": null
+  },
+  "domingo gonzalez": {
+    "name": "Domingo Gonzalez",
+    "pos": "P",
+    "abbr": "SEA",
+    "jerseyNumber": "46",
+    "age": null
+  },
+  "josh simpson": {
+    "name": "Josh Simpson",
+    "pos": "P",
+    "abbr": "SEA",
+    "jerseyNumber": "37",
+    "age": null
+  },
+  "logan evans": {
+    "name": "Logan Evans",
+    "pos": "P",
+    "abbr": "SEA",
+    "jerseyNumber": "23",
+    "age": null
+  },
+  "matt brash": {
+    "name": "Matt Brash",
+    "pos": "P",
+    "abbr": "SEA",
+    "jerseyNumber": "47",
+    "age": null
+  },
+  "robinson ortiz": {
+    "name": "Robinson Ortiz",
+    "pos": "P",
+    "abbr": "SEA",
+    "jerseyNumber": "49",
+    "age": null
+  },
+  "troy taylor": {
+    "name": "Troy Taylor",
+    "pos": "P",
+    "abbr": "SEA",
+    "jerseyNumber": "59",
+    "age": null
+  },
+  "yosver zulueta": {
+    "name": "Yosver Zulueta",
+    "pos": "P",
+    "abbr": "SEA",
+    "jerseyNumber": "61",
+    "age": null
+  },
+  "blade tidwell": {
+    "name": "Blade Tidwell",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "46",
+    "age": null
+  },
+  "caleb kilian": {
+    "name": "Caleb Kilian",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "45",
+    "age": null
+  },
+  "carson seymour": {
+    "name": "Carson Seymour",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "77",
+    "age": null
+  },
+  "carson whisenhunt": {
+    "name": "Carson Whisenhunt",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "88",
+    "age": null
+  },
+  "dylan smith": {
+    "name": "Dylan Smith",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "",
+    "age": null
+  },
+  "erik miller": {
+    "name": "Erik Miller",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "68",
+    "age": null
+  },
+  "hayden birdsong": {
+    "name": "Hayden Birdsong",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "60",
+    "age": null
+  },
+  "jason foley": {
+    "name": "Jason Foley",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "64",
+    "age": null
+  },
+  "joel peguero": {
+    "name": "Joel Peguero",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "63",
+    "age": null
+  },
+  "josé buttó": {
+    "name": "José Buttó",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "70",
+    "age": null
+  },
+  "keaton winn": {
+    "name": "Keaton Winn",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "67",
+    "age": null
+  },
+  "matt gage": {
+    "name": "Matt Gage",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "93",
+    "age": null
+  },
+  "randy rodríguez": {
+    "name": "Randy Rodríguez",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "73",
+    "age": null
+  },
+  "reiver sanmartin": {
+    "name": "Reiver Sanmartin",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "48",
+    "age": null
+  },
+  "rowan wick": {
+    "name": "Rowan Wick",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "",
+    "age": null
+  },
+  "ryan borucki": {
+    "name": "Ryan Borucki",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "47",
+    "age": null
+  },
+  "sam hentges": {
+    "name": "Sam Hentges",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "31",
+    "age": null
+  },
+  "spencer bivens": {
+    "name": "Spencer Bivens",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "76",
+    "age": null
+  },
+  "tristan beck": {
+    "name": "Tristan Beck",
+    "pos": "P",
+    "abbr": "SF",
+    "jerseyNumber": "43",
+    "age": null
+  },
+  "brycen mautz": {
+    "name": "Brycen Mautz",
+    "pos": "P",
+    "abbr": "STL",
+    "jerseyNumber": "52",
+    "age": null
+  },
+  "cooper hjerpe": {
+    "name": "Cooper Hjerpe",
+    "pos": "P",
+    "abbr": "STL",
+    "jerseyNumber": "56",
+    "age": null
+  },
+  "gordon graceffo": {
+    "name": "Gordon Graceffo",
+    "pos": "P",
+    "abbr": "STL",
+    "jerseyNumber": "44",
+    "age": null
+  },
+  "hunter dobbins": {
+    "name": "Hunter Dobbins",
+    "pos": "P",
+    "abbr": "STL",
+    "jerseyNumber": "40",
+    "age": null
+  },
+  "jojo romero": {
+    "name": "JoJo Romero",
+    "pos": "P",
+    "abbr": "STL",
+    "jerseyNumber": "59",
+    "age": null
+  },
+  "justin bruihl": {
+    "name": "Justin Bruihl",
+    "pos": "P",
+    "abbr": "STL",
+    "jerseyNumber": "47",
+    "age": null
+  },
+  "matt pushard": {
+    "name": "Matt Pushard",
+    "pos": "P",
+    "abbr": "STL",
+    "jerseyNumber": "67",
+    "age": null
+  },
+  "nick raquet": {
+    "name": "Nick Raquet",
+    "pos": "P",
+    "abbr": "STL",
+    "jerseyNumber": "70",
+    "age": null
+  },
+  "richard fitts": {
+    "name": "Richard Fitts",
+    "pos": "P",
+    "abbr": "STL",
+    "jerseyNumber": "35",
+    "age": null
+  },
+  "ryan fernandez": {
+    "name": "Ryan Fernandez",
+    "pos": "P",
+    "abbr": "STL",
+    "jerseyNumber": "64",
+    "age": null
+  },
+  "tekoah roby": {
+    "name": "Tekoah Roby",
+    "pos": "P",
+    "abbr": "STL",
+    "jerseyNumber": "38",
+    "age": null
+  },
+  "tink hence": {
+    "name": "Tink Hence",
+    "pos": "P",
+    "abbr": "STL",
+    "jerseyNumber": "30",
+    "age": null
+  },
+  "alex cook": {
+    "name": "Alex Cook",
+    "pos": "P",
+    "abbr": "TB",
+    "jerseyNumber": "54",
+    "age": null
+  },
+  "cam booser": {
+    "name": "Cam Booser",
+    "pos": "P",
+    "abbr": "TB",
+    "jerseyNumber": "",
+    "age": null
+  },
+  "edwin uceta": {
+    "name": "Edwin Uceta",
+    "pos": "P",
+    "abbr": "TB",
+    "jerseyNumber": "63",
+    "age": null
+  },
+  "hunter bigge": {
+    "name": "Hunter Bigge",
+    "pos": "P",
+    "abbr": "TB",
+    "jerseyNumber": "43",
+    "age": null
+  },
+  "joe rock": {
+    "name": "Joe Rock",
+    "pos": "P",
+    "abbr": "TB",
+    "jerseyNumber": "68",
+    "age": null
+  },
+  "manuel rodríguez": {
+    "name": "Manuel Rodríguez",
+    "pos": "P",
+    "abbr": "TB",
+    "jerseyNumber": "39",
+    "age": null
+  },
+  "mason englert": {
+    "name": "Mason Englert",
+    "pos": "P",
+    "abbr": "TB",
+    "jerseyNumber": "59",
+    "age": null
+  },
+  "ryan pepiot": {
+    "name": "Ryan Pepiot",
+    "pos": "P",
+    "abbr": "TB",
+    "jerseyNumber": "44",
+    "age": null
+  },
+  "steven wilson": {
+    "name": "Steven Wilson",
+    "pos": "P",
+    "abbr": "TB",
+    "jerseyNumber": "24",
+    "age": null
+  },
+  "cody bradford": {
+    "name": "Cody Bradford",
+    "pos": "P",
+    "abbr": "TEX",
+    "jerseyNumber": "61",
+    "age": null
+  },
+  "david davalillo": {
+    "name": "David Davalillo",
+    "pos": "P",
+    "abbr": "TEX",
+    "jerseyNumber": "72",
+    "age": null
+  },
+  "emiliano teodo": {
+    "name": "Emiliano Teodo",
+    "pos": "P",
+    "abbr": "TEX",
+    "jerseyNumber": "82",
+    "age": null
+  },
+  "jordan montgomery": {
+    "name": "Jordan Montgomery",
+    "pos": "P",
+    "abbr": "TEX",
+    "jerseyNumber": "52",
+    "age": null
+  },
+  "jose corniell": {
+    "name": "Jose Corniell",
+    "pos": "P",
+    "abbr": "TEX",
+    "jerseyNumber": "59",
+    "age": null
+  },
+  "kumar rocker": {
+    "name": "Kumar Rocker",
+    "pos": "P",
+    "abbr": "TEX",
+    "jerseyNumber": "80",
+    "age": null
+  },
+  "leandro lopez": {
+    "name": "Leandro Lopez",
+    "pos": "P",
+    "abbr": "TEX",
+    "jerseyNumber": "74",
+    "age": null
+  },
+  "luis curvelo": {
+    "name": "Luis Curvelo",
+    "pos": "P",
+    "abbr": "TEX",
+    "jerseyNumber": "57",
+    "age": null
+  },
+  "marc church": {
+    "name": "Marc Church",
+    "pos": "P",
+    "abbr": "TEX",
+    "jerseyNumber": "30",
+    "age": null
+  },
+  "michel otañez": {
+    "name": "Michel Otañez",
+    "pos": "P",
+    "abbr": "TEX",
+    "jerseyNumber": "63",
+    "age": null
+  },
+  "winston santos": {
+    "name": "Winston Santos",
+    "pos": "P",
+    "abbr": "TEX",
+    "jerseyNumber": "84",
+    "age": null
+  },
+  "adam macko": {
+    "name": "Adam Macko",
+    "pos": "P",
+    "abbr": "TOR",
+    "jerseyNumber": "64",
+    "age": null
+  },
+  "bowden francis": {
+    "name": "Bowden Francis",
+    "pos": "P",
+    "abbr": "TOR",
+    "jerseyNumber": "44",
+    "age": null
+  },
+  "chase lee": {
+    "name": "Chase Lee",
+    "pos": "P",
+    "abbr": "TOR",
+    "jerseyNumber": "52",
+    "age": null
+  },
+  "cody ponce": {
+    "name": "Cody Ponce",
+    "pos": "P",
+    "abbr": "TOR",
+    "jerseyNumber": "66",
+    "age": null
+  },
+  "jake bloss": {
+    "name": "Jake Bloss",
+    "pos": "P",
+    "abbr": "TOR",
+    "jerseyNumber": "28",
+    "age": null
+  },
+  "josé berríos": {
+    "name": "José Berríos",
+    "pos": "P",
+    "abbr": "TOR",
+    "jerseyNumber": "17",
+    "age": null
+  },
+  "lazaro estrada": {
+    "name": "Lazaro Estrada",
+    "pos": "P",
+    "abbr": "TOR",
+    "jerseyNumber": "60",
+    "age": null
+  },
+  "ricky tiedemann": {
+    "name": "Ricky Tiedemann",
+    "pos": "P",
+    "abbr": "TOR",
+    "jerseyNumber": "33",
+    "age": null
+  },
+  "spencer miles": {
+    "name": "Spencer Miles",
+    "pos": "P",
+    "abbr": "TOR",
+    "jerseyNumber": "62",
+    "age": null
+  },
+  "yimi garcía": {
+    "name": "Yimi García",
+    "pos": "P",
+    "abbr": "TOR",
+    "jerseyNumber": "93",
+    "age": null
+  },
+  "andrew morris": {
+    "name": "Andrew Morris",
+    "pos": "P",
+    "abbr": "MIN",
+    "jerseyNumber": "78",
+    "age": null
+  },
+  "anthony banda": {
+    "name": "Anthony Banda",
+    "pos": "P",
+    "abbr": "MIN",
+    "jerseyNumber": "43",
+    "age": null
+  },
+  "cody laweryson": {
+    "name": "Cody Laweryson",
+    "pos": "P",
+    "abbr": "MIN",
+    "jerseyNumber": "65",
+    "age": null
+  },
+  "cole sands": {
+    "name": "Cole Sands",
+    "pos": "P",
+    "abbr": "MIN",
+    "jerseyNumber": "44",
+    "age": null
+  },
+  "connor prielipp": {
+    "name": "Connor Prielipp",
+    "pos": "P",
+    "abbr": "MIN",
+    "jerseyNumber": "61",
+    "age": null
+  },
+  "david festa": {
+    "name": "David Festa",
+    "pos": "P",
+    "abbr": "MIN",
+    "jerseyNumber": "58",
+    "age": null
+  },
+  "eric orze": {
+    "name": "Eric Orze",
+    "pos": "P",
+    "abbr": "MIN",
+    "jerseyNumber": "19",
+    "age": null
+  },
+  "john klein": {
+    "name": "John Klein",
+    "pos": "P",
+    "abbr": "MIN",
+    "jerseyNumber": "71",
+    "age": null
+  },
+  "justin topa": {
+    "name": "Justin Topa",
+    "pos": "P",
+    "abbr": "MIN",
+    "jerseyNumber": "48",
+    "age": null
+  },
+  "kendry rojas": {
+    "name": "Kendry Rojas",
+    "pos": "P",
+    "abbr": "MIN",
+    "jerseyNumber": "60",
+    "age": null
+  },
+  "marco raya": {
+    "name": "Marco Raya",
+    "pos": "P",
+    "abbr": "MIN",
+    "jerseyNumber": "85",
+    "age": null
+  },
+  "pablo lópez": {
+    "name": "Pablo López",
+    "pos": "P",
+    "abbr": "MIN",
+    "jerseyNumber": "49",
+    "age": null
+  },
+  "travis adams": {
+    "name": "Travis Adams",
+    "pos": "P",
+    "abbr": "MIN",
+    "jerseyNumber": "45",
+    "age": null
+  },
+  "alan rangel": {
+    "name": "Alan Rangel",
+    "pos": "P",
+    "abbr": "PHI",
+    "jerseyNumber": "57",
+    "age": null
+  },
+  "alex mcfarlane": {
+    "name": "Alex McFarlane",
+    "pos": "P",
+    "abbr": "PHI",
+    "jerseyNumber": "71",
+    "age": null
+  },
+  "chase shugart": {
+    "name": "Chase Shugart",
+    "pos": "P",
+    "abbr": "PHI",
+    "jerseyNumber": "55",
+    "age": null
+  },
+  "jean cabrera": {
+    "name": "Jean Cabrera",
+    "pos": "P",
+    "abbr": "PHI",
+    "jerseyNumber": "79",
+    "age": null
+  },
+  "josé alvarado": {
+    "name": "José Alvarado",
+    "pos": "P",
+    "abbr": "PHI",
+    "jerseyNumber": "46",
+    "age": null
+  },
+  "kyle backhus": {
+    "name": "Kyle Backhus",
+    "pos": "P",
+    "abbr": "PHI",
+    "jerseyNumber": "19",
+    "age": null
+  },
+  "max lazar": {
+    "name": "Max Lazar",
+    "pos": "P",
+    "abbr": "PHI",
+    "jerseyNumber": "60",
+    "age": null
+  },
+  "moisés chace": {
+    "name": "Moisés Chace",
+    "pos": "P",
+    "abbr": "PHI",
+    "jerseyNumber": "75",
+    "age": null
+  },
+  "nolan hoffman": {
+    "name": "Nolan Hoffman",
+    "pos": "P",
+    "abbr": "PHI",
+    "jerseyNumber": "47",
+    "age": null
+  },
+  "orion kerkering": {
+    "name": "Orion Kerkering",
+    "pos": "P",
+    "abbr": "PHI",
+    "jerseyNumber": "50",
+    "age": null
+  },
+  "seth johnson": {
+    "name": "Seth Johnson",
+    "pos": "P",
+    "abbr": "PHI",
+    "jerseyNumber": "51",
+    "age": null
+  },
+  "yoniel curet": {
+    "name": "Yoniel Curet",
+    "pos": "P",
+    "abbr": "PHI",
+    "jerseyNumber": "66",
+    "age": null
+  },
+  "zach pop": {
+    "name": "Zach Pop",
+    "pos": "P",
+    "abbr": "PHI",
+    "jerseyNumber": "56",
+    "age": null
+  },
+  "zack wheeler": {
+    "name": "Zack Wheeler",
+    "pos": "P",
+    "abbr": "PHI",
+    "jerseyNumber": "45",
+    "age": null
+  },
+  "aj smith-shawver": {
+    "name": "AJ Smith-Shawver",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "32",
+    "age": null
+  },
+  "aaron bummer": {
+    "name": "Aaron Bummer",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "49",
+    "age": null
+  },
+  "danny young": {
+    "name": "Danny Young",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "63",
+    "age": null
+  },
+  "daysbel hernández": {
+    "name": "Daysbel Hernández",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "62",
+    "age": null
+  },
+  "dylan dodd": {
+    "name": "Dylan Dodd",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "46",
+    "age": null
+  },
+  "dylan lee": {
+    "name": "Dylan Lee",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "52",
+    "age": null
+  },
+  "hayden harris": {
+    "name": "Hayden Harris",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "79",
+    "age": null
+  },
+  "hunter stratton": {
+    "name": "Hunter Stratton",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "65",
+    "age": null
+  },
+  "jhancarlos lara": {
+    "name": "Jhancarlos Lara",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "78",
+    "age": null
+  },
+  "joe jiménez": {
+    "name": "Joe Jiménez",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "77",
+    "age": null
+  },
+  "martín pérez": {
+    "name": "Martín Pérez",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "33",
+    "age": null
+  },
+  "raisel iglesias": {
+    "name": "Raisel Iglesias",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "26",
+    "age": null
+  },
+  "robert suarez": {
+    "name": "Robert Suarez",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "75",
+    "age": null
+  },
+  "rolddy muñoz": {
+    "name": "Rolddy Muñoz",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "67",
+    "age": null
+  },
+  "spencer schwellenbach": {
+    "name": "Spencer Schwellenbach",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "56",
+    "age": null
+  },
+  "tyler kinley": {
+    "name": "Tyler Kinley",
+    "pos": "P",
+    "abbr": "ATL",
+    "jerseyNumber": "45",
+    "age": null
+  },
+  "brandon eisert": {
+    "name": "Brandon Eisert",
+    "pos": "P",
+    "abbr": "CWS",
+    "jerseyNumber": "53",
+    "age": null
+  },
+  "bryan hudson": {
+    "name": "Bryan Hudson",
+    "pos": "P",
+    "abbr": "CWS",
+    "jerseyNumber": "60",
+    "age": null
+  },
+  "david sandlin": {
+    "name": "David Sandlin",
+    "pos": "P",
+    "abbr": "CWS",
+    "jerseyNumber": "54",
+    "age": null
+  },
+  "drew thorpe": {
+    "name": "Drew Thorpe",
+    "pos": "P",
+    "abbr": "CWS",
+    "jerseyNumber": "33",
+    "age": null
+  },
+  "duncan davitt": {
+    "name": "Duncan Davitt",
+    "pos": "P",
+    "abbr": "CWS",
+    "jerseyNumber": "67",
+    "age": null
+  },
+  "jordan hicks": {
+    "name": "Jordan Hicks",
+    "pos": "P",
+    "abbr": "CWS",
+    "jerseyNumber": "44",
+    "age": null
+  },
+  "ky bush": {
+    "name": "Ky Bush",
+    "pos": "P",
+    "abbr": "CWS",
+    "jerseyNumber": "57",
+    "age": null
+  },
+  "lucas sims": {
+    "name": "Lucas Sims",
+    "pos": "P",
+    "abbr": "CWS",
+    "jerseyNumber": "39",
+    "age": null
+  },
+  "mike vasil": {
+    "name": "Mike Vasil",
+    "pos": "P",
+    "abbr": "CWS",
+    "jerseyNumber": "61",
+    "age": null
+  },
+  "prelander berroa": {
+    "name": "Prelander Berroa",
+    "pos": "P",
+    "abbr": "CWS",
+    "jerseyNumber": "52",
+    "age": null
+  },
+  "tanner mcdougal": {
+    "name": "Tanner McDougal",
+    "pos": "P",
+    "abbr": "CWS",
+    "jerseyNumber": "68",
+    "age": null
+  },
+  "wikelman gonzález": {
+    "name": "Wikelman González",
+    "pos": "P",
+    "abbr": "CWS",
+    "jerseyNumber": "66",
+    "age": null
+  },
+  "adam mazur": {
+    "name": "Adam Mazur",
+    "pos": "P",
+    "abbr": "MIA",
+    "jerseyNumber": "60",
+    "age": null
+  },
+  "andrew nardi": {
+    "name": "Andrew Nardi",
+    "pos": "P",
+    "abbr": "MIA",
+    "jerseyNumber": "43",
+    "age": null
+  },
+  "anthony bender": {
+    "name": "Anthony Bender",
+    "pos": "P",
+    "abbr": "MIA",
+    "jerseyNumber": "37",
+    "age": null
+  },
+  "braxton garrett": {
+    "name": "Braxton Garrett",
+    "pos": "P",
+    "abbr": "MIA",
+    "jerseyNumber": "20",
+    "age": null
+  },
+  "cade gibson": {
+    "name": "Cade Gibson",
+    "pos": "P",
+    "abbr": "MIA",
+    "jerseyNumber": "58",
+    "age": null
+  },
+  "calvin faucher": {
+    "name": "Calvin Faucher",
+    "pos": "P",
+    "abbr": "MIA",
+    "jerseyNumber": "53",
+    "age": null
+  },
+  "dax fulton": {
+    "name": "Dax Fulton",
+    "pos": "P",
+    "abbr": "MIA",
+    "jerseyNumber": "90",
+    "age": null
+  },
+  "josh white": {
+    "name": "Josh White",
+    "pos": "P",
+    "abbr": "MIA",
+    "jerseyNumber": "59",
+    "age": null
+  },
+  "ronny henriquez": {
+    "name": "Ronny Henriquez",
+    "pos": "P",
+    "abbr": "MIA",
+    "jerseyNumber": "32",
+    "age": null
+  },
+  "ryan gusto": {
+    "name": "Ryan Gusto",
+    "pos": "P",
+    "abbr": "MIA",
+    "jerseyNumber": "65",
+    "age": null
+  },
+  "william kempner": {
+    "name": "William Kempner",
+    "pos": "P",
+    "abbr": "MIA",
+    "jerseyNumber": "71",
+    "age": null
+  },
+  "angel chivilli": {
+    "name": "Angel Chivilli",
+    "pos": "P",
+    "abbr": "NYY",
+    "jerseyNumber": "57",
+    "age": null
+  },
+  "cade winquest": {
+    "name": "Cade Winquest",
+    "pos": "P",
+    "abbr": "NYY",
+    "jerseyNumber": "39",
+    "age": null
+  },
+  "camilo doval": {
+    "name": "Camilo Doval",
+    "pos": "P",
+    "abbr": "NYY",
+    "jerseyNumber": "75",
+    "age": null
+  },
+  "chase hampton": {
+    "name": "Chase Hampton",
+    "pos": "P",
+    "abbr": "NYY",
+    "jerseyNumber": "86",
+    "age": null
+  },
+  "clarke schmidt": {
+    "name": "Clarke Schmidt",
+    "pos": "P",
+    "abbr": "NYY",
+    "jerseyNumber": "36",
+    "age": null
+  },
+  "elmer rodríguez": {
+    "name": "Elmer Rodríguez",
+    "pos": "P",
+    "abbr": "NYY",
+    "jerseyNumber": "76",
+    "age": null
+  },
+  "gerrit cole": {
+    "name": "Gerrit Cole",
+    "pos": "P",
+    "abbr": "NYY",
+    "jerseyNumber": "45",
+    "age": null
+  },
+  "jake bird": {
+    "name": "Jake Bird",
+    "pos": "P",
+    "abbr": "NYY",
+    "jerseyNumber": "59",
+    "age": null
+  },
+  "kervin castro": {
+    "name": "Kervin Castro",
+    "pos": "P",
+    "abbr": "NYY",
+    "jerseyNumber": "74",
+    "age": null
+  },
+  "ryan yarbrough": {
+    "name": "Ryan Yarbrough",
+    "pos": "P",
+    "abbr": "NYY",
+    "jerseyNumber": "33",
+    "age": null
+  },
+  "yerry de los santos": {
+    "name": "Yerry De los Santos",
+    "pos": "P",
+    "abbr": "NYY",
+    "jerseyNumber": "73",
+    "age": null
+  },
+  "abner uribe": {
+    "name": "Abner Uribe",
+    "pos": "P",
+    "abbr": "MIL",
+    "jerseyNumber": "45",
+    "age": null
+  },
+  "carlos rodriguez": {
+    "name": "Carlos Rodriguez",
+    "pos": "P",
+    "abbr": "MIL",
+    "jerseyNumber": "27",
+    "age": null
+  },
+  "coleman crow": {
+    "name": "Coleman Crow",
+    "pos": "P",
+    "abbr": "MIL",
+    "jerseyNumber": "72",
+    "age": null
+  },
+  "craig yoho": {
+    "name": "Craig Yoho",
+    "pos": "P",
+    "abbr": "MIL",
+    "jerseyNumber": "48",
+    "age": null
+  },
+  "dl hall": {
+    "name": "DL Hall",
+    "pos": "P",
+    "abbr": "MIL",
+    "jerseyNumber": "37",
+    "age": null
+  },
+  "easton mcgee": {
+    "name": "Easton McGee",
+    "pos": "P",
+    "abbr": "MIL",
+    "jerseyNumber": "50",
+    "age": null
+  },
+  "jake woodford": {
+    "name": "Jake Woodford",
+    "pos": "P",
+    "abbr": "MIL",
+    "jerseyNumber": "41",
+    "age": null
+  },
+  "jared koenig": {
+    "name": "Jared Koenig",
+    "pos": "P",
+    "abbr": "MIL",
+    "jerseyNumber": "47",
+    "age": null
+  },
+  "logan henderson": {
+    "name": "Logan Henderson",
+    "pos": "P",
+    "abbr": "MIL",
+    "jerseyNumber": "43",
+    "age": null
+  },
+  "rob zastryzny": {
+    "name": "Rob Zastryzny",
+    "pos": "P",
+    "abbr": "MIL",
+    "jerseyNumber": "58",
+    "age": null
+  },
+  "shane drohan": {
+    "name": "Shane Drohan",
+    "pos": "P",
+    "abbr": "MIL",
+    "jerseyNumber": "73",
+    "age": null
+  },
+  "trevor megill": {
+    "name": "Trevor Megill",
+    "pos": "P",
+    "abbr": "MIL",
+    "jerseyNumber": "29",
+    "age": null
+  },
+  "alek manoah": {
+    "name": "Alek Manoah",
+    "pos": "P",
+    "abbr": "LAA",
+    "jerseyNumber": "47",
+    "age": null
+  },
+  "ben joyce": {
+    "name": "Ben Joyce",
+    "pos": "P",
+    "abbr": "LAA",
+    "jerseyNumber": "44",
+    "age": null
+  },
+  "brent suter": {
+    "name": "Brent Suter",
+    "pos": "P",
+    "abbr": "LAA",
+    "jerseyNumber": "37",
+    "age": null
+  },
+  "grayson rodriguez": {
+    "name": "Grayson Rodriguez",
+    "pos": "P",
+    "abbr": "LAA",
+    "jerseyNumber": "21",
+    "age": null
+  },
+  "jordan romano": {
+    "name": "Jordan Romano",
+    "pos": "P",
+    "abbr": "LAA",
+    "jerseyNumber": "68",
+    "age": null
+  },
+  "josé fermin": {
+    "name": "José Fermin",
+    "pos": "P",
+    "abbr": "LAA",
+    "jerseyNumber": "65",
+    "age": null
+  },
+  "kirby yates": {
+    "name": "Kirby Yates",
+    "pos": "P",
+    "abbr": "LAA",
+    "jerseyNumber": "39",
+    "age": null
+  },
+  "robert stephenson": {
+    "name": "Robert Stephenson",
+    "pos": "P",
+    "abbr": "LAA",
+    "jerseyNumber": "24",
+    "age": null
+  },
+  "shaun anderson": {
+    "name": "Shaun Anderson",
+    "pos": "P",
+    "abbr": "LAA",
+    "jerseyNumber": "64",
+    "age": null
+  },
+  "a.j. puk": {
+    "name": "A.J. Puk",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "33",
+    "age": null
+  },
+  "andrew saalfrank": {
+    "name": "Andrew Saalfrank",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "27",
+    "age": null
+  },
+  "blake walston": {
+    "name": "Blake Walston",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "48",
+    "age": null
+  },
+  "corbin burnes": {
+    "name": "Corbin Burnes",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "39",
+    "age": null
+  },
+  "cristian mena": {
+    "name": "Cristian Mena",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "64",
+    "age": null
+  },
+  "drey jameson": {
+    "name": "Drey Jameson",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "99",
+    "age": null
+  },
+  "dylan ray": {
+    "name": "Dylan Ray",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "61",
+    "age": null
+  },
+  "joe ross": {
+    "name": "Joe Ross",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "22",
+    "age": null
+  },
+  "jonathan loáisiga": {
+    "name": "Jonathan Loáisiga",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "43",
+    "age": null
+  },
+  "juan burgos": {
+    "name": "Juan Burgos",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "52",
+    "age": null
+  },
+  "justin martinez": {
+    "name": "Justin Martinez",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "63",
+    "age": null
+  },
+  "kade strowd": {
+    "name": "Kade Strowd",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "24",
+    "age": null
+  },
+  "kevin ginkel": {
+    "name": "Kevin Ginkel",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "37",
+    "age": null
+  },
+  "kohl drake": {
+    "name": "Kohl Drake",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "58",
+    "age": null
+  },
+  "merrill kelly": {
+    "name": "Merrill Kelly",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "29",
+    "age": null
+  },
+  "mitch bratt": {
+    "name": "Mitch Bratt",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "60",
+    "age": null
+  },
+  "philip abner": {
+    "name": "Philip Abner",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "50",
+    "age": null
+  },
+  "yilber díaz": {
+    "name": "Yilber Díaz",
+    "pos": "P",
+    "abbr": "AZ",
+    "jerseyNumber": "30",
+    "age": null
+  },
+  "albert suárez": {
+    "name": "Albert Suárez",
+    "pos": "P",
+    "abbr": "BAL",
+    "jerseyNumber": "49",
+    "age": null
+  },
+  "andrew kittredge": {
+    "name": "Andrew Kittredge",
+    "pos": "P",
+    "abbr": "BAL",
+    "jerseyNumber": "39",
+    "age": null
+  },
+  "anthony nunez": {
+    "name": "Anthony Nunez",
+    "pos": "P",
+    "abbr": "BAL",
+    "jerseyNumber": "66",
+    "age": null
+  },
+  "brandon young": {
+    "name": "Brandon Young",
+    "pos": "P",
+    "abbr": "BAL",
+    "jerseyNumber": "63",
+    "age": null
+  },
+  "cameron foster": {
+    "name": "Cameron Foster",
+    "pos": "P",
+    "abbr": "BAL",
+    "jerseyNumber": "65",
+    "age": null
+  },
+  "chayce mcdermott": {
+    "name": "Chayce McDermott",
+    "pos": "P",
+    "abbr": "BAL",
+    "jerseyNumber": "59",
+    "age": null
+  },
+  "colin selby": {
+    "name": "Colin Selby",
+    "pos": "P",
+    "abbr": "BAL",
+    "jerseyNumber": "60",
+    "age": null
+  },
+  "félix bautista": {
+    "name": "Félix Bautista",
+    "pos": "P",
+    "abbr": "BAL",
+    "jerseyNumber": "74",
+    "age": null
+  },
+  "jayvien sandridge": {
+    "name": "Jayvien Sandridge",
+    "pos": "P",
+    "abbr": "BAL",
+    "jerseyNumber": "",
+    "age": null
+  },
+  "jose espada": {
+    "name": "Jose Espada",
+    "pos": "P",
+    "abbr": "BAL",
+    "jerseyNumber": "70",
+    "age": null
+  },
+  "keegan akin": {
+    "name": "Keegan Akin",
+    "pos": "P",
+    "abbr": "BAL",
+    "jerseyNumber": "45",
+    "age": null
+  },
+  "aroldis chapman": {
+    "name": "Aroldis Chapman",
+    "pos": "P",
+    "abbr": "BOS",
+    "jerseyNumber": "44",
+    "age": null
+  },
+  "danny coulombe": {
+    "name": "Danny Coulombe",
+    "pos": "P",
+    "abbr": "BOS",
+    "jerseyNumber": "67",
+    "age": null
+  },
+  "garrett whitlock": {
+    "name": "Garrett Whitlock",
+    "pos": "P",
+    "abbr": "BOS",
+    "jerseyNumber": "22",
+    "age": null
+  },
+  "jake bennett": {
+    "name": "Jake Bennett",
+    "pos": "P",
+    "abbr": "BOS",
+    "jerseyNumber": "64",
+    "age": null
+  },
+  "justin slaten": {
+    "name": "Justin Slaten",
+    "pos": "P",
+    "abbr": "BOS",
+    "jerseyNumber": "63",
+    "age": null
+  },
+  "kutter crawford": {
+    "name": "Kutter Crawford",
+    "pos": "P",
+    "abbr": "BOS",
+    "jerseyNumber": "50",
+    "age": null
+  },
+  "patrick sandoval": {
+    "name": "Patrick Sandoval",
+    "pos": "P",
+    "abbr": "BOS",
+    "jerseyNumber": "43",
+    "age": null
+  },
+  "payton tolle": {
+    "name": "Payton Tolle",
+    "pos": "P",
+    "abbr": "BOS",
+    "jerseyNumber": "70",
+    "age": null
+  },
+  "tanner houck": {
+    "name": "Tanner Houck",
+    "pos": "P",
+    "abbr": "BOS",
+    "jerseyNumber": "89",
+    "age": null
+  },
+  "tyler samaniego": {
+    "name": "Tyler Samaniego",
+    "pos": "P",
+    "abbr": "BOS",
+    "jerseyNumber": "78",
+    "age": null
+  },
+  "tyler uberstine": {
+    "name": "Tyler Uberstine",
+    "pos": "P",
+    "abbr": "BOS",
+    "jerseyNumber": "79",
+    "age": null
+  },
+  "zack kelly": {
+    "name": "Zack Kelly",
+    "pos": "P",
+    "abbr": "BOS",
+    "jerseyNumber": "76",
+    "age": null
+  },
+  "daniel palencia": {
+    "name": "Daniel Palencia",
+    "pos": "P",
+    "abbr": "CHC",
+    "jerseyNumber": "48",
+    "age": null
+  },
+  "ethan roberts": {
+    "name": "Ethan Roberts",
+    "pos": "P",
+    "abbr": "CHC",
+    "jerseyNumber": "39",
+    "age": null
+  },
+  "gavin hollowell": {
+    "name": "Gavin Hollowell",
+    "pos": "P",
+    "abbr": "CHC",
+    "jerseyNumber": "46",
+    "age": null
+  },
+  "hunter harvey": {
+    "name": "Hunter Harvey",
+    "pos": "P",
+    "abbr": "CHC",
+    "jerseyNumber": "45",
+    "age": null
+  },
+  "justin steele": {
+    "name": "Justin Steele",
+    "pos": "P",
+    "abbr": "CHC",
+    "jerseyNumber": "35",
+    "age": null
+  },
+  "luke little": {
+    "name": "Luke Little",
+    "pos": "P",
+    "abbr": "CHC",
+    "jerseyNumber": "43",
+    "age": null
+  },
+  "porter hodge": {
+    "name": "Porter Hodge",
+    "pos": "P",
+    "abbr": "CHC",
+    "jerseyNumber": "37",
+    "age": null
+  },
+  "riley martin": {
+    "name": "Riley Martin",
+    "pos": "P",
+    "abbr": "CHC",
+    "jerseyNumber": "33",
+    "age": null
+  },
+  "ryan rolison": {
+    "name": "Ryan Rolison",
+    "pos": "P",
+    "abbr": "CHC",
+    "jerseyNumber": "33",
+    "age": null
+  },
+  "shelby miller": {
+    "name": "Shelby Miller",
+    "pos": "P",
+    "abbr": "CHC",
+    "jerseyNumber": "77",
+    "age": null
+  },
+  "caleb ferguson": {
+    "name": "Caleb Ferguson",
+    "pos": "P",
+    "abbr": "CIN",
+    "jerseyNumber": "46",
+    "age": null
+  },
+  "chase petty": {
+    "name": "Chase Petty",
+    "pos": "P",
+    "abbr": "CIN",
+    "jerseyNumber": "61",
+    "age": null
+  },
+  "jose franco": {
+    "name": "Jose Franco",
+    "pos": "P",
+    "abbr": "CIN",
+    "jerseyNumber": "74",
+    "age": null
+  },
+  "julian aguiar": {
+    "name": "Julian Aguiar",
+    "pos": "P",
+    "abbr": "CIN",
+    "jerseyNumber": "39",
+    "age": null
+  },
+  "kyle nicolas": {
+    "name": "Kyle Nicolas",
+    "pos": "P",
+    "abbr": "CIN",
+    "jerseyNumber": "62",
+    "age": null
+  },
+  "luis mey": {
+    "name": "Luis Mey",
+    "pos": "P",
+    "abbr": "CIN",
+    "jerseyNumber": "47",
+    "age": null
+  },
+  "sam moll": {
+    "name": "Sam Moll",
+    "pos": "P",
+    "abbr": "CIN",
+    "jerseyNumber": "50",
+    "age": null
+  },
+  "zach maxwell": {
+    "name": "Zach Maxwell",
+    "pos": "P",
+    "abbr": "CIN",
+    "jerseyNumber": "78",
+    "age": null
+  },
+  "andrew walters": {
+    "name": "Andrew Walters",
+    "pos": "P",
+    "abbr": "CLE",
+    "jerseyNumber": "91",
+    "age": null
+  },
+  "austin peterson": {
+    "name": "Austin Peterson",
+    "pos": "P",
+    "abbr": "CLE",
+    "jerseyNumber": "80",
+    "age": null
+  },
+  "codi heuer": {
+    "name": "Codi Heuer",
+    "pos": "P",
+    "abbr": "CLE",
+    "jerseyNumber": "50",
+    "age": null
+  },
+  "colin holderman": {
+    "name": "Colin Holderman",
+    "pos": "P",
+    "abbr": "CLE",
+    "jerseyNumber": "35",
+    "age": null
+  },
+  "daniel espino": {
+    "name": "Daniel Espino",
+    "pos": "P",
+    "abbr": "CLE",
+    "jerseyNumber": "66",
+    "age": null
+  },
+  "franco aleman": {
+    "name": "Franco Aleman",
+    "pos": "P",
+    "abbr": "CLE",
+    "jerseyNumber": "92",
+    "age": null
+  },
+  "hunter gaddis": {
+    "name": "Hunter Gaddis",
+    "pos": "P",
+    "abbr": "CLE",
+    "jerseyNumber": "33",
+    "age": null
+  },
+  "tim herrin": {
+    "name": "Tim Herrin",
+    "pos": "P",
+    "abbr": "CLE",
+    "jerseyNumber": "29",
+    "age": null
+  },
+  "yorman gómez": {
+    "name": "Yorman Gómez",
+    "pos": "P",
+    "abbr": "CLE",
+    "jerseyNumber": "95",
+    "age": null
+  },
+  "brennan bernardino": {
+    "name": "Brennan Bernardino",
+    "pos": "P",
+    "abbr": "COL",
+    "jerseyNumber": "83",
+    "age": null
+  },
+  "carson palmquist": {
+    "name": "Carson Palmquist",
+    "pos": "P",
+    "abbr": "COL",
+    "jerseyNumber": "45",
+    "age": null
+  },
+  "gabriel hughes": {
+    "name": "Gabriel Hughes",
+    "pos": "P",
+    "abbr": "COL",
+    "jerseyNumber": "43",
+    "age": null
+  },
+  "jeff criswell": {
+    "name": "Jeff Criswell",
+    "pos": "P",
+    "abbr": "COL",
+    "jerseyNumber": "46",
+    "age": null
+  },
+  "luis peralta": {
+    "name": "Luis Peralta",
+    "pos": "P",
+    "abbr": "COL",
+    "jerseyNumber": "41",
+    "age": null
+  },
+  "pierson ohl": {
+    "name": "Pierson Ohl",
+    "pos": "P",
+    "abbr": "COL",
+    "jerseyNumber": "40",
+    "age": null
+  },
+  "rj petit": {
+    "name": "RJ Petit",
+    "pos": "P",
+    "abbr": "COL",
+    "jerseyNumber": "58",
+    "age": null
+  },
+  "ryan feltner": {
+    "name": "Ryan Feltner",
+    "pos": "P",
+    "abbr": "COL",
+    "jerseyNumber": "18",
+    "age": null
+  },
+  "seth halvorsen": {
+    "name": "Seth Halvorsen",
+    "pos": "P",
+    "abbr": "COL",
+    "jerseyNumber": "54",
+    "age": null
+  },
+  "valente bellozo": {
+    "name": "Valente Bellozo",
+    "pos": "P",
+    "abbr": "COL",
+    "jerseyNumber": "56",
+    "age": null
+  },
+  "victor vodnik": {
+    "name": "Victor Vodnik",
+    "pos": "P",
+    "abbr": "COL",
+    "jerseyNumber": "38",
+    "age": null
+  },
+  "welinton herrera": {
+    "name": "Welinton Herrera",
+    "pos": "P",
+    "abbr": "COL",
+    "jerseyNumber": "59",
+    "age": null
+  },
+  "bailey horn": {
+    "name": "Bailey Horn",
+    "pos": "P",
+    "abbr": "DET",
+    "jerseyNumber": "57",
+    "age": null
+  },
+  "beau brieske": {
+    "name": "Beau Brieske",
+    "pos": "P",
+    "abbr": "DET",
+    "jerseyNumber": "4",
+    "age": null
+  },
+  "brenan hanifee": {
+    "name": "Brenan Hanifee",
+    "pos": "P",
+    "abbr": "DET",
+    "jerseyNumber": "75",
+    "age": null
+  },
+  "connor seabold": {
+    "name": "Connor Seabold",
+    "pos": "P",
+    "abbr": "DET",
+    "jerseyNumber": "43",
+    "age": null
+  },
+  "drew anderson": {
+    "name": "Drew Anderson",
+    "pos": "P",
+    "abbr": "DET",
+    "jerseyNumber": "38",
+    "age": null
+  },
+  "drew sommers": {
+    "name": "Drew Sommers",
+    "pos": "P",
+    "abbr": "DET",
+    "jerseyNumber": "51",
+    "age": null
+  },
+  "enmanuel de jesus": {
+    "name": "Enmanuel De Jesus",
+    "pos": "P",
+    "abbr": "DET",
+    "jerseyNumber": "37",
+    "age": null
+  },
+  "jackson jobe": {
+    "name": "Jackson Jobe",
+    "pos": "P",
+    "abbr": "DET",
+    "jerseyNumber": "21",
+    "age": null
+  },
+  "jake miller": {
+    "name": "Jake Miller",
+    "pos": "P",
+    "abbr": "DET",
+    "jerseyNumber": "60",
+    "age": null
+  },
+  "kenley jansen": {
+    "name": "Kenley Jansen",
+    "pos": "P",
+    "abbr": "DET",
+    "jerseyNumber": "74",
+    "age": null
+  },
+  "reese olson": {
+    "name": "Reese Olson",
+    "pos": "P",
+    "abbr": "DET",
+    "jerseyNumber": "45",
+    "age": null
+  },
+  "sawyer gipson-long": {
+    "name": "Sawyer Gipson-Long",
+    "pos": "P",
+    "abbr": "DET",
+    "jerseyNumber": "66",
+    "age": null
+  },
+  "ty madden": {
+    "name": "Ty Madden",
+    "pos": "P",
+    "abbr": "DET",
+    "jerseyNumber": "36",
+    "age": null
+  },
+  "bennett sousa": {
+    "name": "Bennett Sousa",
+    "pos": "P",
+    "abbr": "HOU",
+    "jerseyNumber": "62",
+    "age": null
+  },
+  "brandon walter": {
+    "name": "Brandon Walter",
+    "pos": "P",
+    "abbr": "HOU",
+    "jerseyNumber": "60",
+    "age": null
+  },
+  "christian roa": {
+    "name": "Christian Roa",
+    "pos": "P",
+    "abbr": "HOU",
+    "jerseyNumber": "73",
+    "age": null
+  },
+  "cody bolton": {
+    "name": "Cody Bolton",
+    "pos": "P",
+    "abbr": "HOU",
+    "jerseyNumber": "67",
+    "age": null
+  },
+  "enyel de los santos": {
+    "name": "Enyel De Los Santos",
+    "pos": "P",
+    "abbr": "HOU",
+    "jerseyNumber": "65",
+    "age": null
+  },
+  "hayden wesneski": {
+    "name": "Hayden Wesneski",
+    "pos": "P",
+    "abbr": "HOU",
+    "jerseyNumber": "39",
+    "age": null
+  },
+  "josh hader": {
+    "name": "Josh Hader",
+    "pos": "P",
+    "abbr": "HOU",
+    "jerseyNumber": "71",
+    "age": null
+  },
+  "kai-wei teng": {
+    "name": "Kai-Wei Teng",
+    "pos": "P",
+    "abbr": "HOU",
+    "jerseyNumber": "17",
+    "age": null
+  },
+  "miguel ullola": {
+    "name": "Miguel Ullola",
+    "pos": "P",
+    "abbr": "HOU",
+    "jerseyNumber": "66",
+    "age": null
+  },
+  "nate pearson": {
+    "name": "Nate Pearson",
+    "pos": "P",
+    "abbr": "HOU",
+    "jerseyNumber": "55",
+    "age": null
+  },
+  "ronel blanco": {
+    "name": "Ronel Blanco",
+    "pos": "P",
+    "abbr": "HOU",
+    "jerseyNumber": "56",
+    "age": null
+  },
+  "ryan weiss": {
+    "name": "Ryan Weiss",
+    "pos": "P",
+    "abbr": "HOU",
+    "jerseyNumber": "51",
+    "age": null
+  },
+  "spencer arrighetti": {
+    "name": "Spencer Arrighetti",
+    "pos": "P",
+    "abbr": "HOU",
+    "jerseyNumber": "41",
+    "age": null
+  },
+  "alec marsh": {
+    "name": "Alec Marsh",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "48",
+    "age": null
+  },
+  "alex lange": {
+    "name": "Alex Lange",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "56",
+    "age": null
+  },
+  "bailey falter": {
+    "name": "Bailey Falter",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "36",
+    "age": null
+  },
+  "ben kudrna": {
+    "name": "Ben Kudrna",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "59",
+    "age": null
+  },
+  "carlos estévez": {
+    "name": "Carlos Estévez",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "53",
+    "age": null
+  },
+  "daniel lynch iv": {
+    "name": "Daniel Lynch IV",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "41",
+    "age": null
+  },
+  "eli morgan": {
+    "name": "Eli Morgan",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "",
+    "age": null
+  },
+  "eric cerantola": {
+    "name": "Eric Cerantola",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "61",
+    "age": null
+  },
+  "james mcarthur": {
+    "name": "James McArthur",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "66",
+    "age": null
+  },
+  "lucas erceg": {
+    "name": "Lucas Erceg",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "60",
+    "age": null
+  },
+  "luinder avila": {
+    "name": "Luinder Avila",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "58",
+    "age": null
+  },
+  "mason black": {
+    "name": "Mason Black",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "47",
+    "age": null
+  },
+  "matt strahm": {
+    "name": "Matt Strahm",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "25",
+    "age": null
+  },
+  "nick mears": {
+    "name": "Nick Mears",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "31",
+    "age": null
+  },
+  "ryan bergert": {
+    "name": "Ryan Bergert",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "38",
+    "age": null
+  },
+  "steven cruz": {
+    "name": "Steven Cruz",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "64",
+    "age": null
+  },
+  "steven zobac": {
+    "name": "Steven Zobac",
+    "pos": "P",
+    "abbr": "KC",
+    "jerseyNumber": "63",
+    "age": null
+  },
+  "ben casparius": {
+    "name": "Ben Casparius",
+    "pos": "P",
+    "abbr": "LAD",
+    "jerseyNumber": "78",
+    "age": null
+  },
+  "bobby miller": {
+    "name": "Bobby Miller",
+    "pos": "P",
+    "abbr": "LAD",
+    "jerseyNumber": "28",
+    "age": null
+  },
+  "brock stewart": {
+    "name": "Brock Stewart",
+    "pos": "P",
+    "abbr": "LAD",
+    "jerseyNumber": "41",
+    "age": null
+  },
+  "brusdar graterol": {
+    "name": "Brusdar Graterol",
+    "pos": "P",
+    "abbr": "LAD",
+    "jerseyNumber": "48",
+    "age": null
+  },
+  "edgardo henriquez": {
+    "name": "Edgardo Henriquez",
+    "pos": "P",
+    "abbr": "LAD",
+    "jerseyNumber": "60",
+    "age": null
+  },
+  "evan phillips": {
+    "name": "Evan Phillips",
+    "pos": "P",
+    "abbr": "LAD",
+    "jerseyNumber": "59",
+    "age": null
+  },
+  "gavin stone": {
+    "name": "Gavin Stone",
+    "pos": "P",
+    "abbr": "LAD",
+    "jerseyNumber": "35",
+    "age": null
+  },
+  "grant holman": {
+    "name": "Grant Holman",
+    "pos": "P",
+    "abbr": "LAD",
+    "jerseyNumber": "",
+    "age": null
+  },
+  "jake cousins": {
+    "name": "Jake Cousins",
+    "pos": "P",
+    "abbr": "LAD",
+    "jerseyNumber": "",
+    "age": null
+  },
+  "jake eder": {
+    "name": "Jake Eder",
+    "pos": "P",
+    "abbr": "LAD",
+    "jerseyNumber": "",
+    "age": null
+  },
+  "kyle hurt": {
+    "name": "Kyle Hurt",
+    "pos": "P",
+    "abbr": "LAD",
+    "jerseyNumber": "63",
+    "age": null
+  },
+  "landon knack": {
+    "name": "Landon Knack",
+    "pos": "P",
+    "abbr": "LAD",
+    "jerseyNumber": "96",
+    "age": null
+  },
+  "paul gervase": {
+    "name": "Paul Gervase",
+    "pos": "P",
+    "abbr": "LAD",
+    "jerseyNumber": "65",
+    "age": null
+  },
+  "river ryan": {
+    "name": "River Ryan",
+    "pos": "P",
+    "abbr": "LAD",
+    "jerseyNumber": "77",
+    "age": null
+  },
+  "ronan kopp": {
+    "name": "Ronan Kopp",
+    "pos": "P",
+    "abbr": "LAD",
+    "jerseyNumber": "83",
+    "age": null
+  },
+  "andre granillo": {
+    "name": "Andre Granillo",
+    "pos": "P",
+    "abbr": "WSH",
+    "jerseyNumber": "79",
+    "age": null
+  },
+  "cionel pérez": {
+    "name": "Cionel Pérez",
+    "pos": "P",
+    "abbr": "WSH",
+    "jerseyNumber": "51",
+    "age": null
+  },
+  "clayton beeter": {
+    "name": "Clayton Beeter",
+    "pos": "P",
+    "abbr": "WSH",
+    "jerseyNumber": "39",
+    "age": null
+  },
+  "cole henry": {
+    "name": "Cole Henry",
+    "pos": "P",
+    "abbr": "WSH",
+    "jerseyNumber": "99",
+    "age": null
+  },
+  "dj herz": {
+    "name": "DJ Herz",
+    "pos": "P",
+    "abbr": "WSH",
+    "jerseyNumber": "77",
+    "age": null
+  },
+  "gus varland": {
+    "name": "Gus Varland",
+    "pos": "P",
+    "abbr": "WSH",
+    "jerseyNumber": "47",
+    "age": null
+  },
+  "jackson rutledge": {
+    "name": "Jackson Rutledge",
+    "pos": "P",
+    "abbr": "WSH",
+    "jerseyNumber": "44",
+    "age": null
+  },
+  "josiah gray": {
+    "name": "Josiah Gray",
+    "pos": "P",
+    "abbr": "WSH",
+    "jerseyNumber": "40",
+    "age": null
+  },
+  "julian fernández": {
+    "name": "Julian Fernández",
+    "pos": "P",
+    "abbr": "WSH",
+    "jerseyNumber": "65",
+    "age": null
+  },
+  "luis perales": {
+    "name": "Luis Perales",
+    "pos": "P",
+    "abbr": "WSH",
+    "jerseyNumber": "43",
+    "age": null
+  },
+  "mitchell parker": {
+    "name": "Mitchell Parker",
+    "pos": "P",
+    "abbr": "WSH",
+    "jerseyNumber": "70",
+    "age": null
+  },
+  "orlando ribalta": {
+    "name": "Orlando Ribalta",
+    "pos": "P",
+    "abbr": "WSH",
+    "jerseyNumber": "64",
+    "age": null
+  },
+  "paxton schultz": {
+    "name": "Paxton Schultz",
+    "pos": "P",
+    "abbr": "WSH",
+    "jerseyNumber": "75",
+    "age": null
+  },
+  "riley cornelio": {
+    "name": "Riley Cornelio",
+    "pos": "P",
+    "abbr": "WSH",
+    "jerseyNumber": "74",
+    "age": null
+  },
+  "trevor williams": {
+    "name": "Trevor Williams",
+    "pos": "P",
+    "abbr": "WSH",
+    "jerseyNumber": "32",
+    "age": null
+  },
+  "a.j. minter": {
+    "name": "A.J. Minter",
+    "pos": "P",
+    "abbr": "NYM",
+    "jerseyNumber": "33",
+    "age": null
+  },
+  "alex carrillo": {
+    "name": "Alex Carrillo",
+    "pos": "P",
+    "abbr": "NYM",
+    "jerseyNumber": "84",
+    "age": null
+  },
+  "austin warren": {
+    "name": "Austin Warren",
+    "pos": "P",
+    "abbr": "NYM",
+    "jerseyNumber": "44",
+    "age": null
+  },
+  "christian scott": {
+    "name": "Christian Scott",
+    "pos": "P",
+    "abbr": "NYM",
+    "jerseyNumber": "45",
+    "age": null
+  },
+  "dedniel núñez": {
+    "name": "Dedniel Núñez",
+    "pos": "P",
+    "abbr": "NYM",
+    "jerseyNumber": "72",
+    "age": null
+  },
+  "dylan ross": {
+    "name": "Dylan Ross",
+    "pos": "P",
+    "abbr": "NYM",
+    "jerseyNumber": "66",
+    "age": null
+  },
+  "joey gerber": {
+    "name": "Joey Gerber",
+    "pos": "P",
+    "abbr": "NYM",
+    "jerseyNumber": "56",
+    "age": null
+  },
+  "jonah tong": {
+    "name": "Jonah Tong",
+    "pos": "P",
+    "abbr": "NYM",
+    "jerseyNumber": "21",
+    "age": null
+  },
+  "jonathan pintaro": {
+    "name": "Jonathan Pintaro",
+    "pos": "P",
+    "abbr": "NYM",
+    "jerseyNumber": "91",
+    "age": null
+  },
+  "justin hagenman": {
+    "name": "Justin Hagenman",
+    "pos": "P",
+    "abbr": "NYM",
+    "jerseyNumber": "47",
+    "age": null
+  },
+  "reed garrett": {
+    "name": "Reed Garrett",
+    "pos": "P",
+    "abbr": "NYM",
+    "jerseyNumber": "75",
+    "age": null
+  },
+  "tylor megill": {
+    "name": "Tylor Megill",
+    "pos": "P",
+    "abbr": "NYM",
+    "jerseyNumber": "58",
+    "age": null
+  }
+}
