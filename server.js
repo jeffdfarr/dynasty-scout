@@ -165,6 +165,7 @@ const server = http.createServer(async (req, res) => {
         const headers = parseCSVLine(lines[0]).map(h => h.replace(/^\uFEFF/,'').replace(/^﻿/,''));
         const col = name => headers.indexOf(name);
         const iName   = col('player_name');
+        const iPitcherId = col('pitcher');
         const iEvents = col('events');
         const iDesc   = col('description');
         const iTeam   = col('home_team');
@@ -177,7 +178,8 @@ const server = http.createServer(async (req, res) => {
           const row = parseCSVLine(lines[i]);
           const name = row[iName] || '';
           if(!name) continue;
-          if(!pitchers[name]) pitchers[name] = {pitches:0, swstr:0, bf:0, k:0, bb:0, teams:{}, pitchTypes:{}};
+          if(!pitchers[name]) pitchers[name] = {pitches:0, swstr:0, bf:0, k:0, bb:0, teams:{}, pitchTypes:{}, mlbId:''};
+          if(iPitcherId >= 0 && row[iPitcherId] && !pitchers[name].mlbId) pitchers[name].mlbId = row[iPitcherId].trim();
           const p = pitchers[name];
           p.pitches++;
           const pitchType = iPitch >= 0 ? (row[iPitch]||'').trim() : '';
@@ -215,6 +217,7 @@ const server = http.createServer(async (req, res) => {
 
           result[normalized.toLowerCase()] = {
             name: normalized,
+            mlbId: p.mlbId || '',
             k_pct: p.bf > 0 ? parseFloat((p.k / p.bf * 100).toFixed(1)) : 0,
             bb_pct: p.bf > 0 ? parseFloat((p.bb / p.bf * 100).toFixed(1)) : 0,
             kbb: p.bf > 0 ? parseFloat(((p.k - p.bb) / p.bf * 100).toFixed(1)) : 0,
@@ -274,6 +277,7 @@ const server = http.createServer(async (req, res) => {
         const headers = parseCSVLine(lines[0]).map(h => h.replace(/^\uFEFF/,''));
         const col = name => headers.indexOf(name);
         const iName   = col('player_name');
+        const iPitcherId = col('pitcher');
         const iEvents = col('events');
         const iDesc   = col('description');
         const iTeam   = col('home_team');
@@ -511,6 +515,7 @@ const server = http.createServer(async (req, res) => {
             const gbPct = (go + ao) > 0 ? parseFloat((go/(go+ao)*100).toFixed(1)) : null;
             result[name.toLowerCase()] = {
               name,
+              mlbId:     String(s.player?.id || ''),
               mlbOrg:    s.team?.parentOrgName || '',
               aaaTeam:   s.team?.abbreviation  || '',
               role:      gs > 0 ? 'SP' : 'RP',
@@ -631,6 +636,27 @@ const server = http.createServer(async (req, res) => {
       ...(req.headers.cookie ? { Cookie: req.headers.cookie } : {}),
     };
     proxyRequest(FANTRAX_HOST, fxPath, req.method, headers, body, res);
+    return;
+  }
+
+  // /mlb-photo/:id -> proxy MLB headshot images (avoids CORS)
+  if (path.startsWith('/mlb-photo/')) {
+    const playerId = path.replace('/mlb-photo/', '').split('?')[0];
+    const imgPath = `/mlb-photos/image/upload/w_60,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/${playerId}/headshot/silo/current`;
+    const opts = {
+      hostname: 'img.mlbstatic.com', port: 443, path: imgPath, method: 'GET',
+      headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*' }
+    };
+    const pr = https.request(opts, sr => {
+      res.writeHead(sr.statusCode, {
+        'Content-Type': sr.headers['content-type'] || 'image/png',
+        'Cache-Control': 'public, max-age=86400',
+        'Access-Control-Allow-Origin': '*',
+      });
+      sr.pipe(res);
+    });
+    pr.on('error', () => res.writeHead(404).end());
+    pr.end();
     return;
   }
 
