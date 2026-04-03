@@ -394,6 +394,9 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Helper: baseball IP notation to decimal (4.2 -> 4.667)
+  const ipToDecimal = ip => { const p = String(ip).split('.'); return (parseInt(p[0])||0) + ((parseInt(p[1])||0)/3); };
+
   // /mlb-stats -> fetch MLB pitching traditional stats (WHIP, K/9, BB/9, GB%, IP)
   if (path.startsWith('/mlb-stats')) {
     const mlbYear = path.includes('year=2025') ? '2025' : String(new Date().getFullYear());
@@ -420,7 +423,8 @@ const server = http.createServer(async (req, res) => {
         const name = s.player?.fullName || '';
         if(!name) return;
         const st = s.stat || {};
-        const ip  = parseFloat(st.inningsPitched) || 0;
+        const ipRawM = st.inningsPitched || '0';
+        const ipM    = ipToDecimal(ipRawM);
         const k   = st.strikeOuts || 0;
         const bb  = st.baseOnBalls || 0;
         const go  = st.groundOuts || 0;
@@ -428,9 +432,9 @@ const server = http.createServer(async (req, res) => {
         result[name.toLowerCase()] = {
           name,
           whip:  parseFloat(st.whip) || null,
-          ip,
-          k9:    ip > 0 ? parseFloat((k/ip*9).toFixed(1)) : null,
-          bb9:   ip > 0 ? parseFloat((bb/ip*9).toFixed(1)) : null,
+          ip: ipRawM, ipNum: ipM,
+          k9:    ipM > 0 ? parseFloat((k/ipM*9).toFixed(1)) : null,
+          bb9:   ipM > 0 ? parseFloat((bb/ipM*9).toFixed(1)) : null,
           gbPct: (go+ao) > 0 ? parseFloat((go/(go+ao)*100).toFixed(1)) : null,
           saves: st.saves || 0,
           holds: st.holds || 0,
@@ -470,9 +474,9 @@ const server = http.createServer(async (req, res) => {
         const unique = splits.filter(s => {
           const id = s.player?.id;
           if(!id || seen.has(id)) return false;
-          // Exclude if team sport level is MLB (sportId=1) — only want minor league entries
-          const sportId = s.team?.sport?.id || s.sport?.id;
-          if(sportId && sportId === 1) return false;
+          // Only include confirmed AAA entries (sport ID 11 = Triple-A)
+          const sportId = s.team?.sport?.id;
+          if(sportId && sportId !== 11) return false;
           seen.add(id);
           return true;
         });
@@ -484,7 +488,9 @@ const server = http.createServer(async (req, res) => {
             const bf = st.battersFaced || 0;
             const k  = st.strikeOuts || 0;
             const bb = st.baseOnBalls || 0;
-            const ip = parseFloat(st.inningsPitched) || 0;
+            const ipRaw = st.inningsPitched || '0';
+            const ip    = ipToDecimal(ipRaw); // decimal for calculations
+            const ipDisplay = ipRaw; // keep original baseball notation for display
             const gs = st.gamesStarted || 0;
             const gp = st.gamesPlayed || 0;
             const kpct  = bf > 0 ? parseFloat((k/bf*100).toFixed(1)) : 0;
@@ -503,7 +509,7 @@ const server = http.createServer(async (req, res) => {
               role:      gs > 0 ? 'SP' : 'RP',
               era:       parseFloat(st.era)  || null,
               whip:      parseFloat(st.whip) || null,
-              ip, bf, k, bb,
+              ip: ipDisplay, ipNum: ip, bf, k, bb,
               k_pct: kpct, bb_pct: bbpct, kbb,
               k9, bb9, gbPct,
               gp, gs,

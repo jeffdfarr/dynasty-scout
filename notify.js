@@ -368,7 +368,7 @@ async function run() {
   const minAAAK9  = Math.max(7.0, 8.0 * aaaFactor);
 
   const aaaCandidates = Object.values(aaaStats).filter(p => {
-    if(p.ip   < minAAAIP) return false;
+    if((p.ipNum || parseFloat(p.ip) || 0) < minAAAIP) return false;
     if(p.kbb  < 15)       return false;
     if(p.era  > 4.50)     return false;
     if(p.k9   < minAAAK9) return false;

@@ -66,7 +66,7 @@
     }
   }
 
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif; background: var(--bg3); color: var(--text); font-size: 13px; line-height: 1.4; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif; background: var(--bg3); color: var(--text); font-size: 13px; line-height: 1.4; overflow-x: hidden; }
 
   /* ── Nav bar (Savant-style dark header) ── */
   .nav-bar {
@@ -151,14 +151,12 @@
     margin-bottom: -2px;
     transition: color 0.15s;
     white-space: nowrap;
-    flex: 1;
-    text-align: center;
   }
   .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
   .tab:hover { color: var(--text); }
   @media (max-width: 600px) {
     .tabs { padding: 0; }
-    .tab { padding: 10px 8px; font-size: 12px; }
+    .tab { padding: 10px 8px; font-size: 12px; flex: 1; text-align: center; }
   }
   .pane { display: none; } .pane.active { display: block; }
 
@@ -190,10 +188,13 @@
     border: 1px solid var(--border);
     background: var(--bg);
     overscroll-behavior: contain;
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: contain;
+    touch-action: pan-x pan-y;
     -webkit-overflow-scrolling: touch;
   }
 
-  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; touch-action: pan-x pan-y; user-select: none; }
   .table-wrap thead th {
     position: sticky; top: 0; z-index: 10;
     background: var(--nav);
@@ -234,6 +235,29 @@
   .bgy { background: var(--gray-bg); color: var(--gray-text); }
   .mine-tag { font-size: 10px; padding: 1px 5px; border-radius: 3px; background: var(--blue-bg); color: var(--blue-text); margin-left: 5px; font-weight: 600; }
   .tpill { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: rgba(255,255,255,0.08); color: var(--text2); font-weight: 600; border: 1px solid var(--border); }
+  @keyframes shimmer {
+    0% { background-position: -600px 0; }
+    100% { background-position: 600px 0; }
+  }
+  .skeleton-row td {
+    padding: 10px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .skeleton-cell {
+    height: 12px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--bg2) 25%, var(--bg3) 50%, var(--bg2) 75%);
+    background-size: 600px 100%;
+    animation: shimmer 1.4s infinite linear;
+  }
+  .skeleton-avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: linear-gradient(90deg, var(--bg2) 25%, var(--bg3) 50%, var(--bg2) 75%);
+    background-size: 600px 100%;
+    animation: shimmer 1.4s infinite linear;
+    flex-shrink: 0;
+  }
+
   .p-avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border); background: var(--bg2); vertical-align: middle; margin-right: 7px; flex-shrink: 0; }
   .p-cell { display: flex; align-items: center; }
 
@@ -289,7 +313,7 @@
   </div>
 
   
-  <div id="pane-freeagents" class="pane">
+  <div id="pane-freeagents" class="pane active">
     <div class="filter-row">
       <label>Pos:</label>
       <select id="faPos" onchange="renderFA()"><option value="all" selected>All</option><option value="SP">SP</option><option value="RP">RP</option></select>
@@ -305,10 +329,9 @@
         <option value="200">200 BF</option>
       </select>
       <input id="faSearch" type="text" placeholder="Search pitcher..." oninput="renderFA()" style="padding:4px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);width:140px"/>
-      <div style="margin-left:auto;display:flex;gap:4px;align-items:center">
-        <button class="yr-btn active" id="faYrCur" onclick="setYear(CURRENT_YEAR,'fa')">—</button>
-        <button class="yr-btn" id="faYrPrev" onclick="setYear(PREV_YEAR,'fa')">—</button>
-      </div>
+    </div>
+    <div style="margin-bottom:8px">
+      <span style="font-size:11px;color:var(--text2)">FA pitchers · <span id="faCount">—</span> total · <span id="faUpdated"></span></span>
     </div>
     <div class="table-wrap"><table>
       <thead><tr id="faHead">
@@ -319,7 +342,7 @@
         <th onclick="faSort('ip')"    style="cursor:pointer">IP <span id="fsip"></span></th>
         <th onclick="faSort('xera')"  style="cursor:pointer">xERA <span id="fse"></span></th>
         <th onclick="faSort('kbb')"   style="cursor:pointer">K-BB% <span id="fsk"></span></th>
-        <th onclick="faSort('kbb7')"  style="cursor:pointer" id="l7Header">L7 K-BB% <span id="fsk7"></span></th>
+
         <th onclick="faSort('xba')"   style="cursor:pointer">xBA <span id="fsb"></span></th>
         <th onclick="faSort('whiff')" style="cursor:pointer">Whiff% <span id="fsw"></span></th>
         <th>Pitch mix</th>
@@ -344,12 +367,12 @@
       <label>MLB Org:</label>
       <select id="aaaTeamFilter" onchange="renderAAA()"><option value="all">All</option></select>
       <input id="aaaSearch" type="text" placeholder="Search pitcher..." oninput="renderAAA()" style="padding:4px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);width:140px"/>
+      <div style="margin-left:auto;display:flex;gap:4px;align-items:center">
+        <button class="yr-btn active" id="aaaYrCur" onclick="setYear(CURRENT_YEAR,'aaa')">—</button>
+        <button class="yr-btn" id="aaaYrPrev" onclick="setYear(PREV_YEAR,'aaa')">—</button>
+      </div>
     </div>
-    <div style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
-      <button class="yr-btn active" id="aaaYrCur" onclick="setYear(CURRENT_YEAR,'aaa')">—</button>
-      <button class="yr-btn" id="aaaYrPrev" onclick="setYear(PREV_YEAR,'aaa')">—</button>
-      <span style="font-size:11px;color:var(--text2);margin-left:6px">AAA pitchers · <span id="aaaCount">—</span> total · <span id="aaaUpdated"></span></span>
-    </div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:8px">AAA pitchers · <span id="aaaCount">—</span> total · <span id="aaaUpdated"></span></div>
     <div class="table-wrap"><table>
       <thead><tr>
         <th>#</th>
@@ -385,12 +408,16 @@
 
 const savant = [];
 
+// Show skeleton loaders immediately
+showSkeleton('faBody', 10);
+showSkeleton('aaaBody', 10);
+
 // Init year button labels for all tabs
-['faYrCur','aaaYrCur','rosYrCur'].forEach(id => {
+['aaaYrCur'].forEach(id => {
   const el = document.getElementById(id);
   if(el) el.textContent = CURRENT_YEAR;
 });
-['faYrPrev','aaaYrPrev','rosYrPrev'].forEach(id => {
+['aaaYrPrev'].forEach(id => {
   const el = document.getElementById(id);
   if(el) el.textContent = PREV_YEAR;
 });
@@ -438,7 +465,7 @@ function calcScore(p){
   return Math.round(Math.max(0, Math.min(100, s*100)));
 }
 
-let G = { leagueId:'', leagueName:'', leagues:[], teams:{}, rosters:{}, standings:[], faNames:new Set(), yearCache:{} };
+let G = { leagueId:'', leagueName:'', leagues:[], teams:{}, rosters:{}, faNames:new Set(), yearCache:{}, aaaCache:{}, savantLoaded: false };
 
 function tier(s){ if(s>=75)return['Elite','bg']; if(s>=55)return['Strong','bb']; if(s>=35)return['Average','ba']; return['Fade','br']; }
 
@@ -502,10 +529,9 @@ async function loadLeague(){
   G.leagueName = league.leagueName || 'My league';
   localStorage.setItem('fantrax_league_id', G.leagueId);
   try {
-    const [info, rosterData, standData, adpData] = await Promise.all([
+    const [info, rosterData, adpData] = await Promise.all([
       fx('getLeagueInfo', {leagueId: G.leagueId}),
       fx('getTeamRosters', {leagueId: G.leagueId}),
-      fx('getStandings', {leagueId: G.leagueId}),
       fx('getAdp', {sport: 'MLB'}),
     ]);
     const adpSample = (adpData.players||adpData.playerInfo||Object.values(adpData)[0]||[]);
@@ -628,128 +654,41 @@ async function loadLeague(){
     console.log('[scout] ADP sample entry:', JSON.stringify(Object.values(adpData).find(e=>e&&e.name)));
     console.log('[scout] nameToTeam size:', Object.keys(nameToTeam).length, '| sample:', JSON.stringify(Object.entries(nameToTeam).slice(0,5)));
     G.teams = teams; G.rosters = rosters; G.faNames = faNames; G.playerInfo = playerInfo; G.nameToTeam = nameToTeam;
+    G.teams = teams; G.rosters = rosters; G.faNames = faNames; G.playerInfo = playerInfo; G.nameToTeam = nameToTeam;
 
+    renderFA();
 
-    // Populate team picker in AI tab
-    const picker = document.getElementById('myTeamPicker');
-    if(picker){
-      const saved = localStorage.getItem('fantrax_my_team') || '';
-      picker.innerHTML = '<option value="">— select your team —</option>' +
-        Object.entries(teams).map(([tid, tname]) =>
-          `<option value="${tid}" ${tid === saved ? 'selected' : ''}>${tname}</option>`
-        ).join('');
-    }
-
-    // standData is { "0": {teamId, teamName, rank, points, winPercentage, gamesBack}, "1": ... }
-    G.standings = Object.values(standData)
-      .filter(v => v && typeof v === 'object' && v.teamId)
-      .sort((a,b) => (a.rank||99) - (b.rank||99));
-
-    // Count actual pitcher FAs from the full Fantrax pool using adpPosMap
-    const PPOS_COUNT = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
     const faCount = Array.from(faNames).filter(name => {
       const adpPos = adpPosMap[name] || '';
-      return adpPos.split(',').some(p => PPOS_COUNT.has(p.trim()));
+      return adpPos.split(',').some(p => new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']).has(p.trim()));
     }).length;
-    const matched = savant.filter(p=>p.fxStatus!=='unknown').length;
-    const myId = getMyTeam();
-    const myR = G.rosters[myId];
-    const minePitchers = myR ? myR.players.filter(p=>['SP','RP','P'].includes(p.pos)).length : 0;
-
-
-    document.getElementById('leagueHeader').textContent = `${G.leagueName} · ${Object.keys(teams).length} teams · Live`;
-
-    // Fetch live Savant data and merge with league FA info
-    setStatus('st2','Fetching Baseball Savant pitcher stats...','inf');
-    try { await fetchSavantData(); } catch(e){ console.warn('Savant fetch skipped:', e.message); }
-
     document.getElementById('leagueHeader').textContent = `${G.leagueName} · ${Object.keys(teams).length} teams · ${faCount} pitcher FAs · Live`;
-    renderFA(); renderStandings();
-    sw('freeagents'); // ensure active tab renders
-    // Fetch AAA stats in background
+
+    try { await fetchSavantData(); } catch(e){ console.warn('Savant fetch skipped:', e.message); }
     fetchAAA(G.dataYear || CURRENT_YEAR);
 
-    // Pre-fetch previous year in background so switching is instant
     setTimeout(async () => {
       if(!G.yearCache[PREV_YEAR]) {
-        console.log(`[scout] Pre-fetching ${PREV_YEAR} data in background...`);
         const savedYear = G.dataYear;
         G.dataYear = PREV_YEAR;
         try { await fetchSavantData(PREV_YEAR); } catch(e) { console.warn('Pre-fetch failed:', e.message); }
         G.dataYear = savedYear || CURRENT_YEAR;
-        // Restore current year display
         applyCachedYear(G.dataYear);
-        fetchAAA(PREV_YEAR); // pre-cache AAA too
+        fetchAAA(PREV_YEAR);
+        G.dataYear = savedYear;
         console.log(`[scout] ${PREV_YEAR} data pre-cached`);
       }
-    }, 5000); // wait 5s after initial load before pre-fetching
+    }, 5000);
+
   } catch(e) { document.getElementById('leagueHeader').textContent = 'Error: ' + e.message; throw e; }
+
 }
-
-function getMyTeam(){
-  const picker = document.getElementById('myTeamPicker');
-  if(picker && picker.value) return picker.value;
-  return localStorage.getItem('fantrax_my_team') || '';
-}
-
-const PITCHER_POS = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
-
-function isPitcherFA(name) {
-  const lower = name.toLowerCase();
-  if(!G.faNames || !G.faNames.has(lower)) return false;
-  // Check ADP position map
-  const adpPos = G.adpPosMap ? (G.adpPosMap[lower] || '') : '';
-  if(adpPos) {
-    return adpPos.split(',').some(p => PITCHER_POS.has(p.trim()));
-  }
-  // If no position info, include if they're in our savant pitcher list
-  return savant.some(s => s.name.toLowerCase() === lower);
-}
-
-let faSortCol = 'xera';
-let faSortAsc = true; // xERA ascending = best first
-
-function faSort(col){
-  if(faSortCol === col){
-    faSortAsc = !faSortAsc;
-  } else {
-    faSortCol = col;
-    // Default direction per column
-    faSortAsc = (col === 'xera' || col === 'xba'); // lower is better for these
-  }
-  renderFA();
-}
-
-let aaaSortCol = 'kbb';
-let aaaSortAsc = false; // K-BB% descending by default
-
-async function fetchAAA(year) {
-  try {
-    document.getElementById('aaaUpdated').textContent = `Loading ${year}...`;
-    const data = await fetch(`${PROXY}/aaa-stats?year=${year}`).then(r => r.json());
-    G.aaaStats = data;
-    document.getElementById('aaaUpdated').textContent = `${year} · Updated ` + new Date().toLocaleTimeString();
-    // Populate AAA org dropdown
-    const aaaOrgs = [...new Set(Object.values(data).map(p=>p.mlbOrg).filter(Boolean).sort())];
-    const aaaTeamSel = document.getElementById('aaaTeamFilter');
-    if(aaaTeamSel) aaaTeamSel.innerHTML = '<option value="all">All</option>' + aaaOrgs.map(t=>`<option value="${t}">${t}</option>`).join('');
-    renderAAA();
-  } catch(e) { console.warn('AAA stats failed:', e.message); }
-}
-
-function aaaSort(col){
-  if(aaaSortCol === col){ aaaSortAsc = !aaaSortAsc; }
-  else { aaaSortCol = col; aaaSortAsc = (col === 'era' || col === 'whip' || col === 'bb9'); }
-  renderAAA();
-}
-
 function renderAAA(){
   const role    = document.getElementById('aaaRole')?.value || 'all';
   const minBF   = parseInt(document.getElementById('aaaMinBF')?.value || '0');
   const search   = (document.getElementById('aaaSearch')?.value || '').toLowerCase().trim();
   const aaaTeamF = document.getElementById('aaaTeamFilter')?.value || 'all';
 
-  // Check if AAA player is rostered in Fantrax — use rosteredNames (more reliable than faNames)
   function isAAAPlayerRostered(name) {
     if(!G.rosteredNames || !G.rosteredNames.size) return false;
     const nn  = stripAccents(normName(name));
@@ -764,7 +703,6 @@ function renderAAA(){
     if(minBF > 0 && p.bf < minBF) return false;
     if(search && !p.name.toLowerCase().includes(search)) return false;
     if(aaaTeamF !== 'all' && p.mlbOrg !== aaaTeamF) return false;
-
     return true;
   });
 
@@ -777,7 +715,7 @@ function renderAAA(){
     if(aaaSortCol === 'bb9')   return dir * ((a.bb9||99)   - (b.bb9||99));
     if(aaaSortCol === 'gbPct') return dir * ((a.gbPct||0)  - (b.gbPct||0));
     if(aaaSortCol === 'whip')  return dir * ((a.whip||99)  - (b.whip||99));
-    if(aaaSortCol === 'ip')    return dir * ((a.ip||0)     - (b.ip||0));
+    if(aaaSortCol === 'ip')    return dir * ((a.ipNum||parseFloat(a.ip)||0) - (b.ipNum||parseFloat(b.ip)||0));
     return 0;
   });
 
@@ -832,6 +770,39 @@ function renderAAA(){
   document.getElementById('aaaEmpty').style.display = list.length ? 'none' : 'block';
 }
 
+function showSkeleton(tbodyId, cols, rows=8) {
+  const tbody = document.getElementById(tbodyId);
+  if(!tbody) return;
+  const hasAvatar = cols > 5; // FA and AAA have avatars
+  tbody.innerHTML = Array.from({length: rows}, () => `
+    <tr class="skeleton-row">
+      <td><div class="skeleton-cell" style="width:20px"></div></td>
+      <td><div class="p-cell">
+        ${hasAvatar ? '<div class="skeleton-avatar"></div>' : ''}
+        <div class="skeleton-cell" style="width:${hasAvatar?'120':'80'}px"></div>
+      </div></td>
+      ${Array.from({length: cols-2}, (_,i) => `<td><div class="skeleton-cell" style="width:${30+Math.sin(i)*15|0}px;margin:0 auto"></div></td>`).join('')}
+    </tr>`).join('');
+}
+
+let faSortCol = 'xera';
+let faSortAsc = true;
+
+function faSort(col){
+  if(faSortCol === col){ faSortAsc = !faSortAsc; }
+  else { faSortCol = col; faSortAsc = (col === 'xera' || col === 'xba' || col === 'whip'); }
+  renderFA();
+}
+
+let aaaSortCol = 'kbb';
+let aaaSortAsc = false;
+
+function aaaSort(col){
+  if(aaaSortCol === col){ aaaSortAsc = !aaaSortAsc; }
+  else { aaaSortCol = col; aaaSortAsc = (col === 'era' || col === 'whip' || col === 'bb9'); }
+  renderAAA();
+}
+
 function renderFA(){
   const pos      = document.getElementById('faPos').value;
   const minBF   = parseInt(document.getElementById('faMinBF')?.value || '0');
@@ -854,30 +825,33 @@ function renderFA(){
     if(faSortCol === 'xera')  return dir * ((a.xera||99)  - (b.xera||99));
     if(faSortCol === 'whip')  return dir * ((a.whip||99)  - (b.whip||99));
     if(faSortCol === 'kbb')   return dir * ((a.kbb||0)    - (b.kbb||0));
-    if(faSortCol === 'kbb7')  return dir * ((a.kbb7||0)   - (b.kbb7||0));
     if(faSortCol === 'k9')    return dir * ((a.k9||0)     - (b.k9||0));
     if(faSortCol === 'bb9')   return dir * ((a.bb9||99)   - (b.bb9||99));
     if(faSortCol === 'gbPct') return dir * ((a.gbPct||0)  - (b.gbPct||0));
     if(faSortCol === 'xba')   return dir * ((a.xba||1)    - (b.xba||1));
     if(faSortCol === 'whiff') return dir * ((a.whiff||0)  - (b.whiff||0));
-    if(faSortCol === 'ip')    return dir * ((a.ip||0)     - (b.ip||0));
+    if(faSortCol === 'ip')    return dir * ((a.ipNum||parseFloat(a.ip)||0) - (b.ipNum||parseFloat(b.ip)||0));
     return 0;
   });
   // Update sort indicators
-  ['n','ip','e','k','k7','b','w'].forEach(id => {
+  ['n','ip','e','k','b','w'].forEach(id => {
     const el = document.getElementById('fs'+id);
     if(el) el.textContent = '';
   });
-  const colToId = {name:'n',ip:'ip',xera:'e',kbb:'k',kbb7:'k7',xba:'b',whiff:'w'};
+  const colToId = {name:'n',ip:'ip',xera:'e',kbb:'k',xba:'b',whiff:'w'};
   const activeEl = document.getElementById('fs' + (colToId[faSortCol]||''));
   if(activeEl) activeEl.textContent = faSortAsc ? ' ▲' : ' ▼';
   // highlight applied after render below
   const empty = document.getElementById('faEmpty');
   // Only show empty message if league data is actually loaded
   if(!list.length){
+    if(!G.savantLoaded) {
+      // Keep skeleton showing — data hasn't arrived yet
+      return;
+    }
     empty.style.display = G.leagues.length ? 'block' : 'none';
     empty.textContent = G.leagues.length ? 'No FA pitchers match your filters.' : 'Loading...';
-    document.getElementById('faBody').innerHTML = ''; // clear stale rows
+    document.getElementById('faBody').innerHTML = '';
     return;
   }
   empty.style.display='none';
@@ -885,19 +859,16 @@ function renderFA(){
   function applyFAHighlight(){
     document.querySelectorAll('#faHead th').forEach(th => th.classList.remove('col-hl'));
     document.querySelectorAll('#faBody td').forEach(td => td.classList.remove('col-hl'));
-    const colToId2 = {name:'n',xera:'e',kbb:'k',kbb7:'k7',xba:'b',whiff:'w'};
+    const colToId2 = {name:'n',ip:'ip',xera:'e',kbb:'k',xba:'b',whiff:'w'};
     const ael = document.getElementById('fs'+(colToId2[faSortCol]||''));
     if(ael?.closest('th')) ael.closest('th').classList.add('col-hl');
     document.querySelectorAll(`#faBody td[data-col="${faSortCol}"]`).forEach(td => td.classList.add('col-hl'));
   }
 
+  document.getElementById('faCount').textContent = list.length;
+  document.getElementById('faUpdated').textContent = (G.dataYear || CURRENT_YEAR) + ' · Updated ' + new Date().toLocaleTimeString();
   document.getElementById('faBody').innerHTML = list.map((p,i) => {
-    const trend = p.kbb7 != null && p.kbb != null
-      ? (p.kbb7 > p.kbb + 3 ? '<span style="color:#1D9E75;font-size:11px"> ▲</span>'
-       : p.kbb7 < p.kbb - 3 ? '<span style="color:#E24B4A;font-size:11px"> ▼</span>'
-       : '<span style="color:var(--text2);font-size:11px"> —</span>')
-      : '';
-    const l7 = p.kbb7 != null ? `${p.kbb7}%${trend}` : `<span style="color:var(--text2)">—</span>`;
+
     // Build pitch mix display — top 3 pitches by usage
     const mix = p.pitchMix || {};
     const topPitches = Object.entries(mix)
@@ -911,10 +882,10 @@ function renderFA(){
       <td><div class="p-cell"><img class="p-avatar" src="${PROXY}/mlb-photo/${p.mlbId || 'generic'}" onerror="this.style.display='none'" /><span style="font-weight:500">${p.name}</span></div></td>
       <td><span class="tpill">${p.mlb}</span></td>
       <td>${p.role}</td>
-      <td data-col="ip">${p.ip != null ? p.ip.toFixed(1) : '—'}</td>
+      <td data-col="ip">${p.ip || '—'}</td>
       <td data-col="xera">${bar(p.xera,2.5,4.8,true)}</td>
       <td data-col="kbb">${bar(p.kbb,8,25)}</td>
-      <td data-col="kbb7">${l7}</td>
+
       <td data-col="xba">${p.xba!=null?p.xba.toFixed(3):'—'}</td>
       <td data-col="whiff">${bar(p.whiff,18,40)}</td>
       <td style="font-size:11px;color:var(--text2)">${topPitches}</td>
@@ -926,7 +897,6 @@ function renderFA(){
 
 
 
-function renderStandings(){} // removed
 
 let svSortCol = 'xera';
 let svSortAsc = true;
@@ -939,9 +909,37 @@ function svSort(col){
 
 function renderSavant(){} // removed
 
+async function fetchAAA(year) {
+  const el = document.getElementById('aaaUpdated');
+  // Return from cache if available
+  if(G.aaaCache[year]) {
+    showSkeleton('aaaBody', 10);
+    G.aaaStats = G.aaaCache[year];
+    if(el) el.textContent = `${year} · Updated ` + new Date().toLocaleTimeString();
+    const aaaOrgs = [...new Set(Object.values(G.aaaStats).map(p=>p.mlbOrg).filter(Boolean).sort())];
+    const aaaTeamSel = document.getElementById('aaaTeamFilter');
+    if(aaaTeamSel) aaaTeamSel.innerHTML = '<option value="all">All</option>' + aaaOrgs.map(t=>`<option value="${t}">${t}</option>`).join('');
+    renderAAA();
+    return;
+  }
+  try {
+    if(el) el.textContent = `Loading ${year}...`;
+    showSkeleton('aaaBody', 10);
+    const data = await fetch(`${PROXY}/aaa-stats?year=${year}`).then(r => r.json());
+    G.aaaStats = data;
+    G.aaaCache[year] = data; // cache it
+    if(el) el.textContent = `${year} · Updated ` + new Date().toLocaleTimeString();
+    const aaaOrgs = [...new Set(Object.values(data).map(p=>p.mlbOrg).filter(Boolean).sort())];
+    const aaaTeamSel = document.getElementById('aaaTeamFilter');
+    if(aaaTeamSel) aaaTeamSel.innerHTML = '<option value="all">All</option>' + aaaOrgs.map(t=>`<option value="${t}">${t}</option>`).join('');
+    renderAAA();
+  } catch(e) { console.warn('AAA stats failed:', e.message); }
+}
+
 function applyCachedYear(year) {
   const cache = G.yearCache[year];
   if(!cache) return;
+  G.savantLoaded = true;
   // Restore savant array from cache
   savant.length = 0;
   cache.savant.forEach(p => savant.push({...p}));
@@ -1157,6 +1155,7 @@ async function fetchSavantData(year){
         p.fxStatus='unknown'; p.fxTeam='';
       }
     });
+      G.savantLoaded = true;
       // Save to year cache before rendering
 
 
@@ -1227,7 +1226,6 @@ async function setYear(year, tab){
 
   // Update buttons only for the clicked tab
   const tabBtnMap = {
-    fa:      ['faYrCur',  'faYrPrev'],
     aaa:     ['aaaYrCur', 'aaaYrPrev'],
   };
   if(tab && tabBtnMap[tab]) {
@@ -1245,17 +1243,13 @@ async function setYear(year, tab){
   // FA and Rosters share Statcast data
   G.dataYear = year;
 
-  // Show/hide L7 column based on year
-  const l7h = document.getElementById('l7Header');
-  if(l7h) l7h.style.display = year === CURRENT_YEAR ? '' : 'none';
-  document.querySelectorAll('#faBody td[data-col="kbb7"]').forEach(td => td.style.display = year === CURRENT_YEAR ? '' : 'none');
-
   if(G.yearCache[year]) {
     applyCachedYear(year);
     document.getElementById('leagueHeader').textContent = `${G.leagueName} · ${Object.keys(G.teams).length} teams · ${year} data`;
   } else {
     savant.forEach(p => { p.xera=null; p.xba=null; p.kbb=null; p.whiff=null; p.fxStatus='unknown'; p.fxTeam=''; });
     document.getElementById('leagueHeader').textContent = `Loading ${year} Statcast data...`;
+    showSkeleton('faBody', 10);
     try { await fetchSavantData(year); } catch(e){ console.warn('Savant fetch failed:', e.message); }
     document.getElementById('leagueHeader').textContent = `${G.leagueName} · ${Object.keys(G.teams).length} teams · ${year} data`;
   }
