@@ -641,12 +641,13 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // /bullpen-watch -> all 30 MLB teams bullpen data with saves, holds, injury status
+  // /bullpen-watch -> all 30 MLB teams bullpen data with saves, holds, injury status, prior year
   if (path.startsWith('/bullpen-watch')) {
     const bpYear = new Date().getFullYear();
-    // Fetch pitching stats + injury status via hydrate
-    const fetchPage = (offset) => new Promise((resolve) => {
-      const mlbPath = `/api/v1/stats?stats=season&group=pitching&gameType=R&season=${bpYear}&sportIds=1&limit=500&offset=${offset}&sortStat=saves&order=desc&hydrate=person(currentTeam),team`;
+    const bpPrevYear = bpYear - 1;
+
+    const fetchStats = (year, offset) => new Promise((resolve) => {
+      const mlbPath = `/api/v1/stats?stats=season&group=pitching&gameType=R&season=${year}&sportIds=1&limit=500&offset=${offset}&sortStat=saves&order=desc&hydrate=person,team`;
       const opts = {hostname:'statsapi.mlb.com',port:443,path:mlbPath,method:'GET',headers:{'User-Agent':'Mozilla/5.0'}};
       const pr = https.request(opts, sr => {
         let body=''; sr.on('data',c=>body+=c);
@@ -655,7 +656,6 @@ const server = http.createServer(async (req, res) => {
       pr.on('error',()=>resolve([])); pr.end();
     });
 
-    // Fetch injury report
     const fetchInjuries = () => new Promise((resolve) => {
       const opts = {hostname:'statsapi.mlb.com',port:443,path:`/api/v1/injuries`,method:'GET',headers:{'User-Agent':'Mozilla/5.0'}};
       const pr = https.request(opts, sr => {
@@ -665,19 +665,36 @@ const server = http.createServer(async (req, res) => {
       pr.on('error',()=>resolve([])); pr.end();
     });
 
-    Promise.all([fetchPage(0), fetchPage(500), fetchInjuries()]).then(([p1, p2, injuries]) => {
-      const splits = [...p1, ...p2];
+    Promise.all([
+      fetchStats(bpYear, 0), fetchStats(bpYear, 500),
+      fetchStats(bpPrevYear, 0), fetchStats(bpPrevYear, 500),
+      fetchInjuries()
+    ]).then(([cur1, cur2, prev1, prev2, injuries]) => {
+      const curSplits  = [...cur1,  ...cur2];
+      const prevSplits = [...prev1, ...prev2];
 
       // Build injury lookup by player id
       const injuredIds = new Set();
-      injuries.forEach(inj => {
-        if(inj.player?.id) injuredIds.add(inj.player.id);
+      injuries.forEach(inj => { if(inj.player?.id) injuredIds.add(inj.player.id); });
+
+      // Build prior year saves lookup: playerId -> saves
+      const prevSaves = {};
+      const prevTeamLeader = {}; // teamId -> { pid, saves }
+      prevSplits.forEach(s => {
+        const pid = s.player?.id;
+        if(!pid) return;
+        const sv = s.stat?.saves || 0;
+        prevSaves[pid] = sv;
+        const tid = s.team?.id;
+        if(tid && (!prevTeamLeader[tid] || sv > prevTeamLeader[tid].saves)) {
+          prevTeamLeader[tid] = { pid, saves: sv, name: s.player?.fullName };
+        }
       });
 
-      // Group by MLB team, filter to RPs with saves or holds or gamesFinished
+      // Group current year by MLB team
       const teams = {};
       const seen = new Set();
-      splits.forEach(s => {
+      curSplits.forEach(s => {
         const pid = s.player?.id;
         if(!pid || seen.has(pid)) return;
         seen.add(pid);
@@ -687,39 +704,60 @@ const server = http.createServer(async (req, res) => {
         const gf    = st.gamesFinished || 0;
         const gp    = st.gamesPlayed || 0;
         const gs    = st.gamesStarted || 0;
-        // Only include relievers with meaningful appearances
         if(gs > gp * 0.5) return; // skip starters
-        if(saves === 0 && holds === 0 && gf === 0) return; // skip middle guys with no role
+        if(saves === 0 && holds === 0 && gf === 0) return;
         const teamName = s.team?.name || '';
         const teamAbbr = s.team?.abbreviation || '';
-        const teamId   = s.team?.id || '';
+        const teamId   = String(s.team?.id || '');
         if(!teamName) return;
         if(!teams[teamId]) teams[teamId] = { name: teamName, abbr: teamAbbr, id: teamId, pitchers: [] };
         const ipRaw = st.inningsPitched || '0';
-        const ipParts = String(ipRaw).split('.');
-        const ipDec = (parseInt(ipParts[0])||0) + ((parseInt(ipParts[1])||0)/3);
         teams[teamId].pitchers.push({
-          name:   s.player?.fullName || '',
-          mlbId:  String(pid),
+          name:      s.player?.fullName || '',
+          mlbId:     String(pid),
           saves, holds, gf, gp,
-          ip:     ipRaw,
-          era:    parseFloat(st.era) || null,
-          whip:   parseFloat(st.whip) || null,
-          injured: injuredIds.has(pid),
+          ip:        ipRaw,
+          era:       parseFloat(st.era) || null,
+          whip:      parseFloat(st.whip) || null,
+          injured:   injuredIds.has(pid),
+          prevSaves: prevSaves[pid] || 0,
         });
       });
 
-      // Sort pitchers within each team by saves desc then holds desc
-      Object.values(teams).forEach(t => {
+      // Classify each team using prior year + injury awareness
+      Object.entries(teams).forEach(([tid, t]) => {
         t.pitchers.sort((a,b) => (b.saves - a.saves) || (b.holds - a.holds));
-        // Classify team bullpen situation
-        const withSaves = t.pitchers.filter(p => p.saves > 0);
-        const totalSaves = t.pitchers.reduce((s,p) => s+p.saves, 0);
-        if(withSaves.length === 0) t.situation = 'NO_SAVES';
-        else if(withSaves.length >= 3) t.situation = 'COMMITTEE';
-        else if(withSaves.length === 2 && Math.abs(withSaves[0].saves - withSaves[1].saves) <= 2) t.situation = 'COMMITTEE';
-        else if(withSaves.length === 1 && withSaves[0].saves >= 5) t.situation = 'LOCKED';
-        else t.situation = 'EMERGING';
+
+        const prevLeader = prevTeamLeader[tid];
+        const healthyWithSaves = t.pitchers.filter(p => p.saves > 0 && !p.injured);
+        const allWithSaves     = t.pitchers.filter(p => p.saves > 0);
+
+        // Find the prior year closer on this team (if they're still here)
+        const priorCloser = t.pitchers.find(p => prevLeader && String(p.mlbId) === String(prevLeader.pid));
+        const priorCloserIsInjured = priorCloser?.injured || false;
+        const priorCloserHadDominantYear = priorCloser && (priorCloser.prevSaves >= 15);
+
+        // Flag prior closer if injured
+        if(priorCloser) priorCloser.isPriorCloser = true;
+
+        if(priorCloserHadDominantYear && !priorCloserIsInjured) {
+          // Prior dominant closer is healthy — locked regardless of early save count
+          t.situation = 'LOCKED';
+          t.lockedPitcher = priorCloser.name;
+        } else if(priorCloserHadDominantYear && priorCloserIsInjured) {
+          // Prior closer is hurt — reclassify based on healthy pitchers only
+          if(healthyWithSaves.length === 0) t.situation = 'NO_SAVES';
+          else if(healthyWithSaves.length >= 2) t.situation = 'COMMITTEE';
+          else t.situation = 'EMERGING';
+          t.injuredCloser = priorCloser.name; // flag for UI
+        } else {
+          // No dominant prior closer — use current save distribution
+          if(allWithSaves.length === 0) t.situation = 'NO_SAVES';
+          else if(allWithSaves.length >= 3) t.situation = 'COMMITTEE';
+          else if(allWithSaves.length === 2 && Math.abs(allWithSaves[0].saves - allWithSaves[1].saves) <= 2) t.situation = 'COMMITTEE';
+          else if(allWithSaves.length === 1 && allWithSaves[0].saves >= 3) t.situation = 'LOCKED';
+          else t.situation = 'EMERGING';
+        }
       });
 
       setCORS(res, reqOrigin);
