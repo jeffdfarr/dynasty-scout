@@ -427,13 +427,18 @@ const server = http.createServer(async (req, res) => {
 
     Promise.all([fetchPage(0), fetchPage(500)]).then(([page1, page2]) => {
       const splits = [...page1, ...page2];
-      const seen = new Set();
-      const result = {};
-      splits.filter(s => {
+      // Dedup by player ID — prefer highest IP entry (cumulative season total over per-team splits)
+      const bestByPlayer = {};
+      splits.forEach(s => {
         const id = s.player?.id;
-        if(!id || seen.has(id)) return false;
-        seen.add(id); return true;
-      }).forEach(s => {
+        if(!id) return;
+        const ip = parseFloat(s.stat?.inningsPitched||'0');
+        if(!bestByPlayer[id] || ip > parseFloat(bestByPlayer[id].stat?.inningsPitched||'0')) {
+          bestByPlayer[id] = s;
+        }
+      });
+      const result = {};
+      Object.values(bestByPlayer).forEach(s => {
         const name = s.player?.fullName || '';
         if(!name) return;
         const st = s.stat || {};
@@ -445,6 +450,7 @@ const server = http.createServer(async (req, res) => {
         const ao  = st.airOuts || 0;
         result[name.toLowerCase()] = {
           name,
+          era:   parseFloat(st.era)  || null,
           whip:  parseFloat(st.whip) || null,
           ip: ipRawM, ipNum: ipM,
           k9:    ipM > 0 ? parseFloat((k/ipM*9).toFixed(1)) : null,
@@ -452,6 +458,7 @@ const server = http.createServer(async (req, res) => {
           gbPct: (go+ao) > 0 ? parseFloat((go/(go+ao)*100).toFixed(1)) : null,
           saves: st.saves || 0,
           holds: st.holds || 0,
+          gamesPlayed: st.gamesPlayed || 0,
           gamesFinished: st.gamesFinished || 0,
         };
       });
@@ -702,13 +709,19 @@ const server = http.createServer(async (req, res) => {
         }
       });
 
-      // Group current year by MLB team
-      const teams = {};
-      const seen = new Set();
+      // Group current year by MLB team — prefer highest IP entry per player
+      const bestCur = {};
       curSplits.forEach(s => {
         const pid = s.player?.id;
-        if(!pid || seen.has(pid)) return;
-        seen.add(pid);
+        if(!pid) return;
+        const ip = parseFloat(s.stat?.inningsPitched||'0');
+        if(!bestCur[pid] || ip > parseFloat(bestCur[pid].stat?.inningsPitched||'0')) {
+          bestCur[pid] = s;
+        }
+      });
+      const teams = {};
+      Object.values(bestCur).forEach(s => {
+        const pid = s.player?.id;
         const st = s.stat || {};
         const saves = st.saves || 0;
         const holds = st.holds || 0;

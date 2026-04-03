@@ -441,6 +441,7 @@
   // Dynamic year constants — always current year and previous year
   const CURRENT_YEAR = String(new Date().getFullYear());
   const PREV_YEAR    = String(new Date().getFullYear() - 1);
+  const CACHE_VERSION = '2'; // bump when data schema changes to force cache invalidation
 
   // Auto-detect proxy URL — localhost in dev, same origin in cloud
   // Use localhost proxy when running locally (file:// or localhost), cloud origin when deployed
@@ -510,7 +511,7 @@ function calcScore(p){
   return Math.round(Math.max(0, Math.min(100, s*100)));
 }
 
-let G = { leagueId:'', leagueName:'', leagues:[], teams:{}, rosters:{}, faNames:new Set(), yearCache:{}, aaaCache:{}, savantLoaded: false };
+let G = { leagueId:'', leagueName:'', leagues:[], teams:{}, rosters:{}, faNames:new Set(), yearCache:{}, aaaCache:{}, savantLoaded: false, preFetching: false };
 
 function tier(s){ if(s>=75)return['Elite','bg']; if(s>=55)return['Strong','bb']; if(s>=35)return['Average','ba']; return['Fade','br']; }
 
@@ -720,10 +721,15 @@ async function loadLeague(){
       if(!G.yearCache[PREV_YEAR]) {
         console.log(`[scout] Pre-fetching ${PREV_YEAR} Savant in background...`);
         const savedYear = G.dataYear;
+        const savedMlbStats = G.mlbStats;
+        const savedSavantLoaded = G.savantLoaded;
         G.dataYear = PREV_YEAR;
+        G.preFetching = true; // block all renders during pre-fetch
         try { await fetchSavantData(PREV_YEAR); } catch(e) { console.warn('Pre-fetch Savant failed:', e.message); }
+        G.preFetching = false;
         G.dataYear = savedYear || CURRENT_YEAR;
-        // Restore current year display without re-rendering (it's already showing correctly)
+        G.mlbStats = savedMlbStats;
+        G.savantLoaded = savedSavantLoaded;
         console.log(`[scout] ${PREV_YEAR} Savant pre-cached`);
       }
       if(!G.aaaCache[PREV_YEAR]) {
@@ -1038,17 +1044,31 @@ function applyCachedYear(year) {
     if(G.faNames.has(normName(ln))){ p.fxStatus='fa'; }
     else if(G.rosteredNames?.has(ln)){ p.fxStatus='rostered'; }
   });
-  renderFA();
+  _savantStatusMap = null; _savantDataMap = null; // rebuild maps with fresh tags
+  if(!G.preFetching) {
+    renderFA();
+    // Trigger bullpen FA sections if pending
+    if(G_bpData && (G_bpPendingRender || document.getElementById('pane-bullpen')?.classList.contains('active'))) {
+      G_bpPendingRender = false;
+      renderBPTransitions();
+      renderBPWaiting();
+      const bpUpd = document.getElementById('bpUpdated');
+      if(bpUpd) bpUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
+    }
+  }
 }
 
 async function fetchSavantData(year){
   year = year || G.dataYear || CURRENT_YEAR;
 
   // Return cached data if available
-  if(G.yearCache[year]) {
+  if(G.yearCache[year] && G.yearCache[year]._v === CACHE_VERSION) {
     console.log(`[scout] Using cached data for ${year}`);
     applyCachedYear(year);
     return;
+  } else if(G.yearCache[year]) {
+    console.log(`[scout] Cache version mismatch for ${year} — refetching`);
+    delete G.yearCache[year];
   }
   const url = `/savant/leaderboard/expected_statistics?type=pitcher&year=${year}&position=&team=&min=1&csv=true`;
   try {
@@ -1119,20 +1139,6 @@ async function fetchSavantData(year){
       const mlbJson    = await r4.json();
       G.recentStats = recentJson;
       G.mlbStats = mlbJson;
-      // If bullpen FA sections are pending, render now that mlbStats + savant are ready
-      if(G_bpData && (G_bpPendingRender || document.getElementById('pane-bullpen')?.classList.contains('active'))) {
-        // Only render FA sections once savant fxStatus tagging is complete
-        // so isFAInLeague checks are accurate
-        if(G.savantLoaded) {
-          G_bpPendingRender = false;
-          renderBPTransitions();
-          renderBPWaiting();
-          const updEl = document.getElementById('bpUpdated');
-          if(updEl) updEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
-        } else {
-          G_bpPendingRender = true; // wait for savant to finish tagging
-        }
-      }
       // Merge MLB traditional stats (IP, WHIP, K9, BB9, GB%) into liveData
       Object.entries(mlbJson).forEach(([lname, m]) => {
         const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
@@ -1263,10 +1269,19 @@ async function fetchSavantData(year){
     });
       _savantStatusMap = null; _savantDataMap = null; // rebuild savant maps with fresh data
     G.savantLoaded = true;
+    // Now savant is fully tagged — render bullpen FA sections if pending (not during pre-fetch)
+    if(!G.preFetching && G_bpData && (G_bpPendingRender || document.getElementById('pane-bullpen')?.classList.contains('active'))) {
+      G_bpPendingRender = false;
+      renderBPTransitions();
+      renderBPWaiting();
+      const bpUpd = document.getElementById('bpUpdated');
+      if(bpUpd) bpUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
+    }
       // Save to year cache before rendering
 
 
       G.yearCache[year] = {
+        _v: CACHE_VERSION,
         savant: savant.map(p => ({...p})),
         recentStats: G.recentStats,
         mlbStats: G.mlbStats,
