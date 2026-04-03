@@ -123,7 +123,7 @@
   .tab {
     padding: 11px 20px;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 800;
     cursor: pointer;
     color: #9aabb8;
     border: none;
@@ -448,7 +448,7 @@ const savant = [];
 // Show skeleton loaders immediately
 showSkeleton('faBody', 10);
 showSkeleton('aaaBody', 10);
-// Bullpen Watch is first tab — start loading it immediately after league loads
+showBPSkeleton(); // bullpen is first tab — show skeleton right away
 
 // Init year button labels for all tabs
 ['aaaYrCur'].forEach(id => {
@@ -704,9 +704,9 @@ async function loadLeague(){
     }).length;
     document.getElementById('leagueHeader').textContent = `${G.leagueName} · ${Object.keys(teams).length} teams · ${faCount} pitcher FAs · Live`;
 
+    fetchBullpenWatch(); // first tab — fire immediately, don't wait for Savant
     try { await fetchSavantData(); } catch(e){ console.warn('Savant fetch skipped:', e.message); }
     fetchAAA(G.dataYear || CURRENT_YEAR);
-    fetchBullpenWatch(); // first tab — start loading immediately
 
     setTimeout(async () => {
       // Pre-cache previous year silently — no renders, no UI updates
