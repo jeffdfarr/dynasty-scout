@@ -235,6 +235,32 @@
   .bgy { background: var(--gray-bg); color: var(--gray-text); }
   .mine-tag { font-size: 10px; padding: 1px 5px; border-radius: 3px; background: var(--blue-bg); color: var(--blue-text); margin-left: 5px; font-weight: 600; }
   .tpill { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: rgba(255,255,255,0.08); color: var(--text2); font-weight: 600; border: 1px solid var(--border); }
+  /* Bullpen Watch */
+  .bp-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; }
+  .bp-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .bp-team { font-size:13px; font-weight:700; color:var(--text); }
+  .bp-sit { font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; letter-spacing:.05em; }
+  .bp-sit.COMMITTEE  { background:#faeeda; color:#854F0B; }
+  .bp-sit.LOCKED     { background:#eaf3de; color:#3B6D11; }
+  .bp-sit.EMERGING   { background:#e6f1fb; color:#185FA5; }
+  .bp-sit.NO_SAVES   { background:#f1efe8; color:#5f5e5a; }
+  .bp-pitcher { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); }
+  .bp-pitcher:last-child { border-bottom:none; }
+  .bp-avatar { width:26px; height:26px; border-radius:50%; object-fit:cover; border:1px solid var(--border); background:var(--bg2); flex-shrink:0; }
+  .bp-name { font-size:12px; font-weight:500; color:var(--text); flex:1; }
+  .bp-fa  { font-size:10px; padding:1px 5px; border-radius:3px; background:#e1f5ee; color:#0F6E56; font-weight:600; margin-left:3px; }
+  .bp-inj { font-size:10px; padding:1px 5px; border-radius:3px; background:#fcebeb; color:#A32D2D; font-weight:600; margin-left:3px; }
+  .bp-stats { font-size:11px; color:var(--text2); white-space:nowrap; }
+  .bp-stat-val { font-weight:600; color:var(--text); }
+  .role-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-lg); padding:12px 14px; display:flex; gap:10px; align-items:center; }
+  .role-info { flex:1; min-width:0; }
+  .role-name { font-size:13px; font-weight:600; color:var(--text); }
+  .role-team { font-size:11px; color:var(--text2); }
+  .role-stats { font-size:11px; color:var(--text2); margin-top:3px; }
+  .role-badge { font-size:10px; padding:2px 7px; border-radius:20px; font-weight:600; white-space:nowrap; }
+  .role-badge.transition { background:#faeeda; color:#854F0B; }
+  .role-badge.waiting    { background:#e6f1fb; color:#185FA5; }
+
   @keyframes shimmer {
     0% { background-position: -600px 0; }
     100% { background-position: 600px 0; }
@@ -309,6 +335,7 @@
   <div class="tabs">
     <button class="tab active" onclick="sw('freeagents')">Free Agents</button>
     <button class="tab" onclick="sw('aaa')">AAA prospects</button>
+    <button class="tab" onclick="sw('bullpen');if(!G_bpData)fetchBullpenWatch()">Bullpen Watch</button>
 
   </div>
 
@@ -1045,11 +1072,13 @@ async function fetchSavantData(year){
         const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
         const key = match || lname;
         if(liveData[key]) {
-          if(m.ip    != null) liveData[key].ip    = m.ip;
+          // Don't overwrite IP — Savant pitch-by-pitch IP is more accurate for current year
           if(m.whip  != null) liveData[key].whip  = m.whip;
           if(m.k9    != null) liveData[key].k9    = m.k9;
           if(m.bb9   != null) liveData[key].bb9   = m.bb9;
           if(m.gbPct != null) liveData[key].gbPct = m.gbPct;
+          if(m.saves != null) liveData[key].saves  = m.saves;
+          if(m.holds != null) liveData[key].holds  = m.holds;
         }
       });
 
@@ -1080,12 +1109,15 @@ async function fetchSavantData(year){
           liveData[key].whiff    = s.whiff_pct;
           liveData[key].pitchMix = s.pitchMix || {};
           liveData[key].pa       = s.bf || liveData[key].pa || 0;
+          if(s.ip)    liveData[key].ip    = s.ip;
+          if(s.ipNum) liveData[key].ipNum = s.ipNum;
           if(s.team && !liveData[key].mlbTeam) liveData[key].mlbTeam = s.team;
           if(s.mlbId && !liveData[key].mlbId) liveData[key].mlbId = s.mlbId;
         } else {
           liveData[key] = {
             name: s.name, mlbTeam: s.team||'',
             mlbId: s.mlbId || '',
+            ip: s.ip || null, ipNum: s.ipNum || null,
             k_pct: s.k_pct, bb_pct: s.bb_pct, kbb: s.kbb,
             whiff: s.whiff_pct, xera: null, xba: null, pa: s.bf || 0,
             pitchMix: s.pitchMix || {},
@@ -1291,6 +1323,163 @@ async function refreshLeague(){
 
 renderSavant();
 refreshLeague();
+
+// ── Bullpen Watch ──────────────────────────────────────────
+let G_bpData = null;
+
+function isFAInLeague(name) {
+  if(!name || !G.faNames) return false;
+  return G.faNames.has(normName(name.toLowerCase()));
+}
+
+async function fetchBullpenWatch() {
+  if(G_bpData) { renderBullpenWatch(); return; }
+  document.getElementById('bpUpdated').textContent = 'Loading...';
+  try {
+    const data = await fetch(`${PROXY}/bullpen-watch`).then(r => r.json());
+    G_bpData = data;
+    document.getElementById('bpUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+    renderBullpenWatch();
+  } catch(e) { document.getElementById('bpUpdated').textContent = 'Error loading data'; }
+}
+
+function renderBullpenWatch() {
+  if(!G_bpData) return;
+  renderBPTeams();
+  renderBPTransitions();
+  renderBPWaiting();
+}
+
+function renderBPTeams() {
+  const el = document.getElementById('bpTeams');
+  if(!el) return;
+  el.innerHTML = G_bpData.map(team => {
+    const sitClass = team.situation || 'NO_SAVES';
+    const sitLabel = {COMMITTEE:'Committee',LOCKED:'Locked In',EMERGING:'Emerging',NO_SAVES:'No Saves Yet'}[sitClass] || sitClass;
+    const pitchers = team.pitchers.map(p => {
+      const isFA  = isFAInLeague(p.name);
+      const faTag = isFA  ? '<span class="bp-fa">FA</span>'  : '';
+      const injTag = p.injured ? '<span class="bp-inj">IL</span>' : '';
+      return `<div class="bp-pitcher">
+        <img class="bp-avatar" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
+        <span class="bp-name">${p.name}${faTag}${injTag}</span>
+        <span class="bp-stats">
+          <span class="bp-stat-val">${p.saves}</span>SV
+          <span style="margin:0 3px">·</span>
+          <span class="bp-stat-val">${p.holds}</span>HLD
+          <span style="margin:0 3px">·</span>
+          ${p.ip}IP
+        </span>
+      </div>`;
+    }).join('');
+    return `<div class="bp-card">
+      <div class="bp-card-header">
+        <span class="bp-team">${team.name}</span>
+        <span class="bp-sit ${sitClass}">${sitLabel}</span>
+      </div>
+      ${pitchers || '<span style="font-size:11px;color:var(--text2)">No save/hold data</span>'}
+    </div>`;
+  }).join('');
+}
+
+function renderBPTransitions() {
+  const el = document.getElementById('bpTransitions');
+  if(!el || !G.mlbStats) return;
+  // FA pitchers who are RPs with saves > 0 or saves recently acquired
+  const savant = window.savant || [];
+  const transitions = Object.entries(G.mlbStats)
+    .filter(([name, m]) => {
+      if(!isFAInLeague(name)) return false;
+      if((m.saves||0) === 0 && (m.holds||0) === 0) return false;
+      if((m.saves||0) === 0) return false; // needs at least 1 save for transition
+      return true;
+    })
+    .map(([name, m]) => {
+      const sv = findSavant(name);
+      return { name: m.name||name, saves: m.saves||0, holds: m.holds||0, ip: m.ip||'—',
+               era: m.era||null, kbb: sv?.kbb||null, whiff: sv?.whiff||null,
+               mlbId: sv?.mlbId||null };
+    })
+    .sort((a,b) => (b.saves - a.saves) || ((b.kbb||0) - (a.kbb||0)));
+
+  if(!transitions.length) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No FA role transitions detected yet.</span>';
+    return;
+  }
+  el.innerHTML = transitions.map(p => {
+    const bpTeam = G_bpData?.find(t => t.pitchers.some(r => r.name === p.name));
+    const sit = bpTeam ? `<span class="bp-sit ${bpTeam.situation}" style="font-size:10px">${bpTeam.situation}</span>` : '';
+    return `<div class="role-card">
+      <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
+      <div class="role-info">
+        <div class="role-name">${p.name} ${sit}</div>
+        <div class="role-team">${p.saves}SV · ${p.holds}HLD · ${p.ip}IP · ERA ${p.era?.toFixed(2)||'—'}</div>
+        <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
+      </div>
+      <span class="role-badge transition">Transition</span>
+    </div>`;
+  }).join('');
+}
+
+function renderBPWaiting() {
+  const el = document.getElementById('bpWaiting');
+  if(!el || !G.mlbStats) return;
+  // FA RPs with elite stuff but 0 saves, on committee/emerging teams
+  const committeeTeams = new Set((G_bpData||[]).filter(t=>t.situation==='COMMITTEE'||t.situation==='EMERGING'||t.situation==='NO_SAVES').map(t=>t.name));
+  const waiting = Object.entries(G.mlbStats)
+    .filter(([name, m]) => {
+      if(!isFAInLeague(name)) return false;
+      if((m.saves||0) > 0) return false; // already has saves
+      if((m.holds||0) === 0 && (m.gamesFinished||0) === 0) return false;
+      const sv = findSavant(name);
+      if(!sv) return false;
+      if((sv.kbb||0) < 12 || (sv.whiff||0) < 22) return false; // needs elite stuff
+      return true;
+    })
+    .map(([name, m]) => {
+      const sv = findSavant(name);
+      const bpTeam = G_bpData?.find(t => t.pitchers.some(r => r.name === (m.name||name)));
+      return { name: m.name||name, holds: m.holds||0, gf: m.gamesFinished||0,
+               ip: m.ip||'—', era: m.era||null, kbb: sv?.kbb||null, whiff: sv?.whiff||null,
+               mlbId: sv?.mlbId||null, teamSit: bpTeam?.situation||'', teamName: bpTeam?.name||'' };
+    })
+    .sort((a,b) => ((b.kbb||0)+(b.whiff||0)) - ((a.kbb||0)+(a.whiff||0)));
+
+  if(!waiting.length) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No closers-in-waiting found with current filters.</span>';
+    return;
+  }
+  el.innerHTML = waiting.map(p => {
+    const sit = p.teamSit ? `<span class="bp-sit ${p.teamSit}" style="font-size:10px">${p.teamSit}</span>` : '';
+    return `<div class="role-card">
+      <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
+      <div class="role-info">
+        <div class="role-name">${p.name} ${sit}</div>
+        <div class="role-team">${p.holds}HLD · ${p.gf}GF · ${p.ip}IP · ERA ${p.era?.toFixed(2)||'—'}</div>
+        <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
+      </div>
+      <span class="role-badge waiting">In-Waiting</span>
+    </div>`;
+  }).join('');
+}
+
+// fetchBullpenWatch is called from the tab onclick directly
+
 </script>
+  <div id="pane-bullpen" class="pane">
+    <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Bullpen situations · <span id="bpUpdated">—</span></div>
+    <div style="margin-bottom:20px">
+      <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Fluid Bullpens — All 30 Teams</div>
+      <div id="bpTeams" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
+    </div>
+    <div style="margin-bottom:20px">
+      <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Role Transitions — FA Only</div>
+      <div id="bpTransitions" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
+    </div>
+    <div>
+      <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Closers-in-Waiting — FA Only</div>
+      <div id="bpWaiting" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
+    </div>
+  </div>
 </body>
 </html>

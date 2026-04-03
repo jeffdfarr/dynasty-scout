@@ -150,6 +150,7 @@ const server = http.createServer(async (req, res) => {
         const iPitcherId = col('pitcher');
         const iEvents = col('events');
         const iDesc   = col('description');
+        const iOuts   = col('outs_when_up');
         const iTeam   = col('home_team');
         const iAwayTeam = col('away_team');
         const iPitch  = col('pitch_name');
@@ -160,7 +161,7 @@ const server = http.createServer(async (req, res) => {
           const row = parseCSVLine(lines[i]);
           const name = row[iName] || '';
           if(!name) continue;
-          if(!pitchers[name]) pitchers[name] = {pitches:0, swstr:0, bf:0, k:0, bb:0, teams:{}, pitchTypes:{}, mlbId:''};
+          if(!pitchers[name]) pitchers[name] = {pitches:0, swstr:0, bf:0, k:0, bb:0, outs:0, teams:{}, pitchTypes:{}, mlbId:''};
           if(iPitcherId >= 0 && row[iPitcherId] && !pitchers[name].mlbId) pitchers[name].mlbId = row[iPitcherId].trim();
           const p = pitchers[name];
           p.pitches++;
@@ -173,7 +174,11 @@ const server = http.createServer(async (req, res) => {
           if(desc === 'swinging_strike' || desc === 'swinging_strike_blocked') p.swstr++;
           if(ev && ev !== 'null') {
             p.bf++;
-            if(ev === 'strikeout' || ev === 'strikeout_double_play') p.k++;
+            if(ev === 'strikeout' || ev === 'strikeout_double_play') { p.k++; p.outs++; }
+            else if(ev === 'walk' || ev === 'intent_walk' || ev === 'hit_by_pitch') {} // no out
+            else if(ev === 'field_out' || ev === 'grounded_into_double_play' || ev === 'double_play'
+                 || ev === 'force_out' || ev === 'fielders_choice_out' || ev === 'other_out'
+                 || ev === 'sac_fly' || ev === 'sac_bunt' || ev === 'triple_play') { p.outs++; }
             if(ev === 'walk' || ev === 'intent_walk') p.bb++;
           }
           // Track both home and away teams, pick most frequent = pitcher's team
@@ -197,9 +202,17 @@ const server = http.createServer(async (req, res) => {
             pitchMix[type] = parseFloat((count / p.pitches * 100).toFixed(1));
           });
 
+          const totalOuts = p.outs || 0;
+          const ipWhole = Math.floor(totalOuts / 3);
+          const ipRem   = totalOuts % 3;
+          const ipStr   = `${ipWhole}.${ipRem}`;
+          const ipDec   = ipWhole + ipRem / 3;
+
           result[normalized.toLowerCase()] = {
             name: normalized,
             mlbId: p.mlbId || '',
+            ip: ipStr,
+            ipNum: parseFloat(ipDec.toFixed(3)),
             k_pct: p.bf > 0 ? parseFloat((p.k / p.bf * 100).toFixed(1)) : 0,
             bb_pct: p.bf > 0 ? parseFloat((p.bb / p.bf * 100).toFixed(1)) : 0,
             kbb: p.bf > 0 ? parseFloat(((p.k - p.bb) / p.bf * 100).toFixed(1)) : 0,
@@ -262,6 +275,7 @@ const server = http.createServer(async (req, res) => {
         const iPitcherId = col('pitcher');
         const iEvents = col('events');
         const iDesc   = col('description');
+        const iOuts   = col('outs_when_up');
         const iTeam   = col('home_team');
         const iAway   = col('away_team');
 
@@ -624,6 +638,94 @@ const server = http.createServer(async (req, res) => {
       ...(req.headers.cookie ? { Cookie: req.headers.cookie } : {}),
     };
     proxyRequest(FANTRAX_HOST, fxPath, req.method, headers, body, res);
+    return;
+  }
+
+  // /bullpen-watch -> all 30 MLB teams bullpen data with saves, holds, injury status
+  if (path.startsWith('/bullpen-watch')) {
+    const bpYear = new Date().getFullYear();
+    // Fetch pitching stats + injury status via hydrate
+    const fetchPage = (offset) => new Promise((resolve) => {
+      const mlbPath = `/api/v1/stats?stats=season&group=pitching&gameType=R&season=${bpYear}&sportIds=1&limit=500&offset=${offset}&sortStat=saves&order=desc&hydrate=person(currentTeam),team`;
+      const opts = {hostname:'statsapi.mlb.com',port:443,path:mlbPath,method:'GET',headers:{'User-Agent':'Mozilla/5.0'}};
+      const pr = https.request(opts, sr => {
+        let body=''; sr.on('data',c=>body+=c);
+        sr.on('end',()=>{ try { resolve(JSON.parse(body).stats?.[0]?.splits||[]); } catch(e){ resolve([]); } });
+      });
+      pr.on('error',()=>resolve([])); pr.end();
+    });
+
+    // Fetch injury report
+    const fetchInjuries = () => new Promise((resolve) => {
+      const opts = {hostname:'statsapi.mlb.com',port:443,path:`/api/v1/injuries`,method:'GET',headers:{'User-Agent':'Mozilla/5.0'}};
+      const pr = https.request(opts, sr => {
+        let body=''; sr.on('data',c=>body+=c);
+        sr.on('end',()=>{ try { resolve(JSON.parse(body).injuries||[]); } catch(e){ resolve([]); } });
+      });
+      pr.on('error',()=>resolve([])); pr.end();
+    });
+
+    Promise.all([fetchPage(0), fetchPage(500), fetchInjuries()]).then(([p1, p2, injuries]) => {
+      const splits = [...p1, ...p2];
+
+      // Build injury lookup by player id
+      const injuredIds = new Set();
+      injuries.forEach(inj => {
+        if(inj.player?.id) injuredIds.add(inj.player.id);
+      });
+
+      // Group by MLB team, filter to RPs with saves or holds or gamesFinished
+      const teams = {};
+      const seen = new Set();
+      splits.forEach(s => {
+        const pid = s.player?.id;
+        if(!pid || seen.has(pid)) return;
+        seen.add(pid);
+        const st = s.stat || {};
+        const saves = st.saves || 0;
+        const holds = st.holds || 0;
+        const gf    = st.gamesFinished || 0;
+        const gp    = st.gamesPlayed || 0;
+        const gs    = st.gamesStarted || 0;
+        // Only include relievers with meaningful appearances
+        if(gs > gp * 0.5) return; // skip starters
+        if(saves === 0 && holds === 0 && gf === 0) return; // skip middle guys with no role
+        const teamName = s.team?.name || '';
+        const teamAbbr = s.team?.abbreviation || '';
+        const teamId   = s.team?.id || '';
+        if(!teamName) return;
+        if(!teams[teamId]) teams[teamId] = { name: teamName, abbr: teamAbbr, id: teamId, pitchers: [] };
+        const ipRaw = st.inningsPitched || '0';
+        const ipParts = String(ipRaw).split('.');
+        const ipDec = (parseInt(ipParts[0])||0) + ((parseInt(ipParts[1])||0)/3);
+        teams[teamId].pitchers.push({
+          name:   s.player?.fullName || '',
+          mlbId:  String(pid),
+          saves, holds, gf, gp,
+          ip:     ipRaw,
+          era:    parseFloat(st.era) || null,
+          whip:   parseFloat(st.whip) || null,
+          injured: injuredIds.has(pid),
+        });
+      });
+
+      // Sort pitchers within each team by saves desc then holds desc
+      Object.values(teams).forEach(t => {
+        t.pitchers.sort((a,b) => (b.saves - a.saves) || (b.holds - a.holds));
+        // Classify team bullpen situation
+        const withSaves = t.pitchers.filter(p => p.saves > 0);
+        const totalSaves = t.pitchers.reduce((s,p) => s+p.saves, 0);
+        if(withSaves.length === 0) t.situation = 'NO_SAVES';
+        else if(withSaves.length >= 3) t.situation = 'COMMITTEE';
+        else if(withSaves.length === 2 && Math.abs(withSaves[0].saves - withSaves[1].saves) <= 2) t.situation = 'COMMITTEE';
+        else if(withSaves.length === 1 && withSaves[0].saves >= 5) t.situation = 'LOCKED';
+        else t.situation = 'EMERGING';
+      });
+
+      setCORS(res, reqOrigin);
+      res.writeHead(200, {'Content-Type':'application/json'});
+      res.end(JSON.stringify(Object.values(teams).sort((a,b) => a.name.localeCompare(b.name))));
+    });
     return;
   }
 
