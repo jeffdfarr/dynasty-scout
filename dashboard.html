@@ -46,25 +46,7 @@
     --pct-bad: #c41e3a;
   }
 
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0f1923; --bg2: #162030; --bg3: #1c2a3a;
-      --bg-row-alt: #162030;
-      --nav: #0a1420;
-      --nav-text: #d0dae4; --nav-text2: #6a8aaa;
-      --text: #d8e4f0; --text2: #7a9ab8; --text3: #4a6a88;
-      --border: #1e3048; --border2: #2a4060;
-      --blue: #4a90d9; --blue-light: #0c2040; --blue-text: #90c0f0;
-      --green-bg: #0a2010; --green-text: #60c070;
-      --amber-bg: #201600; --amber-text: #e0a030;
-      --red-bg: #200808; --red-text: #f07070;
-      --teal-bg: #041818; --teal-text: #50c0c0;
-      --gray-bg: #1a2430; --gray-text: #8a9ab0;
-      --blue-bg: #0c2040;
-      --pct-elite: #4a90d9; --pct-great: #7ab8f0;
-      --pct-avg: #1e3048; --pct-poor: #c07050; --pct-bad: #e05050;
-    }
-  }
+
 
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif; background: var(--bg3); color: var(--text); font-size: 13px; line-height: 1.4; overflow-x: hidden; }
 
@@ -230,11 +212,12 @@
       box-shadow: 2px 0 4px rgba(0,0,0,0.04);
     }
     th:nth-child(2) {
-      position: sticky;
-      left: 0;
-      z-index: 20;
-      background: var(--bg2);
-      box-shadow: 2px 0 4px rgba(0,0,0,0.06);
+      position: sticky !important;
+      top: 0 !important;
+      left: 0 !important;
+      z-index: 99 !important;
+      background: var(--bg2) !important;
+      box-shadow: 2px 0 4px rgba(0,0,0,0.08);
     }
     tr:hover td:nth-child(2) { background: var(--bg2); }
   }
@@ -1630,13 +1613,12 @@ function renderBPWaiting() {
   const waiting = Object.entries(G.mlbStats)
     .filter(([name, m]) => {
       if(!isFAInLeague(name)) return false;
-      if((m.saves||0) > 0) return false;
       // Must be confirmed active in an MLB bullpen this year
       if(!activeBullpenNames.has(stripAccents(normName(name)))) return false;
       // Must have meaningful relief appearances — at least 2 holds OR 3 games finished
       if((m.holds||0) < 2 && (m.gamesFinished||0) < 3) return false;
       // Must have actually pitched — minimum 3 IP per mlbStats
-      if((m.ipNum||0) < 3.0) return false;
+      if((m.ipNum||0) < 2.0) return false;
       // Use savant data if available, fall back to mlbStats K9/BB9
       const sv = svMap.get(stripAccents(normName(name)));
       if(sv) {
@@ -1689,11 +1671,13 @@ function renderBPWaiting() {
   <div id="pane-bullpen" class="pane active">
     <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Bullpen situations · <span id="bpUpdated">—</span></div>
     <div style="margin-bottom:20px">
-      <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Role Transitions — FA Only</div>
+      <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Role Transitions</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">Leading their team in saves, non-locked situation.</div>
       <div id="bpTransitions" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">
-      <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Elite Arms — Next In Line</div>
+      <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Elite Arms — Next In Line</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">2+ IP, 2+ HLD/GF, K-BB% ≥18% or K/9 ≥10</div>
       <div id="bpWaiting" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">
