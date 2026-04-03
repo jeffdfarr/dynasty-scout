@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Dynasty Pitcher Scout</title>
+<title>Pitcher Scout</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -34,7 +34,7 @@
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg3); color: var(--text); font-size: 14px; line-height: 1.5; }
   .shell { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
   .header { margin-bottom: 20px; }
-  .header h1 { font-size: 20px; font-weight: 500; }
+  .header h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
   .header p { font-size: 13px; color: var(--text2); margin-top: 3px; }
   .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 20px; flex-wrap: wrap; }
   .col-hl { 
@@ -79,6 +79,10 @@
   .yr-btn.active { border-color:var(--blue);background:var(--blue);color:#fff; }
   .filter-row select { width: auto; }
   .table-wrap { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 260px); border-radius: var(--radius-lg); border: 1px solid var(--border); }
+  @media (pointer: coarse) {
+    .table-wrap { touch-action: pan-y; }
+    .table-wrap.scrolling-x { touch-action: pan-x; }
+  }
   .table-wrap thead th { position: sticky; top: 0; z-index: 10; background: var(--bg2); box-shadow: 0 1px 0 var(--border); }
   table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--bg); }
   th { text-align: left; font-size: 11px; font-weight: 600; color: var(--text2); padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--bg2); }
@@ -112,7 +116,7 @@
 <body>
 <div class="shell">
   <div class="header">
-    <h1>Dynasty pitcher scout</h1>
+    <h1>Pitcher Scout</h1>
     <p id="leagueHeader">Connect your Fantrax league to get started</p>
   </div>
 
@@ -126,7 +130,7 @@
   </div>
 
   <div class="tabs">
-    <button class="tab active" onclick="sw('freeagents')">Pitcher free agents</button>
+    <button class="tab active" onclick="sw('freeagents')">Free Agents</button>
     <button class="tab" onclick="sw('aaa')">AAA prospects</button>
     <button class="tab" onclick="sw('rosters')">Pitching rosters</button>
     <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
@@ -1151,6 +1155,31 @@ async function fetchSavantData(year){
 
 
 
+
+// Lock table scroll to single axis on mobile
+document.querySelectorAll('.table-wrap').forEach(wrap => {
+  let startX = 0, startY = 0;
+  wrap.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    wrap.classList.remove('scrolling-x');
+  }, { passive: true });
+  wrap.addEventListener('touchmove', e => {
+    const dx = Math.abs(e.touches[0].clientX - startX);
+    const dy = Math.abs(e.touches[0].clientY - startY);
+    if(dx > dy) {
+      wrap.classList.add('scrolling-x');
+      wrap.style.touchAction = 'pan-x';
+    } else {
+      wrap.classList.remove('scrolling-x');
+      wrap.style.touchAction = 'pan-y';
+    }
+  }, { passive: true });
+  wrap.addEventListener('touchend', () => {
+    wrap.classList.remove('scrolling-x');
+    wrap.style.touchAction = '';
+  }, { passive: true });
+});
 
 function sw(name){
   // Match each tab button by extracting the name from its onclick attribute

@@ -1,5 +1,5 @@
 /**
- * Dynasty Pitcher Scout — Daily Notification Script
+ * Pitcher Scout — Daily Notification Script
  * Sends push notification via ntfy.sh
  *
  * Setup:
@@ -471,7 +471,7 @@ async function run() {
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Content-Length': body.length,
-        'X-Title': 'Dynasty Scout',
+        'X-Title': 'Pitcher Scout',
         'X-Priority': '3',
         'X-Tags': 'baseball',
       },
