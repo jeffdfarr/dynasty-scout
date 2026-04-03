@@ -5,7 +5,6 @@ const nodePath = require('path');
 
 const PORT = process.env.PORT || 3001;
 const FANTRAX_HOST = 'www.fantrax.com';
-const ANTHROPIC_HOST = 'api.anthropic.com';
 
 const IS_PRODUCTION = !!process.env.RAILWAY_PUBLIC_DOMAIN || !!process.env.ALLOWED_ORIGIN;
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 
@@ -21,7 +20,7 @@ function setCORS(res, reqOrigin) {
     res.setHeader('Access-Control-Allow-Origin', '*');
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, anthropic-version, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
 function readBody(req) {
@@ -52,7 +51,7 @@ function proxyRequest(hostname, path, method, headers, body, res) {
         res.setHeader('Access-Control-Allow-Origin', '*');
       }
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, anthropic-version, Authorization');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
       res.writeHead(upstream.statusCode, {
         'Content-Type': upstream.headers['content-type'] || 'application/json',
       });
@@ -95,24 +94,7 @@ const server = http.createServer(async (req, res) => {
 
   const path = req.url;
 
-  // /anthropic/* -> api.anthropic.com
-  if (path.startsWith('/anthropic/')) {
-    const apiPath = path.replace('/anthropic', '');
-    const body = await readBody(req);
-    const apiKey = req.headers['x-api-key'] || '';
 
-    console.log(`[proxy] POST https://${ANTHROPIC_HOST}${apiPath}`);
-    console.log(`[proxy] api key present: ${apiKey ? 'yes (' + apiKey.slice(0,12) + '...)' : 'NO - missing!'}`);
-
-    const headers = {
-      'Content-Type': 'application/json',
-      'anthropic-version': req.headers['anthropic-version'] || '2023-06-01',
-      'x-api-key': apiKey,
-    };
-
-    proxyRequest(ANTHROPIC_HOST, apiPath, 'POST', headers, body, res);
-    return;
-  }
 
 
 
@@ -676,7 +658,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   res.writeHead(400, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ error: 'Use /fxea/* for Fantrax or /anthropic/* for Claude API.' }));
+  res.end(JSON.stringify({ error: 'Unknown route.' }));
 });
 
 // ── CRON JOB — run daily notification at 8am Central Time ──────────────────
@@ -714,6 +696,5 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('  Proxy running at http://localhost:' + PORT);
   console.log('  /fxea/*       -> https://www.fantrax.com');
-  console.log('  /anthropic/*  -> https://api.anthropic.com');
   console.log('');
 });

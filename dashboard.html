@@ -161,8 +161,7 @@
     background: var(--bg);
   }
   @media (pointer: coarse) {
-    .table-wrap { touch-action: pan-y; }
-    .table-wrap.scrolling-x { touch-action: pan-x; }
+    .table-wrap { touch-action: pan-x pan-y; overflow: auto; }
   }
   table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .table-wrap thead th {
@@ -194,16 +193,6 @@
   tr:nth-child(even) td { background: var(--bg-row-alt); }
   tr:hover td { background: var(--blue-light) !important; }
   tr:last-child td { border-bottom: none; }
-
-  /* Sticky first name column */
-  th:nth-child(2), td:nth-child(2) {
-    position: sticky; left: 0; z-index: 5;
-    background: var(--bg);
-    border-right: 1px solid var(--border);
-  }
-  th:nth-child(2) { background: var(--nav); z-index: 11; border-right: 1px solid rgba(255,255,255,0.1); }
-  tr:nth-child(even) td:nth-child(2) { background: var(--bg-row-alt); }
-  tr:hover td:nth-child(2) { background: var(--blue-light) !important; }
 
   /* ── Badges & pills ── */
   .badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 3px; font-weight: 600; letter-spacing: 0.03em; }
@@ -266,7 +255,6 @@
   <div class="tabs">
     <button class="tab active" onclick="sw('freeagents')">Free Agents</button>
     <button class="tab" onclick="sw('aaa')">AAA prospects</button>
-    <button class="tab" onclick="sw('rosters')">Pitching rosters</button>
 
   </div>
 
@@ -309,31 +297,6 @@
       <tbody id="faBody"></tbody>
     </table></div>
     <p id="faEmpty" style="font-size:13px;color:var(--text2);margin-top:14px;display:none">No FA pitchers found — load your league first.</p>
-  </div>
-
-  <div id="pane-rosters" class="pane">
-    <div class="filter-row">
-      <label>Fantasy Team:</label>
-      <select id="rosterTeamFilter" onchange="renderRosters()"><option value="all">All teams</option></select>
-      <div style="margin-left:auto;display:flex;gap:4px;align-items:center">
-        <button class="yr-btn active" id="rosYrCur" onclick="setYear(CURRENT_YEAR,'rosters')">—</button>
-        <button class="yr-btn" id="rosYrPrev" onclick="setYear(PREV_YEAR,'rosters')">—</button>
-      </div>
-    </div>
-    <div class="table-wrap"><table>
-      <thead><tr>
-        <th onclick="rSort('team')" style="cursor:pointer">Team <span id="rst"></span></th>
-        <th onclick="rSort('ip')"    style="cursor:pointer">Total IP <span id="rsip"></span></th>
-        <th onclick="rSort('xera')"  style="cursor:pointer">xERA <span style="font-weight:400;font-size:10px;color:var(--text2)">(wtd)</span> <span id="rse"></span></th>
-        <th onclick="rSort('kbb')"   style="cursor:pointer">K-BB% <span style="font-weight:400;font-size:10px;color:var(--text2)">(wtd)</span> <span id="rsk"></span></th>
-        <th onclick="rSort('whiff')" style="cursor:pointer">Whiff% <span style="font-weight:400;font-size:10px;color:var(--text2)">(wtd)</span> <span id="rsw"></span></th>
-        <th onclick="rSort('xba')"   style="cursor:pointer">xBA <span style="font-weight:400;font-size:10px;color:var(--text2)">(wtd)</span> <span id="rsb"></span></th>
-        <th>Matched</th>
-      </tr></thead>
-      <tbody id="rosterBody"></tbody>
-    </table></div>
-    <p style="font-size:11px;color:var(--text2);margin-top:8px">Averages weighted by batters faced — pitchers with more appearances carry more weight.</p>
-    <p id="rosterEmpty" style="font-size:13px;color:var(--text2);margin-top:14px;display:none">Load your league first.</p>
   </div>
 
   
@@ -635,12 +598,7 @@ async function loadLeague(){
     console.log('[scout] ADP sample entry:', JSON.stringify(Object.values(adpData).find(e=>e&&e.name)));
     console.log('[scout] nameToTeam size:', Object.keys(nameToTeam).length, '| sample:', JSON.stringify(Object.entries(nameToTeam).slice(0,5)));
     G.teams = teams; G.rosters = rosters; G.faNames = faNames; G.playerInfo = playerInfo; G.nameToTeam = nameToTeam;
-      // Populate fantasy team dropdown for Rosters tab
-      const rosterSel = document.getElementById('rosterTeamFilter');
-      if(rosterSel){
-        rosterSel.innerHTML = '<option value="all">All teams</option>' +
-          Object.values(teams).map(t => `<option value="${t.tid}">${t.teamName}</option>`).join('');
-      }
+
 
     // Populate team picker in AI tab
     const picker = document.getElementById('myTeamPicker');
@@ -676,7 +634,7 @@ async function loadLeague(){
     try { await fetchSavantData(); } catch(e){ console.warn('Savant fetch skipped:', e.message); }
 
     document.getElementById('leagueHeader').textContent = `${G.leagueName} · ${Object.keys(teams).length} teams · ${faCount} pitcher FAs · Live`;
-    renderFA(); renderRosters(); renderStandings();
+    renderFA(); renderStandings();
     sw('freeagents'); // ensure active tab renders
     // Fetch AAA stats in background
     fetchAAA(G.dataYear || CURRENT_YEAR);
@@ -935,109 +893,8 @@ function renderFA(){
   applyFAHighlight();
 }
 
-let rSortCol = 'xera';
-let rSortAsc = true;
 
-function rSort(col){
-  if(rSortCol === col){ rSortAsc = !rSortAsc; }
-  else { rSortCol = col; rSortAsc = (col === 'xera' || col === 'xba' || col === 'team'); }
-  renderRosters();
-}
 
-function renderRosters(){
-  const empty = document.getElementById('rosterEmpty');
-  const myTeam = getMyTeam();
-
-  if(!G.rosters || !Object.keys(G.rosters).length){
-    empty.style.display='block';
-    return;
-  }
-  empty.style.display='none';
-
-  const PITCH_POS = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
-
-  const rosterTeamF = document.getElementById('rosterTeamFilter')?.value || 'all';
-  const teamRows = Object.entries(G.rosters).filter(([tid]) => rosterTeamF === 'all' || tid === rosterTeamF).map(([tid, team]) => {
-    // Get pitchers on this roster
-    const pitchers = team.players.filter(p => {
-      if(!p.name) return false;
-      const pos = (p.pos||'').split(',').map(s=>s.trim());
-      return pos.some(po => PITCH_POS.has(po));
-    });
-
-    // Match each pitcher to Savant data
-    const matched = pitchers.map(p => {
-      return findSavant(p.name);
-    }).filter(Boolean);
-
-    // Compute averages
-    // Weighted average by batters faced (pa field) — more innings = more weight
-    const avg = (arr, key) => {
-      const pairs = arr.map(p => ({val: p[key], w: p.pa||p.ip||1}))
-                       .filter(x => x.val != null && !isNaN(x.val));
-      if(!pairs.length) return null;
-      const totalW = pairs.reduce((s,x) => s + x.w, 0);
-      if(!totalW) return null;
-      return pairs.reduce((s,x) => s + x.val * x.w, 0) / totalW;
-    };
-
-    const avgXera  = avg(matched, 'xera');
-    const avgKbb   = avg(matched, 'kbb');
-    const avgWhiff = avg(matched, 'whiff');
-    const avgXba   = avg(matched, 'xba');
-    const totalIp  = matched.reduce((s, p) => s + (p.ip || 0), 0);
-    const isMe = tid === myTeam;
-
-    return { tid, teamName: team.teamName, pitchers, matched, avgXera, avgKbb, avgWhiff, avgXba, totalIp, isMe };
-  });
-
-  // Sort
-  const dir = rSortAsc ? 1 : -1;
-  teamRows.sort((a, b) => {
-    if(rSortCol === 'team')  return dir * (a.teamName||'').localeCompare(b.teamName||'');
-    if(rSortCol === 'ip')    return dir * ((a.totalIp||0)  - (b.totalIp||0));
-    if(rSortCol === 'xera')  return dir * ((a.avgXera||9)  - (b.avgXera||9));
-    if(rSortCol === 'kbb')   return dir * ((a.avgKbb||0)   - (b.avgKbb||0));
-    if(rSortCol === 'whiff') return dir * ((a.avgWhiff||0) - (b.avgWhiff||0));
-    if(rSortCol === 'xba')   return dir * ((a.avgXba||1)   - (b.avgXba||1));
-    return 0;
-  });
-
-  function fmt(val, decimals=2) {
-    return val != null ? val.toFixed(decimals) : '—';
-  }
-  function tier(s){ if(s>=75)return['Elite','bg']; if(s>=55)return['Strong','bb']; if(s>=35)return['Average','ba']; return['Fade','br']; }
-
-  // Update sort indicators
-  ['t','ip','e','k','w','b'].forEach(id => { const el=document.getElementById('rs'+id); if(el) el.textContent=''; });
-  const rColMap = {team:'t',ip:'ip',xera:'e',kbb:'k',whiff:'w',xba:'b'};
-  const rEl = document.getElementById('rs'+(rColMap[rSortCol]||''));
-  if(rEl) rEl.textContent = rSortAsc ? ' ▲' : ' ▼';
-  // highlight applied after render
-  function applyRosterHighlight(){
-    document.querySelectorAll('#rosterBody td').forEach(e => e.classList.remove('col-hl'));
-    document.querySelectorAll('[id^="rs"]').forEach(e => e?.closest('th')?.classList.remove('col-hl'));
-    const rColMap2 = {team:'t',xera:'e',kbb:'k',whiff:'w',xba:'b'};
-    const rel = document.getElementById('rs'+(rColMap2[rSortCol]||''));
-    if(rel?.closest('th')) rel.closest('th').classList.add('col-hl');
-    document.querySelectorAll(`#rosterBody td[data-col="${rSortCol}"]`).forEach(td => td.classList.add('col-hl'));
-  }
-
-  document.getElementById('rosterBody').innerHTML = teamRows.map((row, i) => {
-
-    const highlight = row.isMe ? 'style="background:var(--blue-bg)"' : '';
-    return `<tr ${highlight}>
-      <td style="font-weight:500">${row.teamName}${row.isMe?'<span class="mine-tag">mine</span>':''}</td>
-      <td data-col="ip">${row.totalIp ? row.totalIp.toFixed(1) : '—'}</td>
-      <td data-col="xera">${fmt(row.avgXera)}</td>
-      <td data-col="kbb">${fmt(row.avgKbb, 1)}%</td>
-      <td data-col="whiff">${fmt(row.avgWhiff, 1)}%</td>
-      <td data-col="xba">${fmt(row.avgXba, 3)}</td>
-      <td>${row.matched.length}/${row.pitchers.length}</td>
-    </tr>`;
-  }).join('');
-  applyRosterHighlight();
-}
 
 function renderStandings(){} // removed
 
@@ -1066,7 +923,7 @@ function applyCachedYear(year) {
     if(G.faNames.has(normName(ln))){ p.fxStatus='fa'; }
     else if(G.rosteredNames?.has(ln)){ p.fxStatus='rostered'; }
   });
-  renderFA(); renderRosters();
+  renderFA();
 }
 
 async function fetchSavantData(year){
@@ -1286,7 +1143,7 @@ async function fetchSavantData(year){
       const aaaTeams = [...new Set(Object.values(G.aaaStats||{}).map(p=>p.mlbOrg).filter(Boolean).sort())];
       const aaaTeamSel = document.getElementById('aaaTeamFilter');
       if(aaaTeamSel) aaaTeamSel.innerHTML = '<option value="all">All</option>' + aaaTeams.map(t=>`<option value="${t}">${t}</option>`).join('');
-      renderFA(); renderRosters();
+      renderFA();
   } catch(e){
     console.error('Savant fetch failed:', e.message);
   }
@@ -1294,31 +1151,6 @@ async function fetchSavantData(year){
 
 
 
-
-// Lock table scroll to single axis on mobile
-document.querySelectorAll('.table-wrap').forEach(wrap => {
-  let startX = 0, startY = 0;
-  wrap.addEventListener('touchstart', e => {
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-    wrap.classList.remove('scrolling-x');
-  }, { passive: true });
-  wrap.addEventListener('touchmove', e => {
-    const dx = Math.abs(e.touches[0].clientX - startX);
-    const dy = Math.abs(e.touches[0].clientY - startY);
-    if(dx > dy) {
-      wrap.classList.add('scrolling-x');
-      wrap.style.touchAction = 'pan-x';
-    } else {
-      wrap.classList.remove('scrolling-x');
-      wrap.style.touchAction = 'pan-y';
-    }
-  }, { passive: true });
-  wrap.addEventListener('touchend', () => {
-    wrap.classList.remove('scrolling-x');
-    wrap.style.touchAction = '';
-  }, { passive: true });
-});
 
 function sw(name){
   // Match each tab button by extracting the name from its onclick attribute
@@ -1367,7 +1199,6 @@ async function setYear(year, tab){
   const tabBtnMap = {
     fa:      ['faYrCur',  'faYrPrev'],
     aaa:     ['aaaYrCur', 'aaaYrPrev'],
-    rosters: ['rosYrCur', 'rosYrPrev'],
   };
   if(tab && tabBtnMap[tab]) {
     const [curId, prevId] = tabBtnMap[tab];
