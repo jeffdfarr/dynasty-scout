@@ -71,11 +71,11 @@
   /* ── Nav bar (Savant-style dark header) ── */
   .nav-bar {
     background: var(--nav);
-    padding: 0 20px;
+    padding: 10px 16px;
     display: flex;
     align-items: center;
-    gap: 20px;
-    height: 48px;
+    flex-wrap: wrap;
+    gap: 6px 16px;
     border-bottom: 1px solid rgba(255,255,255,0.08);
   }
   .nav-bar h1 {
@@ -87,20 +87,31 @@
   }
   .nav-bar h1 span { color: #4a90d9; }
   .nav-meta {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--nav-text2);
-    margin-left: 4px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .nav-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .nav-actions { display: flex; gap: 6px; align-items: center; margin-left: auto; }
   .nav-btn {
-    font-size: 12px; padding: 4px 10px;
+    font-size: 11px; padding: 4px 10px;
     border-radius: var(--radius);
     border: 1px solid rgba(255,255,255,0.15);
     background: rgba(255,255,255,0.06);
     color: var(--nav-text2);
     font-family: inherit; cursor: pointer;
+    white-space: nowrap;
   }
   .nav-btn:hover { background: rgba(255,255,255,0.12); color: var(--nav-text); }
+  @media (max-width: 600px) {
+    .nav-bar { padding: 8px 12px; }
+    .nav-bar h1 { font-size: 16px; }
+    .nav-meta { width: 100%; order: 3; margin: 0; }
+    .nav-actions { order: 2; }
+  }
 
   .shell { max-width: 1400px; margin: 0 auto; padding: 16px; }
 
@@ -109,12 +120,14 @@
     display: flex;
     border-bottom: 2px solid var(--border);
     margin-bottom: 16px;
-    flex-wrap: wrap;
-    gap: 0;
     background: var(--bg);
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     padding: 0 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
+  .tabs::-webkit-scrollbar { display: none; }
   .tab {
     padding: 10px 18px;
     font-size: 13px;
@@ -127,9 +140,16 @@
     font-family: inherit;
     margin-bottom: -2px;
     transition: color 0.15s;
+    white-space: nowrap;
+    flex: 1;
+    text-align: center;
   }
   .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
   .tab:hover { color: var(--text); }
+  @media (max-width: 600px) {
+    .tabs { padding: 0; }
+    .tab { padding: 10px 8px; font-size: 12px; }
+  }
   .pane { display: none; } .pane.active { display: block; }
 
   /* ── Column highlight (Savant gray) ── */
