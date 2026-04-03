@@ -643,6 +643,15 @@ const server = http.createServer(async (req, res) => {
 
   // /bullpen-watch -> all 30 MLB teams bullpen data with saves, holds, injury status, prior year
   if (path.startsWith('/bullpen-watch')) {
+    // Server-side cache — 2 hour TTL
+    const BP_CACHE_TTL = 2 * 60 * 60 * 1000;
+    if(server._bpCache && (Date.now() - server._bpCache.ts) < BP_CACHE_TTL) {
+      console.log('[proxy] bullpen-watch: serving from cache');
+      setCORS(res, reqOrigin);
+      res.writeHead(200, {'Content-Type':'application/json'});
+      res.end(server._bpCache.data);
+      return;
+    }
     const bpYear = new Date().getFullYear();
     const bpPrevYear = bpYear - 1;
 
@@ -665,11 +674,13 @@ const server = http.createServer(async (req, res) => {
       pr.on('error',()=>resolve([])); pr.end();
     });
 
+    const bpStart = Date.now();
     Promise.all([
       fetchStats(bpYear, 0), fetchStats(bpYear, 500),
       fetchStats(bpPrevYear, 0), fetchStats(bpPrevYear, 500),
       fetchInjuries()
     ]).then(([cur1, cur2, prev1, prev2, injuries]) => {
+      console.log(`[proxy] bullpen-watch: all fetches done in ${Date.now()-bpStart}ms`);
       const curSplits  = [...cur1,  ...cur2];
       const prevSplits = [...prev1, ...prev2];
 
@@ -760,9 +771,12 @@ const server = http.createServer(async (req, res) => {
         }
       });
 
+      const responseData = JSON.stringify(Object.values(teams).sort((a,b) => a.name.localeCompare(b.name)));
+      server._bpCache = { data: responseData, ts: Date.now() };
+      console.log('[proxy] bullpen-watch: cached result');
       setCORS(res, reqOrigin);
       res.writeHead(200, {'Content-Type':'application/json'});
-      res.end(JSON.stringify(Object.values(teams).sort((a,b) => a.name.localeCompare(b.name))));
+      res.end(responseData);
     });
     return;
   }

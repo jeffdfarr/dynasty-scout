@@ -221,6 +221,23 @@
     color: var(--text);
   }
   td:first-child, td:nth-child(2) { text-align: left; }
+  @media (pointer: coarse) {
+    td:nth-child(2) {
+      position: sticky;
+      left: 0;
+      z-index: 4;
+      background: var(--bg);
+      box-shadow: 2px 0 4px rgba(0,0,0,0.04);
+    }
+    th:nth-child(2) {
+      position: sticky;
+      left: 0;
+      z-index: 20;
+      background: var(--bg2);
+      box-shadow: 2px 0 4px rgba(0,0,0,0.06);
+    }
+    tr:hover td:nth-child(2) { background: var(--bg2); }
+  }
   tr:nth-child(even) td { background: var(--bg-row-alt); }
   tr:hover td { background: var(--blue-light) !important; }
   tr:last-child td { border-bottom: none; }
@@ -336,14 +353,14 @@
   </div>
 
   <div class="tabs">
-    <button class="tab active" onclick="sw('freeagents')">Free Agents</button>
+    <button class="tab active" onclick="sw('bullpen');fetchBullpenWatch()">Bullpen Watch</button>
+    <button class="tab" onclick="sw('freeagents')">Free Agents</button>
     <button class="tab" onclick="sw('aaa')">AAA prospects</button>
-    <button class="tab" onclick="sw('bullpen');fetchBullpenWatch()">Bullpen Watch</button>
 
   </div>
 
   
-  <div id="pane-freeagents" class="pane active">
+  <div id="pane-freeagents" class="pane">
     <div class="filter-row">
       <label>Pos:</label>
       <select id="faPos" onchange="renderFA()"><option value="all" selected>All</option><option value="SP">SP</option><option value="RP">RP</option></select>
@@ -441,6 +458,7 @@ const savant = [];
 // Show skeleton loaders immediately
 showSkeleton('faBody', 10);
 showSkeleton('aaaBody', 10);
+// Bullpen Watch is first tab — start loading it immediately after league loads
 
 // Init year button labels for all tabs
 ['aaaYrCur'].forEach(id => {
@@ -684,7 +702,9 @@ async function loadLeague(){
     console.log('[scout] ADP sample entry:', JSON.stringify(Object.values(adpData).find(e=>e&&e.name)));
     console.log('[scout] nameToTeam size:', Object.keys(nameToTeam).length, '| sample:', JSON.stringify(Object.entries(nameToTeam).slice(0,5)));
     G.teams = teams; G.rosters = rosters; G.faNames = faNames; G.playerInfo = playerInfo; G.nameToTeam = nameToTeam;
+    _rosteredSet = null; _savantStatusMap = null; // invalidate lookup caches
     G.teams = teams; G.rosters = rosters; G.faNames = faNames; G.playerInfo = playerInfo; G.nameToTeam = nameToTeam;
+    _rosteredSet = null; _savantStatusMap = null; // invalidate lookup caches
 
     renderFA();
 
@@ -696,6 +716,7 @@ async function loadLeague(){
 
     try { await fetchSavantData(); } catch(e){ console.warn('Savant fetch skipped:', e.message); }
     fetchAAA(G.dataYear || CURRENT_YEAR);
+    fetchBullpenWatch(); // first tab — start loading immediately
 
     setTimeout(async () => {
       // Pre-cache previous year silently — no renders, no UI updates
@@ -1237,7 +1258,8 @@ async function fetchSavantData(year){
         p.fxStatus='unknown'; p.fxTeam='';
       }
     });
-      G.savantLoaded = true;
+      _savantStatusMap = null; _savantDataMap = null; // rebuild savant maps with fresh data
+    G.savantLoaded = true;
       // Save to year cache before rendering
 
 
@@ -1371,31 +1393,55 @@ let G_bpData = null;
 let G_bpPendingRender = false;
 function resetBullpenCache() { G_bpData = null; }
 
-function isRosteredInLeague(name) {
-  if(!name || !G.rosters) return false;
-  const nn = stripAccents(normName(name.toLowerCase()));
-  // Check G.rosters directly — most reliable source
-  for(const team of Object.values(G.rosters)) {
-    for(const p of (team.players||[])) {
-      if(stripAccents(normName((p.name||'').toLowerCase())) === nn) return true;
+// Build a normalized roster lookup Set once — rebuilt when rosters load
+let _rosteredSet = null;
+function getRosteredSet() {
+  if(_rosteredSet) return _rosteredSet;
+  _rosteredSet = new Set();
+  if(G.rosters) {
+    for(const team of Object.values(G.rosters)) {
+      for(const p of (team.players||[])) {
+        if(p.name) _rosteredSet.add(stripAccents(normName(p.name.toLowerCase())));
+      }
     }
   }
-  // Also check rosteredNames set as fallback
   if(G.rosteredNames?.size) {
     for(const rn of G.rosteredNames) {
-      if(stripAccents(normName(rn)) === nn) return true;
+      _rosteredSet.add(stripAccents(normName(rn)));
     }
   }
-  return false;
+  return _rosteredSet;
+}
+
+// Build normalized lookup Maps for O(1) access
+let _savantStatusMap = null;
+let _savantDataMap = null;
+function getSavantStatusMap() {
+  if(_savantStatusMap) return _savantStatusMap;
+  _savantStatusMap = new Map();
+  _savantDataMap = new Map();
+  for(const p of savant) {
+    const key = stripAccents(normName(p.name.toLowerCase()));
+    _savantStatusMap.set(key, p.fxStatus);
+    _savantDataMap.set(key, p);
+  }
+  return _savantStatusMap;
+}
+function getSavantDataMap() {
+  if(!_savantDataMap) getSavantStatusMap();
+  return _savantDataMap;
+}
+
+function isRosteredInLeague(name) {
+  if(!name) return false;
+  return getRosteredSet().has(stripAccents(normName(name.toLowerCase())));
 }
 
 function isFAInLeague(name) {
   if(!name) return false;
   const nn = stripAccents(normName(name.toLowerCase()));
-  // Check savant fxStatus first (reliable if in savant array)
-  const sv = savant.find(p => stripAccents(normName(p.name.toLowerCase())) === nn);
-  if(sv) return sv.fxStatus === 'fa';
-  // Fall back: not rostered = FA (more reliable than faNames set)
+  const status = getSavantStatusMap().get(nn);
+  if(status) return status === 'fa';
   return !isRosteredInLeague(name);
 }
 
@@ -1502,6 +1548,7 @@ function renderBPTransitions() {
     return;
   }
 
+  const svMap2 = getSavantDataMap();
   const transitions = Object.entries(G.mlbStats)
     .filter(([name, m]) => {
       if(!isFAInLeague(name)) return false;
@@ -1522,7 +1569,7 @@ function renderBPTransitions() {
       return true;
     })
     .map(([name, m]) => {
-      const sv = findSavant(name);
+      const sv = svMap2.get(stripAccents(normName(name)));
       const bpTeam = G_bpData?.find(t => t.pitchers.some(r => r.name === (m.name||name)));
       const sit = bpTeam?.situation;
       // Badge label describes the pitcher's actual role, not just the team tag
@@ -1567,25 +1614,55 @@ function renderBPWaiting() {
     if(el) el.innerHTML = '<span style="font-size:12px;color:var(--text2)">Waiting for stats to load...</span>';
     return;
   }
-  // FA RPs with elite stuff but 0 saves, on committee/emerging teams
-  const committeeTeams = new Set((G_bpData||[]).filter(t=>t.situation==='COMMITTEE'||t.situation==='EMERGING'||t.situation==='NO_SAVES').map(t=>t.name));
-  // Debug each filter step
+  const svMap = getSavantDataMap();
+  // G.mlbStats keys are the authoritative list of pitchers with real MLB appearances this year
+  // Savant CSV can include spring training or minimal appearances — mlbStats is cleaner
+  const mlbStatsNames = new Set(Object.keys(G.mlbStats).map(n => stripAccents(normName(n))));
+
+  // Build Set of pitchers confirmed active in MLB bullpens this year via bullpen-watch data
+  const activeBullpenNames = new Set();
+  (G_bpData||[]).forEach(team => {
+    (team.pitchers||[]).forEach(p => {
+      activeBullpenNames.add(stripAccents(normName(p.name.toLowerCase())));
+    });
+  });
+
   const waiting = Object.entries(G.mlbStats)
     .filter(([name, m]) => {
       if(!isFAInLeague(name)) return false;
       if((m.saves||0) > 0) return false;
-      if((m.holds||0) === 0 && (m.gamesFinished||0) === 0) return false;
-      const sv = findSavant(name);
-      if(!sv) return false;
-      if((sv.kbb||0) < 12 || (sv.whiff||0) < 22) return false;
+      // Must be confirmed active in an MLB bullpen this year
+      if(!activeBullpenNames.has(stripAccents(normName(name)))) return false;
+      // Must have meaningful relief appearances — at least 2 holds OR 3 games finished
+      if((m.holds||0) < 2 && (m.gamesFinished||0) < 3) return false;
+      // Must have actually pitched — minimum 3 IP per mlbStats
+      if((m.ipNum||0) < 3.0) return false;
+      // Use savant data if available, fall back to mlbStats K9/BB9
+      const sv = svMap.get(stripAccents(normName(name)));
+      if(sv) {
+        if((sv.kbb||0) < 18) return false;   // K-BB% >= 18%
+        if((sv.whiff||0) < 27) return false;  // Whiff% >= 27%
+      } else {
+        if((m.k9||0) < 10.0) return false;   // K/9 >= 10.0
+        if((m.bb9||99) > 3.0) return false;  // BB/9 <= 3.0
+      }
       return true;
     })
     .map(([name, m]) => {
-      const sv = findSavant(name);
-      const bpTeam = G_bpData?.find(t => t.pitchers.some(r => r.name === (m.name||name)));
-      return { name: m.name||name, holds: m.holds||0, gf: m.gamesFinished||0,
-               ip: m.ip||'—', era: m.era||null, kbb: sv?.kbb||null, whiff: sv?.whiff||null,
-               mlbId: sv?.mlbId||null, teamSit: bpTeam?.situation||'', teamName: bpTeam?.name||'' };
+      const sv = svMap.get(stripAccents(normName(name)));
+      const nn = stripAccents(normName((m.name||name).toLowerCase()));
+      const bpTeam = G_bpData?.find(t => t.pitchers.some(r =>
+        stripAccents(normName(r.name.toLowerCase())) === nn
+      ));
+      const bpP = bpTeam?.pitchers.find(r => stripAccents(normName(r.name.toLowerCase())) === nn);
+      return {
+        name: m.name||name, holds: m.holds||0, gf: m.gamesFinished||0,
+        ip: m.ip||'—', era: m.era||null,
+        kbb: sv?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
+        whiff: sv?.whiff||null,
+        mlbId: sv?.mlbId || bpP?.mlbId || null,
+        teamSit: bpTeam?.situation||''
+      };
     })
     .sort((a,b) => ((b.kbb||0)+(b.whiff||0)) - ((a.kbb||0)+(a.whiff||0)));
   if(!waiting.length) {
@@ -1609,7 +1686,7 @@ function renderBPWaiting() {
 // fetchBullpenWatch is called from the tab onclick directly
 
 </script>
-  <div id="pane-bullpen" class="pane">
+  <div id="pane-bullpen" class="pane active">
     <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Bullpen situations · <span id="bpUpdated">—</span></div>
     <div style="margin-bottom:20px">
       <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Role Transitions — FA Only</div>
