@@ -479,11 +479,14 @@ const server = http.createServer(async (req, res) => {
       const splits = [...page1, ...page2];
       console.log(`[proxy] AAA ${aaaYear}: ${splits.length} total splits`);
       try {
-        // deduplicate by player id
+        // deduplicate by player id, filter to actual AAA teams only
         const seen = new Set();
         const unique = splits.filter(s => {
           const id = s.player?.id;
           if(!id || seen.has(id)) return false;
+          // Exclude if team sport level is MLB (sportId=1) — only want minor league entries
+          const sportId = s.team?.sport?.id || s.sport?.id;
+          if(sportId && sportId === 1) return false;
           seen.add(id);
           return true;
         });

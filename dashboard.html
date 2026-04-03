@@ -75,8 +75,11 @@
   .inf { background: var(--blue-bg); color: var(--blue-text); }
   .filter-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
   .filter-row label { font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .yr-btn { padding:3px 10px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg);color:var(--text2);font-size:12px;font-family:inherit;cursor:pointer; }
+  .yr-btn.active { border-color:var(--blue);background:var(--blue);color:#fff; }
   .filter-row select { width: auto; }
-  .table-wrap { overflow-x: auto; border-radius: var(--radius-lg); border: 1px solid var(--border); }
+  .table-wrap { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 260px); border-radius: var(--radius-lg); border: 1px solid var(--border); }
+  .table-wrap thead th { position: sticky; top: 0; z-index: 10; background: var(--bg2); box-shadow: 0 1px 0 var(--border); }
   table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--bg); }
   th { text-align: left; font-size: 11px; font-weight: 600; color: var(--text2); padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--bg2); }
   td { padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
@@ -122,13 +125,6 @@
     <button onclick="document.getElementById('credBar').style.display='none'" style="padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg);color:var(--text2);font-size:13px;font-family:inherit;cursor:pointer">Hide</button>
   </div>
 
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;color:var(--text2)">
-    <span>Season:</span>
-    <button id="yrCurrent" onclick="setYear(CURRENT_YEAR)" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--blue);background:var(--blue);color:#fff;font-size:12px;font-family:inherit;cursor:pointer">—</button>
-    <button id="yrPrev" onclick="setYear(PREV_YEAR)" style="padding:3px 10px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg);color:var(--text2);font-size:12px;font-family:inherit;cursor:pointer">—</button>
-    <span id="yearLabel" style="color:var(--text2)">Loading...</span>
-  </div>
-
   <div class="tabs">
     <button class="tab active" onclick="sw('freeagents')">Pitcher free agents</button>
     <button class="tab" onclick="sw('aaa')">AAA prospects</button>
@@ -144,6 +140,8 @@
     <div class="filter-row">
       <label>Pos:</label>
       <select id="faPos" onchange="renderFA()"><option value="all" selected>All</option><option value="SP">SP</option><option value="RP">RP</option></select>
+      <label>MLB Team:</label>
+      <select id="faTeam" onchange="renderFA()"><option value="all">All</option></select>
       <label>Min BF:</label>
       <select id="faMinBF" onchange="renderFA()">
         <option value="0" selected>Any</option>
@@ -153,9 +151,11 @@
         <option value="100">100 BF</option>
         <option value="200">200 BF</option>
       </select>
-
       <input id="faSearch" type="text" placeholder="Search pitcher..." oninput="renderFA()" style="padding:4px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);width:140px"/>
-
+      <div style="margin-left:auto;display:flex;gap:4px;align-items:center">
+        <button class="yr-btn active" id="faYrCur" onclick="setYear(CURRENT_YEAR,'fa')">—</button>
+        <button class="yr-btn" id="faYrPrev" onclick="setYear(PREV_YEAR,'fa')">—</button>
+      </div>
     </div>
     <div class="table-wrap"><table>
       <thead><tr id="faHead">
@@ -163,9 +163,10 @@
         <th onclick="faSort('name')"  style="cursor:pointer">Pitcher <span id="fsn"></span></th>
         <th>MLB</th>
         <th>Pos</th>
+        <th onclick="faSort('ip')"    style="cursor:pointer">IP <span id="fsip"></span></th>
         <th onclick="faSort('xera')"  style="cursor:pointer">xERA <span id="fse"></span></th>
         <th onclick="faSort('kbb')"   style="cursor:pointer">K-BB% <span id="fsk"></span></th>
-        <th onclick="faSort('kbb7')"  style="cursor:pointer">L7 K-BB% <span id="fsk7"></span></th>
+        <th onclick="faSort('kbb7')"  style="cursor:pointer" id="l7Header">L7 K-BB% <span id="fsk7"></span></th>
         <th onclick="faSort('xba')"   style="cursor:pointer">xBA <span id="fsb"></span></th>
         <th onclick="faSort('whiff')" style="cursor:pointer">Whiff% <span id="fsw"></span></th>
         <th>Pitch mix</th>
@@ -177,11 +178,17 @@
 
   <div id="pane-rosters" class="pane">
     <div class="filter-row">
-
+      <label>Fantasy Team:</label>
+      <select id="rosterTeamFilter" onchange="renderRosters()"><option value="all">All teams</option></select>
+      <div style="margin-left:auto;display:flex;gap:4px;align-items:center">
+        <button class="yr-btn active" id="rosYrCur" onclick="setYear(CURRENT_YEAR,'rosters')">—</button>
+        <button class="yr-btn" id="rosYrPrev" onclick="setYear(PREV_YEAR,'rosters')">—</button>
+      </div>
     </div>
     <div class="table-wrap"><table>
       <thead><tr>
         <th onclick="rSort('team')" style="cursor:pointer">Team <span id="rst"></span></th>
+        <th onclick="rSort('ip')"    style="cursor:pointer">Total IP <span id="rsip"></span></th>
         <th onclick="rSort('xera')"  style="cursor:pointer">xERA <span style="font-weight:400;font-size:10px;color:var(--text2)">(wtd)</span> <span id="rse"></span></th>
         <th onclick="rSort('kbb')"   style="cursor:pointer">K-BB% <span style="font-weight:400;font-size:10px;color:var(--text2)">(wtd)</span> <span id="rsk"></span></th>
         <th onclick="rSort('whiff')" style="cursor:pointer">Whiff% <span style="font-weight:400;font-size:10px;color:var(--text2)">(wtd)</span> <span id="rsw"></span></th>
@@ -206,22 +213,28 @@
         <option value="25">25 BF</option>
         <option value="50">50 BF</option>
       </select>
+      <label>MLB Org:</label>
+      <select id="aaaTeamFilter" onchange="renderAAA()"><option value="all">All</option></select>
       <input id="aaaSearch" type="text" placeholder="Search pitcher..." oninput="renderAAA()" style="padding:4px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);width:140px"/>
     </div>
-    <p style="font-size:11px;color:var(--text2);margin-bottom:8px">AAA pitchers · <span id="aaaCount">—</span> total · <span id="aaaUpdated"></span> · Updates with year toggle</p>
+    <div style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
+      <button class="yr-btn active" id="aaaYrCur" onclick="setYear(CURRENT_YEAR,'aaa')">—</button>
+      <button class="yr-btn" id="aaaYrPrev" onclick="setYear(PREV_YEAR,'aaa')">—</button>
+      <span style="font-size:11px;color:var(--text2);margin-left:6px">AAA pitchers · <span id="aaaCount">—</span> total · <span id="aaaUpdated"></span></span>
+    </div>
     <div class="table-wrap"><table>
       <thead><tr>
         <th>#</th>
         <th onclick="aaaSort('name')" style="cursor:pointer">Pitcher <span id="asn"></span></th>
         <th>MLB Org</th>
         <th>Role</th>
+        <th onclick="aaaSort('ip')"   style="cursor:pointer">IP <span id="asi"></span></th>
         <th onclick="aaaSort('era')"  style="cursor:pointer">ERA <span id="ase"></span></th>
         <th onclick="aaaSort('whip')" style="cursor:pointer">WHIP <span id="asw"></span></th>
         <th onclick="aaaSort('k9')"   style="cursor:pointer">K/9 <span id="ask9"></span></th>
         <th onclick="aaaSort('bb9')"  style="cursor:pointer">BB/9 <span id="asb9"></span></th>
         <th onclick="aaaSort('kbb')"  style="cursor:pointer">K-BB% <span id="ask"></span></th>
         <th onclick="aaaSort('gbPct')" style="cursor:pointer">GB% <span id="asgb"></span></th>
-        <th onclick="aaaSort('ip')"   style="cursor:pointer">IP <span id="asi"></span></th>
         <th>Status</th>
       </tr></thead>
       <tbody id="aaaBody"></tbody>
@@ -244,10 +257,15 @@
 
 const savant = [];
 
-// Init year buttons
-document.getElementById('yrCurrent').textContent = CURRENT_YEAR;
-document.getElementById('yrPrev').textContent = PREV_YEAR;
-document.getElementById('yearLabel').textContent = `Showing ${CURRENT_YEAR} season data`;
+// Init year button labels for all tabs
+['faYrCur','aaaYrCur','rosYrCur'].forEach(id => {
+  const el = document.getElementById(id);
+  if(el) el.textContent = CURRENT_YEAR;
+});
+['faYrPrev','aaaYrPrev','rosYrPrev'].forEach(id => {
+  const el = document.getElementById(id);
+  if(el) el.textContent = PREV_YEAR;
+});
 
 savant.forEach(p => {
   p.score = calcScore(p);
@@ -269,6 +287,10 @@ function detectPitchChanges(mix26, mix25) {
   return changes;
 }
 
+function stripAccents(s) {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
 function normName(n){
   // Normalize name for fuzzy matching: lowercase, remove periods, collapse spaces
   return n.toLowerCase()
@@ -288,7 +310,7 @@ function calcScore(p){
   return Math.round(Math.max(0, Math.min(100, s*100)));
 }
 
-let G = { leagueId:'', leagueName:'', leagues:[], teams:{}, rosters:{}, standings:[], faNames:new Set() };
+let G = { leagueId:'', leagueName:'', leagues:[], teams:{}, rosters:{}, standings:[], faNames:new Set(), yearCache:{} };
 
 function tier(s){ if(s>=75)return['Elite','bg']; if(s>=55)return['Strong','bb']; if(s>=35)return['Average','ba']; return['Fade','br']; }
 
@@ -478,6 +500,12 @@ async function loadLeague(){
     console.log('[scout] ADP sample entry:', JSON.stringify(Object.values(adpData).find(e=>e&&e.name)));
     console.log('[scout] nameToTeam size:', Object.keys(nameToTeam).length, '| sample:', JSON.stringify(Object.entries(nameToTeam).slice(0,5)));
     G.teams = teams; G.rosters = rosters; G.faNames = faNames; G.playerInfo = playerInfo; G.nameToTeam = nameToTeam;
+      // Populate fantasy team dropdown for Rosters tab
+      const rosterSel = document.getElementById('rosterTeamFilter');
+      if(rosterSel){
+        rosterSel.innerHTML = '<option value="all">All teams</option>' +
+          Object.values(teams).map(t => `<option value="${t.tid}">${t.teamName}</option>`).join('');
+      }
 
     // Populate team picker in AI tab
     const picker = document.getElementById('myTeamPicker');
@@ -517,6 +545,21 @@ async function loadLeague(){
     sw('freeagents'); // ensure active tab renders
     // Fetch AAA stats in background
     fetchAAA(G.dataYear || CURRENT_YEAR);
+
+    // Pre-fetch previous year in background so switching is instant
+    setTimeout(async () => {
+      if(!G.yearCache[PREV_YEAR]) {
+        console.log(`[scout] Pre-fetching ${PREV_YEAR} data in background...`);
+        const savedYear = G.dataYear;
+        G.dataYear = PREV_YEAR;
+        try { await fetchSavantData(PREV_YEAR); } catch(e) { console.warn('Pre-fetch failed:', e.message); }
+        G.dataYear = savedYear || CURRENT_YEAR;
+        // Restore current year display
+        applyCachedYear(G.dataYear);
+        fetchAAA(PREV_YEAR); // pre-cache AAA too
+        console.log(`[scout] ${PREV_YEAR} data pre-cached`);
+      }
+    }, 5000); // wait 5s after initial load before pre-fetching
   } catch(e) { document.getElementById('leagueHeader').textContent = 'Error: ' + e.message; throw e; }
 }
 
@@ -563,6 +606,10 @@ async function fetchAAA(year) {
     const data = await fetch(`${PROXY}/aaa-stats?year=${year}`).then(r => r.json());
     G.aaaStats = data;
     document.getElementById('aaaUpdated').textContent = `${year} · Updated ` + new Date().toLocaleTimeString();
+    // Populate AAA org dropdown
+    const aaaOrgs = [...new Set(Object.values(data).map(p=>p.mlbOrg).filter(Boolean).sort())];
+    const aaaTeamSel = document.getElementById('aaaTeamFilter');
+    if(aaaTeamSel) aaaTeamSel.innerHTML = '<option value="all">All</option>' + aaaOrgs.map(t=>`<option value="${t}">${t}</option>`).join('');
     renderAAA();
   } catch(e) { console.warn('AAA stats failed:', e.message); }
 }
@@ -576,13 +623,8 @@ function aaaSort(col){
 function renderAAA(){
   const role    = document.getElementById('aaaRole')?.value || 'all';
   const minBF   = parseInt(document.getElementById('aaaMinBF')?.value || '0');
-  const faOnly  = document.getElementById('aaaFAOnly')?.checked;
-  const search  = (document.getElementById('aaaSearch')?.value || '').toLowerCase().trim();
-
-  // Check if player is FA — try multiple name normalizations
-  function stripAccents(s) {
-    return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
-  }
+  const search   = (document.getElementById('aaaSearch')?.value || '').toLowerCase().trim();
+  const aaaTeamF = document.getElementById('aaaTeamFilter')?.value || 'all';
 
   // Check if AAA player is rostered in Fantrax — use rosteredNames (more reliable than faNames)
   function isAAAPlayerRostered(name) {
@@ -598,6 +640,7 @@ function renderAAA(){
     if(role !== 'all' && p.role !== role) return false;
     if(minBF > 0 && p.bf < minBF) return false;
     if(search && !p.name.toLowerCase().includes(search)) return false;
+    if(aaaTeamF !== 'all' && p.mlbOrg !== aaaTeamF) return false;
 
     return true;
   });
@@ -616,8 +659,8 @@ function renderAAA(){
   });
 
   // Update sort indicators
-  ['n','k','e','k9','b9','gb','w','i'].forEach(id => { const el=document.getElementById('as'+id); if(el) el.textContent=''; });
-  const colMap = {name:'n',kbb:'k',era:'e',k9:'k9',bb9:'b9',gbPct:'gb',whip:'w',ip:'i'};
+  ['n','i','e','w','k9','b9','k','gb'].forEach(id => { const el=document.getElementById('as'+id); if(el) el.textContent=''; });
+  const colMap = {name:'n',ip:'i',era:'e',whip:'w',k9:'k9',bb9:'b9',kbb:'k',gbPct:'gb'};
   const el = document.getElementById('as'+(colMap[aaaSortCol]||''));
   if(el) el.textContent = aaaSortAsc ? ' ▲' : ' ▼';
   // highlight applied after render
@@ -651,13 +694,13 @@ function renderAAA(){
       <td style="font-weight:500">${p.name}</td>
       <td style="font-size:12px;color:var(--text2)">${orgShort}</td>
       <td><span class="tpill">${p.role}</span></td>
+      <td data-col="ip">${p.ip   || '—'}</td>
       <td data-col="era">${p.era  != null ? bar(p.era, 2.0, 5.5, true) : '—'}</td>
       <td data-col="whip">${p.whip != null ? p.whip.toFixed(2) : '—'}</td>
       <td data-col="k9">${p.k9   != null ? p.k9  : '—'}</td>
       <td data-col="bb9">${p.bb9  != null ? p.bb9 : '—'}</td>
       <td data-col="kbb">${p.kbb  != null ? bar(p.kbb, 8, 25) : '—'}</td>
       <td data-col="gbPct">${p.gbPct != null ? bar(p.gbPct, 30, 60) : '—'}</td>
-      <td data-col="ip">${p.ip   || '—'}</td>
       <td>${isAAAPlayerRostered(p.name) ? '<span class="badge bgy">Rostered</span>' : '<span class="badge bt">FA</span>'}</td>
     </tr>`;
   }).join('');
@@ -667,14 +710,16 @@ function renderAAA(){
 }
 
 function renderFA(){
-  const pos    = document.getElementById('faPos').value;
-  const minBF  = parseInt(document.getElementById('faMinBF')?.value || '0');
-  const search = (document.getElementById('faSearch')?.value || '').toLowerCase().trim();
+  const pos      = document.getElementById('faPos').value;
+  const minBF   = parseInt(document.getElementById('faMinBF')?.value || '0');
+  const search  = (document.getElementById('faSearch')?.value || '').toLowerCase().trim();
+  const faTeam  = document.getElementById('faTeam')?.value || 'all';
 
   // Only show pitchers that are FAs — savant array now only contains pitchers
   const PPOS = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
   let list = savant.filter(p => {
     if(p.fxStatus !== 'fa') return false;
+    if(faTeam !== 'all' && p.mlb !== faTeam) return false;
     if(pos !== 'all' && p.role !== pos) return false;
     if(minBF > 0 && (p.pa || 0) < minBF) return false;
     if(search && !p.name.toLowerCase().includes(search)) return false;
@@ -696,11 +741,11 @@ function renderFA(){
     return 0;
   });
   // Update sort indicators
-  ['n','e','k','k7','b','w'].forEach(id => {
+  ['n','ip','e','k','k7','b','w'].forEach(id => {
     const el = document.getElementById('fs'+id);
     if(el) el.textContent = '';
   });
-  const colToId = {name:'n',xera:'e',kbb:'k',kbb7:'k7',xba:'b',whiff:'w'};
+  const colToId = {name:'n',ip:'ip',xera:'e',kbb:'k',kbb7:'k7',xba:'b',whiff:'w'};
   const activeEl = document.getElementById('fs' + (colToId[faSortCol]||''));
   if(activeEl) activeEl.textContent = faSortAsc ? ' ▲' : ' ▼';
   // highlight applied after render below
@@ -709,6 +754,7 @@ function renderFA(){
   if(!list.length){
     empty.style.display = G.leagues.length ? 'block' : 'none';
     empty.textContent = G.leagues.length ? 'No FA pitchers match your filters.' : 'Loading...';
+    document.getElementById('faBody').innerHTML = ''; // clear stale rows
     return;
   }
   empty.style.display='none';
@@ -742,6 +788,7 @@ function renderFA(){
       <td style="font-weight:500">${p.name}</td>
       <td><span class="tpill">${p.mlb}</span></td>
       <td>${p.role}</td>
+      <td data-col="ip">${p.ip != null ? p.ip.toFixed(1) : '—'}</td>
       <td data-col="xera">${bar(p.xera,2.5,4.8,true)}</td>
       <td data-col="kbb">${bar(p.kbb,8,25)}</td>
       <td data-col="kbb7">${l7}</td>
@@ -774,7 +821,8 @@ function renderRosters(){
 
   const PITCH_POS = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
 
-  const teamRows = Object.entries(G.rosters).map(([tid, team]) => {
+  const rosterTeamF = document.getElementById('rosterTeamFilter')?.value || 'all';
+  const teamRows = Object.entries(G.rosters).filter(([tid]) => rosterTeamF === 'all' || tid === rosterTeamF).map(([tid, team]) => {
     // Get pitchers on this roster
     const pitchers = team.players.filter(p => {
       if(!p.name) return false;
@@ -802,15 +850,17 @@ function renderRosters(){
     const avgKbb   = avg(matched, 'kbb');
     const avgWhiff = avg(matched, 'whiff');
     const avgXba   = avg(matched, 'xba');
+    const totalIp  = matched.reduce((s, p) => s + (p.ip || 0), 0);
     const isMe = tid === myTeam;
 
-    return { tid, teamName: team.teamName, pitchers, matched, avgXera, avgKbb, avgWhiff, avgXba, isMe };
+    return { tid, teamName: team.teamName, pitchers, matched, avgXera, avgKbb, avgWhiff, avgXba, totalIp, isMe };
   });
 
   // Sort
   const dir = rSortAsc ? 1 : -1;
   teamRows.sort((a, b) => {
     if(rSortCol === 'team')  return dir * (a.teamName||'').localeCompare(b.teamName||'');
+    if(rSortCol === 'ip')    return dir * ((a.totalIp||0)  - (b.totalIp||0));
     if(rSortCol === 'xera')  return dir * ((a.avgXera||9)  - (b.avgXera||9));
     if(rSortCol === 'kbb')   return dir * ((a.avgKbb||0)   - (b.avgKbb||0));
     if(rSortCol === 'whiff') return dir * ((a.avgWhiff||0) - (b.avgWhiff||0));
@@ -824,8 +874,8 @@ function renderRosters(){
   function tier(s){ if(s>=75)return['Elite','bg']; if(s>=55)return['Strong','bb']; if(s>=35)return['Average','ba']; return['Fade','br']; }
 
   // Update sort indicators
-  ['t','e','k','w','b'].forEach(id => { const el=document.getElementById('rs'+id); if(el) el.textContent=''; });
-  const rColMap = {team:'t',xera:'e',kbb:'k',whiff:'w',xba:'b'};
+  ['t','ip','e','k','w','b'].forEach(id => { const el=document.getElementById('rs'+id); if(el) el.textContent=''; });
+  const rColMap = {team:'t',ip:'ip',xera:'e',kbb:'k',whiff:'w',xba:'b'};
   const rEl = document.getElementById('rs'+(rColMap[rSortCol]||''));
   if(rEl) rEl.textContent = rSortAsc ? ' ▲' : ' ▼';
   // highlight applied after render
@@ -843,6 +893,7 @@ function renderRosters(){
     const highlight = row.isMe ? 'style="background:var(--blue-bg)"' : '';
     return `<tr ${highlight}>
       <td style="font-weight:500">${row.teamName}${row.isMe?'<span class="mine-tag">mine</span>':''}</td>
+      <td data-col="ip">${row.totalIp ? row.totalIp.toFixed(1) : '—'}</td>
       <td data-col="xera">${fmt(row.avgXera)}</td>
       <td data-col="kbb">${fmt(row.avgKbb, 1)}%</td>
       <td data-col="whiff">${fmt(row.avgWhiff, 1)}%</td>
@@ -866,11 +917,32 @@ function svSort(col){
 
 function renderSavant(){} // removed
 
-async function fetchSavantData(){
-  // Baseball Savant expected stats leaderboard for pitchers — current season
-  // Returns CSV with columns: last_name, first_name, player_id, pa, bip, ba, est_ba, est_ba_minus_ba_diff,
-  // slg, est_slg, est_slg_minus_slg_diff, woba, est_woba, est_woba_minus_woba_diff, era, xera, ...
-  const year = G.dataYear || CURRENT_YEAR;
+function applyCachedYear(year) {
+  const cache = G.yearCache[year];
+  if(!cache) return;
+  // Restore savant array from cache
+  savant.length = 0;
+  cache.savant.forEach(p => savant.push({...p}));
+  G.recentStats = cache.recentStats;
+  G.mlbStats    = cache.mlbStats;
+  // Re-tag FA status
+  savant.forEach(p => {
+    const ln = p.name.toLowerCase();
+    if(G.faNames.has(normName(ln))){ p.fxStatus='fa'; }
+    else if(G.rosteredNames?.has(ln)){ p.fxStatus='rostered'; }
+  });
+  renderFA(); renderRosters();
+}
+
+async function fetchSavantData(year){
+  year = year || G.dataYear || CURRENT_YEAR;
+
+  // Return cached data if available
+  if(G.yearCache[year]) {
+    console.log(`[scout] Using cached data for ${year}`);
+    applyCachedYear(year);
+    return;
+  }
   const url = `/savant/leaderboard/expected_statistics?type=pitcher&year=${year}&position=&team=&min=1&csv=true`;
   try {
     const r = await fetch(PROXY + url);
@@ -938,6 +1010,19 @@ async function fetchSavantData(){
       const mlbJson    = await r4.json();
       G.recentStats = recentJson;
       G.mlbStats = mlbJson;
+      // Merge MLB traditional stats (IP, WHIP, K9, BB9, GB%) into liveData
+      Object.entries(mlbJson).forEach(([lname, m]) => {
+        const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
+        const key = match || lname;
+        if(liveData[key]) {
+          if(m.ip    != null) liveData[key].ip    = m.ip;
+          if(m.whip  != null) liveData[key].whip  = m.whip;
+          if(m.k9    != null) liveData[key].k9    = m.k9;
+          if(m.bb9   != null) liveData[key].bb9   = m.bb9;
+          if(m.gbPct != null) liveData[key].gbPct = m.gbPct;
+        }
+      });
+
       // Merge 7-day recent stats into liveData
       Object.entries(recentJson).forEach(([lname, s]) => {
         const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
@@ -1016,7 +1101,7 @@ async function fetchSavantData(){
         const newP = {
           name: d.name, mlb: adpTeam || '—', role,
           pitchMix: d.pitchMix || {},
-          ip: Math.round((d.pa||0)/4),
+          ip: d.ip || null,
           kbb: d.kbb||0, xera: d.xera||4.50, xba: d.xba||.260,
           whiff: d.whiff||20, chase: d.chase||26, stuff: 95,
           fxStatus: 'unknown', fxTeam: '',
@@ -1044,7 +1129,21 @@ async function fetchSavantData(){
         p.fxStatus='unknown'; p.fxTeam='';
       }
     });
-    renderFA(); renderRosters();
+      // Save to year cache before rendering
+      G.yearCache[year] = {
+        savant: savant.map(p => ({...p})),
+        recentStats: G.recentStats,
+        mlbStats: G.mlbStats,
+      };
+      // Populate MLB team dropdown for FA tab
+      const mlbTeams = [...new Set(savant.map(p => p.mlb).filter(t => t && t !== '—').sort())];
+      const faTeamSel = document.getElementById('faTeam');
+      if(faTeamSel) faTeamSel.innerHTML = '<option value="all">All</option>' + mlbTeams.map(t=>`<option value="${t}">${t}</option>`).join('');
+      // Populate MLB org dropdown for AAA tab
+      const aaaTeams = [...new Set(Object.values(G.aaaStats||{}).map(p=>p.mlbOrg).filter(Boolean).sort())];
+      const aaaTeamSel = document.getElementById('aaaTeamFilter');
+      if(aaaTeamSel) aaaTeamSel.innerHTML = '<option value="all">All</option>' + aaaTeams.map(t=>`<option value="${t}">${t}</option>`).join('');
+      renderFA(); renderRosters();
   } catch(e){
     console.error('Savant fetch failed:', e.message);
   }
@@ -1076,10 +1175,8 @@ function debugFA(){
 // Restore saved credentials into all inputs
 function restoreCredentials(){
   const sid = localStorage.getItem('fantrax_secret_id') || '';
-  ['secretIdBar','secretIdAi'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.value = sid;
-  });
+  const sidEl = document.getElementById('secretIdBar');
+  if(sidEl) sidEl.value = sid;
   // Hide cred bar if sid saved
   if(sid) document.getElementById('credBar').style.display = 'none';
 }
@@ -1095,23 +1192,44 @@ function saveCredentials(){
 restoreCredentials();
 
 // Auto-load league on open
-async function setYear(year){
-  G.dataYear = year;
-  // Update button styles
+async function setYear(year, tab){
   const isCurrent = year === CURRENT_YEAR;
-  document.getElementById('yrCurrent').style.background  = isCurrent  ? 'var(--blue)' : 'var(--bg)';
-  document.getElementById('yrCurrent').style.color       = isCurrent  ? '#fff' : 'var(--text2)';
-  document.getElementById('yrCurrent').style.borderColor = isCurrent  ? 'var(--blue)' : 'var(--border2)';
-  document.getElementById('yrPrev').style.background     = !isCurrent ? 'var(--blue)' : 'var(--bg)';
-  document.getElementById('yrPrev').style.color          = !isCurrent ? '#fff' : 'var(--text2)';
-  document.getElementById('yrPrev').style.borderColor    = !isCurrent ? 'var(--blue)' : 'var(--border2)';
-  document.getElementById('yearLabel').textContent = `Showing ${year} season data`;
-  // Reset savant data and re-fetch for new year
-  savant.forEach(p => { p.xera=null; p.xba=null; p.kbb=null; p.whiff=null; p.fxStatus='unknown'; p.fxTeam=''; });
-  document.getElementById('leagueHeader').textContent = `Loading ${year} Statcast data...`;
-  try { await fetchSavantData(); } catch(e){ console.warn('Savant fetch failed:', e.message); }
-  fetchAAA(year); // also refresh AAA for selected year
-  document.getElementById('leagueHeader').textContent = `${G.leagueName} · ${Object.keys(G.teams).length} teams · ${year} data`;
+
+  // Update buttons only for the clicked tab
+  const tabBtnMap = {
+    fa:      ['faYrCur',  'faYrPrev'],
+    aaa:     ['aaaYrCur', 'aaaYrPrev'],
+    rosters: ['rosYrCur', 'rosYrPrev'],
+  };
+  if(tab && tabBtnMap[tab]) {
+    const [curId, prevId] = tabBtnMap[tab];
+    document.getElementById(curId)?.classList.toggle('active', isCurrent);
+    document.getElementById(prevId)?.classList.toggle('active', !isCurrent);
+  }
+
+  // AAA is independent — just re-fetch AAA for that year
+  if(tab === 'aaa') {
+    fetchAAA(year);
+    return;
+  }
+
+  // FA and Rosters share Statcast data
+  G.dataYear = year;
+
+  // Show/hide L7 column based on year
+  const l7h = document.getElementById('l7Header');
+  if(l7h) l7h.style.display = year === CURRENT_YEAR ? '' : 'none';
+  document.querySelectorAll('#faBody td[data-col="kbb7"]').forEach(td => td.style.display = year === CURRENT_YEAR ? '' : 'none');
+
+  if(G.yearCache[year]) {
+    applyCachedYear(year);
+    document.getElementById('leagueHeader').textContent = `${G.leagueName} · ${Object.keys(G.teams).length} teams · ${year} data`;
+  } else {
+    savant.forEach(p => { p.xera=null; p.xba=null; p.kbb=null; p.whiff=null; p.fxStatus='unknown'; p.fxTeam=''; });
+    document.getElementById('leagueHeader').textContent = `Loading ${year} Statcast data...`;
+    try { await fetchSavantData(year); } catch(e){ console.warn('Savant fetch failed:', e.message); }
+    document.getElementById('leagueHeader').textContent = `${G.leagueName} · ${Object.keys(G.teams).length} teams · ${year} data`;
+  }
 }
 
 function toggleCredBar(){
