@@ -668,15 +668,23 @@ async function loadLeague(){
     fetchAAA(G.dataYear || CURRENT_YEAR);
 
     setTimeout(async () => {
+      // Pre-cache previous year silently — no renders, no UI updates
       if(!G.yearCache[PREV_YEAR]) {
+        console.log(`[scout] Pre-fetching ${PREV_YEAR} Savant in background...`);
         const savedYear = G.dataYear;
         G.dataYear = PREV_YEAR;
-        try { await fetchSavantData(PREV_YEAR); } catch(e) { console.warn('Pre-fetch failed:', e.message); }
+        try { await fetchSavantData(PREV_YEAR); } catch(e) { console.warn('Pre-fetch Savant failed:', e.message); }
         G.dataYear = savedYear || CURRENT_YEAR;
-        applyCachedYear(G.dataYear);
-        fetchAAA(PREV_YEAR);
-        G.dataYear = savedYear;
-        console.log(`[scout] ${PREV_YEAR} data pre-cached`);
+        // Restore current year display without re-rendering (it's already showing correctly)
+        console.log(`[scout] ${PREV_YEAR} Savant pre-cached`);
+      }
+      if(!G.aaaCache[PREV_YEAR]) {
+        console.log(`[scout] Pre-fetching ${PREV_YEAR} AAA in background...`);
+        try {
+          const data = await fetch(`${PROXY}/aaa-stats?year=${PREV_YEAR}`).then(r => r.json());
+          G.aaaCache[PREV_YEAR] = data; // cache only, no render
+          console.log(`[scout] ${PREV_YEAR} AAA pre-cached`);
+        } catch(e) { console.warn('Pre-fetch AAA failed:', e.message); }
       }
     }, 5000);
 
