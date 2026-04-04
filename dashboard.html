@@ -699,8 +699,27 @@ async function loadLeague(){
     G.rosteredNames = rosteredNames;
 
     console.log('[scout] ADP sample entry:', JSON.stringify(Object.values(adpData).find(e=>e&&e.name)));
+    const piSample = Object.entries(playerInfo).slice(0,5);
+    const hasIcons = piSample.some(([,p]) => p.icons);
+    const withIcons = Object.entries(playerInfo).filter(([,p]) => p.icons?.length);
+    // Check getTeamRosters raw data for injury fields
+    const rosterSample = Object.values(rosters)[0]?.players?.slice(0,2);
+    console.log('[scout] raw roster player sample:', JSON.stringify(rosterSample));
     console.log('[scout] nameToTeam size:', Object.keys(nameToTeam).length, '| sample:', JSON.stringify(Object.entries(nameToTeam).slice(0,5)));
     G.teams = teams; G.rosters = rosters; G.faNames = faNames; G.playerInfo = playerInfo; G.nameToTeam = nameToTeam;
+
+    // Build IL set from rosterData.rosters INJURED_RESERVE status
+    G.ilPlayerIds = new Set();
+    G.ilNames = new Set();
+    Object.values(rosterData.rosters || {}).forEach(team => {
+      (team.rosterItems || []).forEach(item => {
+        if(item.status === 'INJURED_RESERVE') {
+          G.ilPlayerIds.add(item.id);
+          const name = idToName[item.id];
+          if(name) G.ilNames.add(stripAccents(normName(name.toLowerCase())));
+        }
+      });
+    });
     _rosteredSet = null; _savantStatusMap = null; // invalidate lookup caches
     G.teams = teams; G.rosters = rosters; G.faNames = faNames; G.playerInfo = playerInfo; G.nameToTeam = nameToTeam;
     _rosteredSet = null; _savantStatusMap = null; // invalidate lookup caches
@@ -737,6 +756,7 @@ async function loadLeague(){
         const savedYear = G.dataYear;
         const savedMlbStats = G.mlbStats;
         const savedSavantLoaded = G.savantLoaded;
+        const savedSavant = savant.map(p => ({...p})); // snapshot current year savant
         G.dataYear = PREV_YEAR;
         G.preFetching = true; // block all renders during pre-fetch
         try { await fetchSavantData(PREV_YEAR); } catch(e) { console.warn('Pre-fetch Savant failed:', e.message); }
@@ -744,6 +764,11 @@ async function loadLeague(){
         G.dataYear = savedYear || CURRENT_YEAR;
         G.mlbStats = savedMlbStats;
         G.savantLoaded = savedSavantLoaded;
+        // Restore current year savant array — pre-fetch replaced it with 2025 data
+        // Use fresh spread copies to avoid mutation from 2025 re-tag loop
+        savant.length = 0;
+        savedSavant.forEach(p => savant.push({...p}));
+        _savantStatusMap = null; _savantDataMap = null;
         console.log(`[scout] ${PREV_YEAR} Savant pre-cached`);
       }
       if(!G.aaaCache[PREV_YEAR]) {
@@ -1046,7 +1071,7 @@ async function fetchAAA(year) {
 function applyCachedYear(year) {
   const cache = G.yearCache[year];
   if(!cache) return;
-  G.savantLoaded = true;
+  
   // Restore savant array from cache
   savant.length = 0;
   cache.savant.forEach(p => savant.push({...p}));
@@ -1515,6 +1540,22 @@ function teamNickname(name) {
   return (name||'').replace(/^(Arizona|Atlanta|Baltimore|Boston|Chicago|Cincinnati|Cleveland|Colorado|Detroit|Houston|Kansas City|Los Angeles|Miami|Milwaukee|Minnesota|New York|Oakland|Philadelphia|Pittsburgh|San Diego|San Francisco|Seattle|St\.\s*Louis|Tampa Bay|Texas|Toronto|Washington|Athletics)\s+/i, '');
 }
 
+function isRecentInjury(injuryDate) {
+  if(!injuryDate) return false;
+  const d = new Date(injuryDate);
+  const now = new Date();
+  // Must be this year
+  if(d.getFullYear() < now.getFullYear()) return false;
+  // Must be within 7 days
+  const daysDiff = (now - d) / (1000 * 60 * 60 * 24);
+  return daysDiff <= 7;
+}
+
+function isILPlayer(name) {
+  if(!name || !G.ilNames) return false;
+  return G.ilNames.has(stripAccents(normName(name.toLowerCase())));
+}
+
 function renderBPTeams() {
   const el = document.getElementById('bpTeams');
   if(!el) return;
@@ -1525,30 +1566,39 @@ function renderBPTeams() {
 
   const sitOrder = { EMERGING:0, COMMITTEE:1, LOCKED:2, NO_SAVES:3 };
   const sorted = [...G_bpData].sort((a,b) => {
-    const aIL = a.injuredCloser ? 1 : 0;
-    const bIL = b.injuredCloser ? 1 : 0;
-    if(aIL !== bIL) return bIL - aIL; // IL first
+    // Only feature recently-injured closer cards first (within 7 days, this year)
+    const aIL = a.recentInjury ? 1 : 0;
+    const bIL = b.recentInjury ? 1 : 0;
+    if(aIL !== bIL) return bIL - aIL;
     return (sitOrder[a.situation]??9) - (sitOrder[b.situation]??9);
   });
 
   el.innerHTML = sorted.map(team => {
     const shortName = teamNickname(team.name);
     const sitClass = team.situation || 'NO_SAVES';
-    const cardClass = team.injuredCloser ? 'bp-card injured-closer' : 'bp-card';
-    const injuredBanner = team.injuredCloser
-      ? `<div class="bp-injured-banner">⚠️ ${team.injuredCloser} (prior closer) is on IL</div>`
-      : '';
-    const sortedPitchers = [...team.pitchers].sort((a,b) => {
+    const hasRecentIL = team.pitchers.some(p => isILPlayer(p.name) && (p.isPriorCloser || (p.saves||0) + (p.holds||0) > 2));
+    const cardClass = (team.recentInjury || hasRecentIL) ? 'bp-card injured-closer' : 'bp-card';
+    const injuredBanner = '';
+    // Split pitchers into active and injured groups
+    const activePitchers = team.pitchers.filter(p => !p.injured && !isILPlayer(p.name)).sort((a,b) => {
       if(a.isPriorCloser && !b.isPriorCloser) return -1;
       if(!a.isPriorCloser && b.isPriorCloser) return 1;
       return (b.saves - a.saves) || (b.holds - a.holds);
     });
-    const pitchers = sortedPitchers.map(p => {
+    const injuredPitchers = team.pitchers.filter(p => p.injured || isILPlayer(p.name)).sort((a,b) => {
+      if(a.isPriorCloser && !b.isPriorCloser) return -1;
+      if(!a.isPriorCloser && b.isPriorCloser) return 1;
+      return (b.prevSaves||0) - (a.prevSaves||0);
+    });
+
+    const renderPitcher = p => {
       const isFA     = isFAInLeague(p.name);
-      const faTag    = isFA         ? '<span class="bp-fa">FA</span>'    : '';
-      const injTag   = p.injured    ? '<span class="bp-inj">IL</span>'   : '';
-      const priorTag = p.isPriorCloser && p.prevSaves >= 15
-        ? `<span class="bp-prior-badge">${p.prevSaves}SV '${(new Date().getFullYear()-1).toString().slice(2)}</span>` : '';
+      const isIL     = p.injured || isILPlayer(p.name);
+      const faTag    = isFA ? '<span class="bp-fa">FA</span>' : '';
+      const injTag   = isIL ? '<span class="bp-inj">IL</span>' : '';
+      const prevYr   = (new Date().getFullYear()-1).toString().slice(2);
+      const priorTag = p.isPriorCloser && (p.prevSaves||0) >= 8
+        ? `<span class="bp-prior-badge">${p.prevSaves}SV '${prevYr}</span>` : '';
       return `<div class="bp-pitcher">
         <img class="bp-avatar" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
         <span class="bp-name">${p.name}${priorTag}${faTag}${injTag}</span>
@@ -1560,14 +1610,22 @@ function renderBPTeams() {
           ${p.ip}IP
         </span>
       </div>`;
-    }).join('');
+    };
+
+    const activePitchersHTML = activePitchers.map(renderPitcher).join('');
+    const injuredDivider = injuredPitchers.length
+      ? `<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:8px 0 4px;">Injured</div>`
+        + injuredPitchers.map(renderPitcher).join('')
+      : '';
+
     return `<div class="${cardClass}">
       <div class="bp-card-header">
         <span class="bp-team">${shortName}</span>
         <span class="bp-sit ${sitClass}">${sitLabel[sitClass]||sitClass}</span>
       </div>
       ${injuredBanner}
-      ${pitchers || '<span style="font-size:11px;color:var(--text2)">No save/hold data</span>'}
+      ${activePitchersHTML || '<span style="font-size:11px;color:var(--text2)">No save/hold data</span>'}
+      ${injuredDivider}
     </div>`;
   }).join('');
 }

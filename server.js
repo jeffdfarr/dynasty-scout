@@ -70,21 +70,11 @@ function proxyRequest(hostname, path, method, headers, body, res) {
   proxy.end();
 }
 
-const requestCounts = {};
-setInterval(() => { Object.keys(requestCounts).forEach(k => delete requestCounts[k]); }, 60000);
-
 const server = http.createServer(async (req, res) => {
   const reqOrigin = req.headers.origin || '';
   setCORS(res, reqOrigin);
 
-  // Basic rate limiting — 100 requests per minute per IP
-  const ip = req.socket.remoteAddress || 'unknown';
-  requestCounts[ip] = (requestCounts[ip] || 0) + 1;
-  if(requestCounts[ip] > 100) {
-    res.writeHead(429, {'Content-Type':'text/plain'});
-    res.end('Too many requests');
-    return;
-  }
+  const path = req.url?.split('?')[0] || '/';
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -92,7 +82,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const path = req.url;
+  // path already declared above
 
 
 
@@ -100,7 +90,7 @@ const server = http.createServer(async (req, res) => {
 
   // /fangraphs/* -> fangraphs.com
   if (path.startsWith('/fangraphs/')) {
-    const fgPath = path.replace('/fangraphs', '');
+    const fgPath = req.url.replace('/fangraphs', '');
     const body = await readBody(req);
     console.log(`[proxy] GET https://www.fangraphs.com${fgPath}`);
     const headers = {
@@ -114,7 +104,7 @@ const server = http.createServer(async (req, res) => {
 
   // /savant-stats -> fetch & aggregate 2026 pitcher K%, BB%, Whiff% from statcast
   if (path.startsWith('/savant-stats')) {
-    const params = new URLSearchParams(path.includes('?') ? path.split('?')[1] : '');
+    const params = new URLSearchParams(req.url.includes('?') ? req.url.split('?')[1] : '');
     const year = params.get('year') || String(new Date().getFullYear());
     const statcastUrl = `/statcast_search/csv?all=true&hfGT=R%7C&hfSea=${year}%7C&player_type=pitcher&group_by=name&min_pitches=1&min_pas=1&sort_col=pitches&sort_order=desc&type=details&csv=true`;
     console.log(`[proxy] fetching statcast ${year} pitcher data...`);
@@ -413,7 +403,7 @@ const server = http.createServer(async (req, res) => {
 
   // /mlb-stats -> fetch MLB pitching traditional stats (WHIP, K/9, BB/9, GB%, IP)
   if (path.startsWith('/mlb-stats')) {
-    const mlbYear = path.includes('year=2025') ? '2025' : String(new Date().getFullYear());
+    const mlbYear = req.url.includes('year=2025') ? '2025' : String(new Date().getFullYear());
     const fetchPage = (offset) => new Promise((resolve) => {
       const mlbPath = `/api/v1/stats?stats=season&group=pitching&gameType=R&season=${mlbYear}&sportIds=1&limit=500&offset=${offset}&sortStat=strikeOuts&order=desc&hydrate=person,team`;
       const opts = {hostname:'statsapi.mlb.com',port:443,path:mlbPath,method:'GET',headers:{'User-Agent':'Mozilla/5.0','Accept':'application/json'}};
@@ -472,7 +462,7 @@ const server = http.createServer(async (req, res) => {
 
   // /aaa-stats -> fetch AAA pitching leaderboard from MLB Stats API
   if (path.startsWith('/aaa-stats')) {
-    const aaaYear = path.includes('year=2025') ? '2025' : String(new Date().getFullYear());
+    const aaaYear = req.url.includes('year=2025') ? '2025' : String(new Date().getFullYear());
     // Fetch two pages of 500 to get all AAA pitchers
     // Sort by strikeOuts (counting stat — includes everyone, no min IP filter)
     const fetchPage = (offset) => new Promise((resolve) => {
@@ -610,7 +600,7 @@ const server = http.createServer(async (req, res) => {
 
   // /savant/* -> baseballsavant.mlb.com
   if (path.startsWith('/savant/')) {
-    const savantPath = path.replace('/savant', '');
+    const savantPath = req.url.replace('/savant', '');
     const body = await readBody(req);
     console.log(`[proxy] GET https://baseballsavant.mlb.com${savantPath}`);
     const headers = {
@@ -636,7 +626,7 @@ const server = http.createServer(async (req, res) => {
 
   // /explore/[endpoint] -> proxy to Fantrax and return raw JSON for exploration
   if (path.startsWith('/explore/')) {
-    const fxPath = path.replace('/explore', '/fxea/general');
+    const fxPath = req.url.replace('/explore', '/fxea/general');
     const body = await readBody(req);
     console.log(`[explore] ${req.method} https://${FANTRAX_HOST}${fxPath}`);
     const headers = {
@@ -659,6 +649,7 @@ const server = http.createServer(async (req, res) => {
       res.end(server._bpCache.data);
       return;
     }
+    server._bpCache = null; // clear cache so updated classification logic applies
     const bpYear = new Date().getFullYear();
     const bpPrevYear = bpYear - 1;
 
@@ -672,14 +663,10 @@ const server = http.createServer(async (req, res) => {
       pr.on('error',()=>resolve([])); pr.end();
     });
 
-    const fetchInjuries = () => new Promise((resolve) => {
-      const opts = {hostname:'statsapi.mlb.com',port:443,path:`/api/v1/injuries`,method:'GET',headers:{'User-Agent':'Mozilla/5.0'}};
-      const pr = https.request(opts, sr => {
-        let body=''; sr.on('data',c=>body+=c);
-        sr.on('end',()=>{ try { resolve(JSON.parse(body).injuries||[]); } catch(e){ resolve([]); } });
-      });
-      pr.on('error',()=>resolve([])); pr.end();
-    });
+    // Fetch IL players using the sports players endpoint
+    // IL detection handled via Fantrax playerInfo in dashboard
+    const fetchInjuries = () => Promise.resolve([]);
+
 
     const bpStart = Date.now();
     Promise.all([
@@ -691,9 +678,9 @@ const server = http.createServer(async (req, res) => {
       const curSplits  = [...cur1,  ...cur2];
       const prevSplits = [...prev1, ...prev2];
 
-      // Build injury lookup by player id
+      // injury detection is handled via Fantrax icons in the dashboard
       const injuredIds = new Set();
-      injuries.forEach(inj => { if(inj.player?.id) injuredIds.add(inj.player.id); });
+      const injuryDates = {};
 
       // Build prior year saves lookup: playerId -> saves
       const prevSaves = {};
@@ -748,6 +735,38 @@ const server = http.createServer(async (req, res) => {
         });
       });
 
+      // For each team, check if prior year leader is missing from current splits (likely injured with 0 IP)
+      const currentPlayerIds = new Set(Object.values(bestCur).map(s => String(s.player?.id)));
+      // Build prev team metadata so we can create entries for teams with no current RP activity
+      const prevTeamMeta = {};
+      prevSplits.forEach(s => {
+        const tid = String(s.team?.id);
+        if(!prevTeamMeta[tid]) prevTeamMeta[tid] = { name: s.team?.name||'', id: Number(tid) };
+      });
+
+      Object.entries(prevTeamLeader).forEach(([tid, leader]) => {
+        if(leader.saves < 8) return; // not a significant prior closer
+        if(currentPlayerIds.has(String(leader.pid))) return; // already has appearances this year
+
+        // Create team entry if it doesn't exist (team has no current RP with saves/holds/GF yet)
+        if(!teams[tid]) {
+          const meta = prevTeamMeta[tid] || {};
+          teams[tid] = { name: meta.name||leader.team||'', id: Number(tid), pitchers: [], situation: 'NO_SAVES' };
+          console.log(`[proxy] created team entry for ${meta.name} (no current RP data)`);
+        }
+        // Prior closer is missing from current year — likely on IL with 0 appearances
+        // Add them to the team card with injured flag
+        teams[tid].pitchers.unshift({
+          name: leader.name,
+          mlbId: String(leader.pid),
+          saves: 0, holds: 0, gf: 0, gp: 0,
+          ip: '0.0', era: null, whip: null,
+          injured: true,
+          isPriorCloser: true,
+          prevSaves: leader.saves,
+        });
+      });
+
       // Classify each team using prior year + injury awareness
       Object.entries(teams).forEach(([tid, t]) => {
         t.pitchers.sort((a,b) => (b.saves - a.saves) || (b.holds - a.holds));
@@ -759,23 +778,47 @@ const server = http.createServer(async (req, res) => {
         // Find the prior year closer on this team (if they're still here)
         const priorCloser = t.pitchers.find(p => prevLeader && String(p.mlbId) === String(prevLeader.pid));
         const priorCloserIsInjured = priorCloser?.injured || false;
-        const priorCloserHadDominantYear = priorCloser && (priorCloser.prevSaves >= 15);
+        const priorCloserHadDominantYear = priorCloser && (priorCloser.prevSaves >= 8);
 
         // Flag prior closer if injured
         if(priorCloser) priorCloser.isPriorCloser = true;
 
-        if(priorCloserHadDominantYear && !priorCloserIsInjured) {
-          // Prior dominant closer is healthy — locked regardless of early save count
+        // Also check: does the current save leader have prior year saves on ANY team?
+        // This catches traded closers like Mason Miller
+        const currentLeader = allWithSaves[0];
+        const currentLeaderPrevSaves = currentLeader ? (prevSaves[currentLeader.mlbId] || 0) : 0;
+        const currentLeaderIsPriorCloser = currentLeaderPrevSaves >= 8;
+        if(currentLeaderIsPriorCloser && currentLeader && !currentLeader.isPriorCloser) {
+          currentLeader.isPriorCloser = true;
+          currentLeader.prevSaves = currentLeaderPrevSaves;
+        }
+
+        // Effective prior closer = same team prior closer OR current leader with prior saves
+        const effectivePriorCloser = priorCloser || (currentLeaderIsPriorCloser ? currentLeader : null);
+        const effectivePriorSaves = effectivePriorCloser
+          ? (prevSaves[effectivePriorCloser.mlbId] || 0)
+          : 0;
+        const effectivelyDominant = effectivePriorSaves >= 8; // lowered from 15
+        const effectivelyInjured = effectivePriorCloser?.injured || false;
+
+        // Injury recency determined in dashboard via Fantrax icons
+        // On server side: if prior closer has 0 gp, treat as current-year injury
+        const isCurrentYearInjury = effectivePriorCloser?.gp === 0;
+        const isRecentInjury = isCurrentYearInjury; // assume recent if no appearances yet
+
+        if(effectivelyDominant && !effectivelyInjured) {
           t.situation = 'LOCKED';
-          t.lockedPitcher = priorCloser.name;
-        } else if(priorCloserHadDominantYear && priorCloserIsInjured) {
-          // Prior closer is hurt — reclassify based on healthy pitchers only
+          t.lockedPitcher = effectivePriorCloser.name;
+        } else if(effectivelyDominant && effectivelyInjured) {
+          // Use EMERGING since someone new is stepping in
           if(healthyWithSaves.length === 0) t.situation = 'NO_SAVES';
           else if(healthyWithSaves.length >= 2) t.situation = 'COMMITTEE';
           else t.situation = 'EMERGING';
-          t.injuredCloser = priorCloser.name; // flag for UI
+          // Only set injuredCloser flag for current-year injuries
+          if(isCurrentYearInjury) t.injuredCloser = effectivePriorCloser.name;
+          t.recentInjury = isRecentInjury;
         } else {
-          // No dominant prior closer — use current save distribution
+          // No established prior closer — use current save distribution
           if(allWithSaves.length === 0) t.situation = 'NO_SAVES';
           else if(allWithSaves.length >= 3) t.situation = 'COMMITTEE';
           else if(allWithSaves.length === 2 && Math.abs(allWithSaves[0].saves - allWithSaves[1].saves) <= 2) t.situation = 'COMMITTEE';
@@ -794,23 +837,64 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // /mlb-photo/:id -> proxy MLB headshot images (avoids CORS)
+  // /debug-hader -> check bullpen data for Hader/Astros
+  if (path === '/debug-hader') {
+    const bpYear = new Date().getFullYear();
+    const bpPrevYear = bpYear - 1;
+    const fetchS = (year, offset) => new Promise(resolve => {
+      const p = `/api/v1/stats?stats=season&group=pitching&gameType=R&season=${year}&sportIds=1&limit=500&offset=${offset}&sortStat=saves&order=desc&hydrate=person,team`;
+      const o = {hostname:'statsapi.mlb.com',port:443,path:p,method:'GET',headers:{'User-Agent':'Mozilla/5.0'}};
+      const pr = https.request(o, sr => { let b=''; sr.on('data',c=>b+=c); sr.on('end',()=>{ try{resolve(JSON.parse(b).stats?.[0]?.splits||[]);}catch(e){resolve([]);} }); });
+      pr.on('error',()=>resolve([])); pr.end();
+    });
+    Promise.all([fetchS(bpYear,0),fetchS(bpYear,500),fetchS(bpPrevYear,0),fetchS(bpPrevYear,500)]).then(([c1,c2,p1,p2])=>{
+      const cur = [...c1,...c2];
+      const prev = [...p1,...p2];
+      const haderCur = cur.filter(s=>(s.player?.fullName||'').toLowerCase().includes('hader'));
+      const haderPrev = prev.filter(s=>(s.player?.fullName||'').toLowerCase().includes('hader'));
+      const astrosCur = cur.filter(s=>s.team?.name?.includes('Astros') && (s.stat?.saves>0||s.stat?.holds>0||s.stat?.gamesFinished>0));
+      const astrosPrev = prev.filter(s=>s.team?.name?.includes('Astros') && (s.stat?.saves>0));
+      setCORS(res,reqOrigin); res.writeHead(200,{'Content-Type':'application/json'});
+      res.end(JSON.stringify({
+        haderCurrent: haderCur.map(s=>({name:s.player?.fullName,team:s.team?.name,ip:s.stat?.inningsPitched,saves:s.stat?.saves,gp:s.stat?.gamesPlayed})),
+        haderPrev: haderPrev.map(s=>({name:s.player?.fullName,team:s.team?.name,saves:s.stat?.saves,ip:s.stat?.inningsPitched})),
+        astrosCurrent: astrosCur.map(s=>({name:s.player?.fullName,sv:s.stat?.saves,hld:s.stat?.holds,gf:s.stat?.gamesFinished})),
+        astrosPrevLeader: astrosPrev.sort((a,b)=>(b.stat?.saves||0)-(a.stat?.saves||0))[0] && {name:astrosPrev[0]?.player?.fullName,saves:astrosPrev[0]?.stat?.saves},
+      },null,2));
+    });
+    return;
+  }
+
+  // /mlb-photo/:id -> proxy MLB headshot images with server-side cache
   if (path.startsWith('/mlb-photo/')) {
     const playerId = path.replace('/mlb-photo/', '').split('?')[0];
+    // Serve from in-memory cache if available
+    if(server._photoCache && server._photoCache[playerId]) {
+      const cached = server._photoCache[playerId];
+      res.writeHead(200, { 'Content-Type': cached.type, 'Cache-Control': 'public, max-age=86400', 'Access-Control-Allow-Origin': '*' });
+      res.end(cached.data);
+      return;
+    }
     const imgPath = `/mlb-photos/image/upload/w_60,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/${playerId}/headshot/silo/current`;
     const opts = {
       hostname: 'img.mlbstatic.com', port: 443, path: imgPath, method: 'GET',
       headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*' }
     };
     const pr = https.request(opts, sr => {
-      res.writeHead(sr.statusCode, {
-        'Content-Type': sr.headers['content-type'] || 'image/png',
-        'Cache-Control': 'public, max-age=86400',
-        'Access-Control-Allow-Origin': '*',
+      const chunks = [];
+      sr.on('data', c => chunks.push(c));
+      sr.on('end', () => {
+        const data = Buffer.concat(chunks);
+        const type = sr.headers['content-type'] || 'image/png';
+        if(sr.statusCode === 200) {
+          if(!server._photoCache) server._photoCache = {};
+          server._photoCache[playerId] = { data, type };
+        }
+        res.writeHead(sr.statusCode, { 'Content-Type': type, 'Cache-Control': 'public, max-age=86400', 'Access-Control-Allow-Origin': '*' });
+        res.end(data);
       });
-      sr.pipe(res);
     });
-    pr.on('error', () => res.writeHead(404).end());
+    pr.on('error', () => { res.writeHead(404); res.end(); });
     pr.end();
     return;
   }
@@ -818,7 +902,8 @@ const server = http.createServer(async (req, res) => {
   // /fxea/* -> www.fantrax.com
   if (path.startsWith('/fxea/')) {
     const body = await readBody(req);
-    console.log(`[proxy] ${req.method} https://${FANTRAX_HOST}${path}`);
+    const fullFxPath = req.url; // include query string (userSecretId etc)
+    console.log(`[proxy] ${req.method} https://${FANTRAX_HOST}${fullFxPath}`);
 
     const headers = {
       'Content-Type': 'application/json',
@@ -826,7 +911,7 @@ const server = http.createServer(async (req, res) => {
       ...(req.headers.cookie ? { Cookie: req.headers.cookie } : {}),
     };
 
-    proxyRequest(FANTRAX_HOST, path, req.method, headers, body, res);
+    proxyRequest(FANTRAX_HOST, fullFxPath, req.method, headers, body, res);
     return;
   }
 
