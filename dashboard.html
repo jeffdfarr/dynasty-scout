@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Arm Stash</title>
+<title>Pitcher Stash</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -274,6 +274,7 @@
   .role-name { font-size:13px; font-weight:600; color:var(--text); }
   .role-team { font-size:11px; color:var(--text2); }
   .role-stats { font-size:11px; color:var(--text2); margin-top:3px; }
+  .role-name-sub { font-size:11px; color:var(--text2); font-weight:500; margin-bottom:1px; }
   .role-badge { font-size:10px; padding:2px 7px; border-radius:20px; font-weight:600; white-space:nowrap; }
   .role-badge.transition { background:#faeeda; color:#854F0B; }
   .role-badge.waiting    { background:#e6f1fb; color:#185FA5; }
@@ -331,7 +332,7 @@
 </head>
 <body>
 <nav class="nav-bar">
-  <h1>Arm <span>Stash</span></h1>
+  <h1>Pitcher <span>Stash</span></h1>
   <span class="nav-meta" id="leagueHeader">Connect your Fantrax league to get started</span>
   <div class="nav-actions">
     <button class="nav-btn" onclick="refreshLeague()" id="refreshBtn">↻ Refresh</button>
@@ -716,6 +717,19 @@ async function loadLeague(){
     try { await fetchSavantData(); } catch(e){ console.warn('Savant fetch skipped:', e.message); }
     fetchAAA(G.dataYear || CURRENT_YEAR);
 
+    // Poll until all data ready then render FA sections — covers any race condition
+    const bpPoller = setInterval(() => {
+      if(G.mlbStats && G.savantLoaded && G_bpData && !G.preFetching) {
+        clearInterval(bpPoller);
+        renderBPTransitions();
+        renderBPWaiting();
+        const bpUpd = document.getElementById('bpUpdated');
+        if(bpUpd) bpUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
+      }
+    }, 300);
+    // Give up after 30 seconds
+    setTimeout(() => clearInterval(bpPoller), 30000);
+
     setTimeout(async () => {
       // Pre-cache previous year silently — no renders, no UI updates
       if(!G.yearCache[PREV_YEAR]) {
@@ -1047,14 +1061,7 @@ function applyCachedYear(year) {
   _savantStatusMap = null; _savantDataMap = null; // rebuild maps with fresh tags
   if(!G.preFetching) {
     renderFA();
-    // Trigger bullpen FA sections if pending
-    if(G_bpData && (G_bpPendingRender || document.getElementById('pane-bullpen')?.classList.contains('active'))) {
-      G_bpPendingRender = false;
-      renderBPTransitions();
-      renderBPWaiting();
-      const bpUpd = document.getElementById('bpUpdated');
-      if(bpUpd) bpUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
-    }
+    tryRenderBPFASections();
   }
 }
 
@@ -1269,14 +1276,7 @@ async function fetchSavantData(year){
     });
       _savantStatusMap = null; _savantDataMap = null; // rebuild savant maps with fresh data
     G.savantLoaded = true;
-    // Now savant is fully tagged — render bullpen FA sections if pending (not during pre-fetch)
-    if(!G.preFetching && G_bpData && (G_bpPendingRender || document.getElementById('pane-bullpen')?.classList.contains('active'))) {
-      G_bpPendingRender = false;
-      renderBPTransitions();
-      renderBPWaiting();
-      const bpUpd = document.getElementById('bpUpdated');
-      if(bpUpd) bpUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
-    }
+    tryRenderBPFASections();
       // Save to year cache before rendering
 
 
@@ -1409,6 +1409,15 @@ refreshLeague();
 // ── Bullpen Watch ──────────────────────────────────────────
 let G_bpData = null;
 let G_bpPendingRender = false;
+
+function tryRenderBPFASections() {
+  // Only render when ALL three are ready
+  if(!G.mlbStats || !G.savantLoaded || !G_bpData || G.preFetching) return;
+  renderBPTransitions();
+  renderBPWaiting();
+  const bpUpd = document.getElementById('bpUpdated');
+  if(bpUpd) bpUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
 function resetBullpenCache() { G_bpData = null; }
 
 // Build a normalized roster lookup Set once — rebuilt when rosters load
@@ -1472,6 +1481,7 @@ async function fetchBullpenWatch() {
       const data = await fetch(`${PROXY}/bullpen-watch`).then(r => r.json());
       G_bpData = data;
       console.log('[bp] Fetched bullpen data:', data.length, 'teams');
+      tryRenderBPFASections();
     } catch(e) {
       console.error('[bp] fetch error:', e.message);
       if(updEl) updEl.textContent = 'Error: ' + e.message;
@@ -1484,21 +1494,25 @@ async function fetchBullpenWatch() {
     renderBPTeams();
     const bpT = document.getElementById('bpTransitions');
     const bpW = document.getElementById('bpWaiting');
-    if(bpT) bpT.innerHTML = '<span style="font-size:12px;color:var(--text2)">Stats loading — will update shortly...</span>';
-    if(bpW) bpW.innerHTML = '<span style="font-size:12px;color:var(--text2)">Stats loading — will update shortly...</span>';
+    // Keep skeleton showing for transitions
+    // Keep skeleton showing for waiting
     if(updEl) updEl.textContent = 'Team cards loaded · FA sections loading...';
     return;
   }
   G_bpPendingRender = false;
   if(updEl) updEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
-  renderBullpenWatch();
+  renderBPTeams();
+  tryRenderBPFASections();
 }
 
 function renderBullpenWatch() {
   if(!G_bpData) return;
   renderBPTeams();
-  renderBPTransitions();
-  renderBPWaiting();
+  tryRenderBPFASections();
+}
+
+function teamNickname(name) {
+  return (name||'').replace(/^(Arizona|Atlanta|Baltimore|Boston|Chicago|Cincinnati|Cleveland|Colorado|Detroit|Houston|Kansas City|Los Angeles|Miami|Milwaukee|Minnesota|New York|Oakland|Philadelphia|Pittsburgh|San Diego|San Francisco|Seattle|St\.\s*Louis|Tampa Bay|Texas|Toronto|Washington|Athletics)\s+/i, '');
 }
 
 function renderBPTeams() {
@@ -1561,8 +1575,8 @@ function renderBPTeams() {
 function renderBPTransitions() {
   const el = document.getElementById('bpTransitions');
   if(!G.mlbStats && G.yearCache[CURRENT_YEAR]) G.mlbStats = G.yearCache[CURRENT_YEAR].mlbStats;
-  if(!el || !G.mlbStats || !G.savantLoaded) {
-    if(el) el.innerHTML = '<span style="font-size:12px;color:var(--text2)">Waiting for stats to load...</span>';
+  if(!el || !G.mlbStats || !G.savantLoaded || !G_bpData) {
+    // Keep skeleton showing until all data is ready
     return;
   }
 
@@ -1617,6 +1631,7 @@ function renderBPTransitions() {
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
         <div class="role-name">${p.name}${injTag}</div>
+        <div class="role-name-sub">${teamNickname(p.teamName)}</div>
         <div class="role-team">${p.saves}SV · ${p.holds}HLD · ${p.ip}IP · ERA ${p.era!=null?p.era.toFixed(2):'—'}</div>
         <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
       </div>
@@ -1628,8 +1643,8 @@ function renderBPTransitions() {
 function renderBPWaiting() {
   const el = document.getElementById('bpWaiting');
   if(!G.mlbStats && G.yearCache[CURRENT_YEAR]) G.mlbStats = G.yearCache[CURRENT_YEAR].mlbStats;
-  if(!el || !G.mlbStats || !G.savantLoaded) {
-    if(el) el.innerHTML = '<span style="font-size:12px;color:var(--text2)">Stats loading — will update shortly...</span>';
+  if(!el || !G.mlbStats || !G.savantLoaded || !G_bpData) {
+    // Keep skeleton showing until all data is ready
     return;
   }
   const svMap = getSavantDataMap();
@@ -1678,7 +1693,7 @@ function renderBPWaiting() {
         kbb: sv?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
         whiff: sv?.whiff||null,
         mlbId: sv?.mlbId || bpP?.mlbId || null,
-        teamSit: bpTeam?.situation||''
+        teamSit: bpTeam?.situation||'', teamName: bpTeam?.name||''
       };
     })
     .sort((a,b) => ((b.kbb||0)+(b.whiff||0)) - ((a.kbb||0)+(a.whiff||0)));
@@ -1692,6 +1707,7 @@ function renderBPWaiting() {
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
         <div class="role-name">${p.name} ${sit}</div>
+        <div class="role-name-sub">${teamNickname(p.teamName)}</div>
         <div class="role-team">${p.holds}HLD · ${p.gf}GF · ${p.ip}IP · ERA ${p.era?.toFixed(2)||'—'}</div>
         <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
       </div>
