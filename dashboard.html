@@ -1630,11 +1630,38 @@ function renderBPTeams() {
     .filter(p => p.isRelieverProfile && p.hasActivity)
     .sort((a, b) => b.nextUpScore - a.nextUpScore);
     
-    // Assign roles: CL, 1st, 2nd, 3rd...
+    // Determine the de facto closer (healthy closer, or top healthy guy if closer is IL)
+    let deFactoCloser = null;
+    
+    // Helper for accent-insensitive name matching
+    const namesMatch = (a, b) => {
+      if(!a || !b) return false;
+      return stripAccents(normName(a)) === stripAccents(normName(b));
+    };
+    
+    // Check if closerName is healthy and active
+    const closerNameMatch = activePitchers.find(p => 
+      team.closerName && namesMatch(p.name, team.closerName)
+    );
+    // Check if lockedPitcher is healthy and active
+    const lockedMatch = activePitchers.find(p => 
+      team.lockedPitcher && namesMatch(p.name, team.lockedPitcher)
+    );
+    
+    if(closerNameMatch) {
+      deFactoCloser = closerNameMatch.name;
+    } else if(lockedMatch) {
+      deFactoCloser = lockedMatch.name;
+    } else if(rankedPitchers.length > 0 && (team.situation === 'EMERGING' || team.situation === 'LOCKED' || team.injuredCloser)) {
+      // Closer is injured or missing — top healthy guy is de facto CL
+      deFactoCloser = rankedPitchers[0].name;
+    }
+    
+    // Assign roles: CL to de facto closer, then 1st, 2nd, 3rd to others
     let nextUpCounter = 0;
     rankedPitchers.forEach((p, i) => {
-      const isCloser = team.closerName && normName(p.name) === normName(team.closerName);
-      if(isCloser) {
+      const isDeFactoCloser = deFactoCloser && namesMatch(p.name, deFactoCloser);
+      if(isDeFactoCloser) {
         p.role = 'CL';
       } else {
         nextUpCounter++;
@@ -1652,16 +1679,21 @@ function renderBPTeams() {
 
     const renderPitcher = p => {
       const ranked = roleMap[normName(p.name)];
-      // Check if this is the closer - either from closerName OR lockedPitcher (for LOCKED teams)
-      const isCloser = (team.closerName && normName(p.name) === normName(team.closerName)) 
-                    || (team.lockedPitcher && normName(p.name) === normName(team.lockedPitcher));
-      const isFA     = isFAInLeague(p.name);
       const isIL     = p.injured || isILPlayer(p.name);
+      
+      // CL tag only for de facto closer (must be healthy - double check IL status)
+      const nameMatchesCloser = deFactoCloser && (
+        normName(p.name) === normName(deFactoCloser) ||
+        stripAccents(normName(p.name)) === stripAccents(normName(deFactoCloser))
+      );
+      const isDeFactoCloser = nameMatchesCloser && !isIL;
+      
+      const isFA     = isFAInLeague(p.name);
       const faTag    = isFA ? '<span class="bp-fa">FA</span>' : '';
       
       // Role tag (CL, 1st, 2nd, 3rd)
       let roleTag = '';
-      if(isCloser) {
+      if(isDeFactoCloser) {
         roleTag = '<span class="bp-closer">CL</span>';
       } else if(ranked?.role && ranked.role !== 'CL') {
         roleTag = `<span class="bp-role">${ranked.role}</span>`;
@@ -1686,13 +1718,10 @@ function renderBPTeams() {
       </div>`;
     };
 
-    // Sort active pitchers by nextUpScore for display order, but closer always first
+    // Sort active pitchers: de facto closer first, then by nextUpScore
     const sortedActive = [...activePitchers].sort((a, b) => {
-      // Closer always first
-      const aIsCloser = (team.closerName && normName(a.name) === normName(team.closerName)) 
-                     || (team.lockedPitcher && normName(a.name) === normName(team.lockedPitcher));
-      const bIsCloser = (team.closerName && normName(b.name) === normName(team.closerName)) 
-                     || (team.lockedPitcher && normName(b.name) === normName(team.lockedPitcher));
+      const aIsCloser = deFactoCloser && namesMatch(a.name, deFactoCloser);
+      const bIsCloser = deFactoCloser && namesMatch(b.name, deFactoCloser);
       if(aIsCloser && !bIsCloser) return -1;
       if(!aIsCloser && bIsCloser) return 1;
       // Then by nextUpScore
