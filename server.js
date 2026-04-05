@@ -597,6 +597,27 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Serve static assets (favicon, meta images)
+  const staticFiles = {
+    '/favicon.svg': { file: 'favicon.svg', type: 'image/svg+xml' },
+    '/favicon.ico': { file: 'favicon.svg', type: 'image/svg+xml' },
+    '/apple-touch-icon.svg': { file: 'apple-touch-icon.svg', type: 'image/svg+xml' },
+    '/apple-touch-icon.png': { file: 'apple-touch-icon.svg', type: 'image/svg+xml' },
+    '/og-image.svg': { file: 'og-image.svg', type: 'image/svg+xml' },
+  };
+  if (staticFiles[path]) {
+    try {
+      const { file, type } = staticFiles[path];
+      const content = fs.readFileSync(nodePath.join(__dirname, file), 'utf8');
+      setCORS(res, reqOrigin);
+      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'public, max-age=86400' });
+      res.end(content);
+    } catch(e) {
+      res.writeHead(404); res.end('File not found');
+    }
+    return;
+  }
+
   // Serve dashboard.html at root
   if (path === '/' || path === '/dashboard.html') {
     try {

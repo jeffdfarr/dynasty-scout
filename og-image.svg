@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a2332"/>
+      <stop offset="50%" style="stop-color:#1a2f4a"/>
+      <stop offset="100%" style="stop-color:#1a2332"/>
+    </linearGradient>
+    <linearGradient id="blueAccent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#1a56a0"/>
+      <stop offset="100%" style="stop-color:#4a90d9"/>
+    </linearGradient>
+    <linearGradient id="redAccent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#c41e3a"/>
+      <stop offset="100%" style="stop-color:#e85a6b"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#2a3f5a" stroke-width="0.5" opacity="0.3"/>
+    </pattern>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bgGrad)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  
+  <!-- Decorative baseball seam curves -->
+  <path d="M-50 150 Q200 300 100 630" fill="none" stroke="#c41e3a" stroke-width="3" opacity="0.15"/>
+  <path d="M-30 150 Q220 300 120 630" fill="none" stroke="#c41e3a" stroke-width="2" opacity="0.1"/>
+  <path d="M1250 100 Q1000 250 1100 630" fill="none" stroke="#c41e3a" stroke-width="3" opacity="0.15"/>
+  <path d="M1230 100 Q980 250 1080 630" fill="none" stroke="#c41e3a" stroke-width="2" opacity="0.1"/>
+  
+  <!-- Accent line top -->
+  <rect x="100" y="80" width="120" height="4" rx="2" fill="url(#redAccent)"/>
+  
+  <!-- Main title -->
+  <text x="100" y="180" font-family="Georgia, Times, serif" font-size="82" font-weight="bold" fill="#ffffff">Pitcher Stash</text>
+  
+  <!-- Tagline -->
+  <text x="100" y="240" font-family="system-ui, -apple-system, sans-serif" font-size="32" fill="#8fa3b8">Dynasty Baseball Scouting Dashboard</text>
+  
+  <!-- Feature pills -->
+  <g transform="translate(100, 300)">
+    <rect x="0" y="0" width="180" height="44" rx="22" fill="#1a56a0" opacity="0.3"/>
+    <rect x="0" y="0" width="180" height="44" rx="22" fill="none" stroke="#1a56a0" stroke-width="2"/>
+    <text x="90" y="29" font-family="system-ui, sans-serif" font-size="18" fill="#4a90d9" text-anchor="middle">Bullpen Watch</text>
+  </g>
+  <g transform="translate(200, 300)">
+    <rect x="0" y="0" width="150" height="44" rx="22" fill="#1D9E75" opacity="0.3"/>
+    <rect x="0" y="0" width="150" height="44" rx="22" fill="none" stroke="#1D9E75" stroke-width="2"/>
+    <text x="75" y="29" font-family="system-ui, sans-serif" font-size="18" fill="#2dba8a" text-anchor="middle">FA Pitchers</text>
+  </g>
+  <g transform="translate(370, 300)">
+    <rect x="0" y="0" width="160" height="44" rx="22" fill="#c41e3a" opacity="0.3"/>
+    <rect x="0" y="0" width="160" height="44" rx="22" fill="none" stroke="#c41e3a" stroke-width="2"/>
+    <text x="80" y="29" font-family="system-ui, sans-serif" font-size="18" fill="#e85a6b" text-anchor="middle">AAA Prospects</text>
+  </g>
+  
+  <!-- Stats preview mockup -->
+  <g transform="translate(700, 140)">
+    <rect x="0" y="0" width="420" height="350" rx="12" fill="#0d1520" opacity="0.6"/>
+    <rect x="0" y="0" width="420" height="350" rx="12" fill="none" stroke="#2a3f5a" stroke-width="1"/>
+    
+    <!-- Mock header -->
+    <rect x="20" y="20" width="380" height="50" rx="6" fill="#1a2332"/>
+    <circle cx="50" cy="45" r="18" fill="#2a3f5a"/>
+    <rect x="80" y="35" width="120" height="12" rx="2" fill="#8fa3b8"/>
+    <rect x="80" y="52" width="80" height="8" rx="2" fill="#5a6a7a"/>
+    <rect x="320" y="35" width="60" height="24" rx="12" fill="#1a56a0"/>
+    
+    <!-- Mock stat rows -->
+    <g transform="translate(20, 90)">
+      <rect x="0" y="0" width="380" height="36" rx="4" fill="#1a2332" opacity="0.5"/>
+      <text x="15" y="24" font-family="monospace" font-size="14" fill="#8fa3b8">Whiff%</text>
+      <rect x="100" y="12" width="180" height="12" rx="2" fill="#2a3f5a"/>
+      <rect x="100" y="12" width="140" height="12" rx="2" fill="#1D9E75"/>
+      <text x="350" y="24" font-family="monospace" font-size="14" fill="#1D9E75" text-anchor="end">32.1%</text>
+    </g>
+    <g transform="translate(20, 135)">
+      <rect x="0" y="0" width="380" height="36" rx="4" fill="#1a2332" opacity="0.5"/>
+      <text x="15" y="24" font-family="monospace" font-size="14" fill="#8fa3b8">K-BB%</text>
+      <rect x="100" y="12" width="180" height="12" rx="2" fill="#2a3f5a"/>
+      <rect x="100" y="12" width="155" height="12" rx="2" fill="#1a56a0"/>
+      <text x="350" y="24" font-family="monospace" font-size="14" fill="#4a90d9" text-anchor="end">24.8%</text>
+    </g>
+    <g transform="translate(20, 180)">
+      <rect x="0" y="0" width="380" height="36" rx="4" fill="#1a2332" opacity="0.5"/>
+      <text x="15" y="24" font-family="monospace" font-size="14" fill="#8fa3b8">xERA</text>
+      <rect x="100" y="12" width="180" height="12" rx="2" fill="#2a3f5a"/>
+      <rect x="100" y="12" width="120" height="12" rx="2" fill="#4a90d9"/>
+      <text x="350" y="24" font-family="monospace" font-size="14" fill="#4a90d9" text-anchor="end">2.85</text>
+    </g>
+    
+    <!-- Mock tags -->
+    <g transform="translate(20, 240)">
+      <rect x="0" y="0" width="50" height="24" rx="4" fill="#1a56a0"/>
+      <text x="25" y="17" font-family="system-ui, sans-serif" font-size="12" fill="#fff" text-anchor="middle">CL</text>
+      <rect x="60" y="0" width="50" height="24" rx="4" fill="#faeeda"/>
+      <text x="85" y="17" font-family="system-ui, sans-serif" font-size="12" fill="#854F0B" text-anchor="middle">1st</text>
+      <rect x="120" y="0" width="40" height="24" rx="4" fill="#e1f5ee"/>
+      <text x="140" y="17" font-family="system-ui, sans-serif" font-size="12" fill="#0F6E56" text-anchor="middle">FA</text>
+      <rect x="170" y="0" width="35" height="24" rx="4" fill="#fcebeb"/>
+      <text x="187" y="17" font-family="system-ui, sans-serif" font-size="12" fill="#A32D2D" text-anchor="middle">IL</text>
+    </g>
+    
+    <!-- Decorative dots -->
+    <circle cx="350" cy="320" r="4" fill="#1a56a0" opacity="0.6"/>
+    <circle cx="370" cy="320" r="4" fill="#1D9E75" opacity="0.6"/>
+    <circle cx="390" cy="320" r="4" fill="#c41e3a" opacity="0.6"/>
+  </g>
+  
+  <!-- Bottom accent -->
+  <rect x="0" y="620" width="1200" height="10" fill="url(#blueAccent)"/>
+  
+  <!-- Powered by line -->
+  <text x="100" y="560" font-family="system-ui, sans-serif" font-size="16" fill="#5a6a7a">Statcast + MLB Stats API + Fantrax Integration</text>
+</svg>

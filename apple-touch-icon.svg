@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a2332"/>
+      <stop offset="100%" style="stop-color:#1a3a5c"/>
+    </linearGradient>
+    <linearGradient id="ball" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f8f9fa"/>
+      <stop offset="100%" style="stop-color:#d8dfe6"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="180" height="180" rx="36" fill="url(#bg)"/>
+  
+  <!-- Baseball circle -->
+  <circle cx="90" cy="90" r="60" fill="url(#ball)"/>
+  
+  <!-- Baseball seams -->
+  <path d="M50 45 Q30 90 50 135" fill="none" stroke="#c41e3a" stroke-width="4" stroke-linecap="round"/>
+  <path d="M130 45 Q150 90 130 135" fill="none" stroke="#c41e3a" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- Stitch marks left -->
+  <path d="M42 55 L52 60" fill="none" stroke="#c41e3a" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M36 75 L48 77" fill="none" stroke="#c41e3a" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M36 105 L48 103" fill="none" stroke="#c41e3a" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M42 125 L52 120" fill="none" stroke="#c41e3a" stroke-width="2.5" stroke-linecap="round"/>
+  
+  <!-- Stitch marks right -->
+  <path d="M138 55 L128 60" fill="none" stroke="#c41e3a" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M144 75 L132 77" fill="none" stroke="#c41e3a" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M144 105 L132 103" fill="none" stroke="#c41e3a" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M138 125 L128 120" fill="none" stroke="#c41e3a" stroke-width="2.5" stroke-linecap="round"/>
+  
+  <!-- P letter -->
+  <text x="90" y="108" font-family="Georgia, Times, serif" font-size="65" font-weight="bold" fill="#1a56a0" text-anchor="middle">P</text>
+</svg>
