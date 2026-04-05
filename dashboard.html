@@ -290,11 +290,13 @@
   .bp-pitcher { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); }
   .bp-pitcher:last-child { border-bottom:none; }
   .bp-avatar { width:26px; height:26px; border-radius:50%; object-fit:cover; border:1px solid var(--border); background:var(--bg2); flex-shrink:0; }
-  .bp-name { font-size:12px; font-weight:500; color:var(--text); flex:1; }
+  .bp-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+  .bp-name { font-size:12px; font-weight:500; color:var(--text); }
+  .bp-whiff-line { font-size:10px; color:var(--text3); }
   .bp-fa  { font-size:10px; padding:1px 5px; border-radius:3px; background:#e1f5ee; color:#0F6E56; font-weight:600; margin-left:3px; }
   .bp-inj { font-size:10px; padding:1px 5px; border-radius:3px; background:#fcebeb; color:#A32D2D; font-weight:600; margin-left:3px; }
   .bp-role { font-size:10px; padding:1px 5px; border-radius:3px; background:#faeeda; color:#854F0B; font-weight:600; margin-left:3px; }
-  .bp-whiff { font-size:10px; color:#1D9E75; font-weight:500; }
+  .bp-whiff { font-size:10px; color:#1D9E75; font-weight:600; }
   .bp-stats { font-size:11px; color:var(--text2); white-space:nowrap; }
   .bp-stat-val { font-weight:600; color:var(--text); }
   .role-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-lg); padding:12px 14px; display:flex; gap:10px; align-items:center; }
@@ -1726,19 +1728,23 @@ function renderBPTeams() {
       
       const injTag   = isIL ? '<span class="bp-inj">IL</span>' : '';
       
-      // Whiff display for context
-      const whiffDisplay = ranked?.whiff != null ? `<span class="bp-whiff">${ranked.whiff.toFixed(1)}%</span>` : '';
+      // Whiff display for context - now shown below name
+      const whiffLine = ranked?.whiff != null 
+        ? `<div class="bp-whiff-line">Whiff% <span class="bp-whiff">${ranked.whiff.toFixed(1)}%</span></div>` 
+        : '';
       
       return `<div class="bp-pitcher">
         <img class="bp-avatar" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
-        <span class="bp-name">${p.name}${roleTag}${faTag}${injTag}</span>
+        <div class="bp-info">
+          <span class="bp-name">${p.name}${roleTag}${faTag}${injTag}</span>
+          ${whiffLine}
+        </div>
         <span class="bp-stats">
           <span class="bp-stat-val">${p.saves}</span>SV
           <span style="margin:0 3px">·</span>
           <span class="bp-stat-val">${p.holds}</span>HLD
           <span style="margin:0 3px">·</span>
           ${p.ip}IP
-          ${whiffDisplay ? '<span style="margin:0 3px">·</span>' + whiffDisplay : ''}
         </span>
       </div>`;
     };
