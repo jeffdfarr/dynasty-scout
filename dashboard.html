@@ -268,6 +268,8 @@
   .bp-name { font-size:12px; font-weight:500; color:var(--text); flex:1; }
   .bp-fa  { font-size:10px; padding:1px 5px; border-radius:3px; background:#e1f5ee; color:#0F6E56; font-weight:600; margin-left:3px; }
   .bp-inj { font-size:10px; padding:1px 5px; border-radius:3px; background:#fcebeb; color:#A32D2D; font-weight:600; margin-left:3px; }
+  .bp-role { font-size:10px; padding:1px 5px; border-radius:3px; background:#faeeda; color:#854F0B; font-weight:600; margin-left:3px; }
+  .bp-whiff { font-size:10px; color:#1D9E75; font-weight:500; }
   .bp-stats { font-size:11px; color:var(--text2); white-space:nowrap; }
   .bp-stat-val { font-weight:600; color:var(--text); }
   .role-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-lg); padding:12px 14px; display:flex; gap:10px; align-items:center; }
@@ -741,6 +743,7 @@ async function loadLeague(){
     const bpPoller = setInterval(() => {
       if(G.mlbStats && G.savantLoaded && G_bpData && !G.preFetching) {
         clearInterval(bpPoller);
+        renderBPTeams();  // Re-render with Savant whiff% data for bullpen order
         renderBPTransitions();
         renderBPWaiting();
         const bpUpd = document.getElementById('bpUpdated');
@@ -1580,41 +1583,115 @@ function renderBPTeams() {
     const hasRecentIL = team.pitchers.some(p => isILPlayer(p.name) && (p.isPriorCloser || (p.saves||0) + (p.holds||0) > 2));
     const cardClass = (team.recentInjury || hasRecentIL) ? 'bp-card injured-closer' : 'bp-card';
     const injuredBanner = '';
+    
     // Split pitchers into active and injured groups
-    const activePitchers = team.pitchers.filter(p => !p.injured && !isILPlayer(p.name)).sort((a,b) => {
-      if(a.isPriorCloser && !b.isPriorCloser) return -1;
-      if(!a.isPriorCloser && b.isPriorCloser) return 1;
-      return (b.saves - a.saves) || (b.holds - a.holds);
-    });
+    const activePitchers = team.pitchers.filter(p => !p.injured && !isILPlayer(p.name));
     const injuredPitchers = team.pitchers.filter(p => p.injured || isILPlayer(p.name)).sort((a,b) => {
       if(a.isPriorCloser && !b.isPriorCloser) return -1;
       if(!a.isPriorCloser && b.isPriorCloser) return 1;
       return (b.prevSaves||0) - (a.prevSaves||0);
     });
+    
+    // Calculate "Next Up Score" for each active pitcher and assign bullpen roles
+    // Merge Savant data and compute score
+    const ipToDecimal = ip => { 
+      const p = String(ip||'0').split('.'); 
+      return (parseInt(p[0])||0) + ((parseInt(p[1])||0)/3); 
+    };
+    
+    const rankedPitchers = activePitchers.map(p => {
+      // Merge Savant stuff metrics
+      const savantData = findSavant(p.name);
+      const whiff = savantData?.whiff ?? null;
+      const kbb = savantData?.kbb ?? null;
+      
+      // Calculate reliever profile
+      const ipNum = ipToDecimal(p.ip);
+      const ipPerGame = p.gp > 0 ? ipNum / p.gp : 0;
+      const isRelieverProfile = ipPerGame > 0 && ipPerGame < 2.0;
+      const hasActivity = (p.gf || 0) >= 1 || (p.saves || 0) >= 1 || (p.holds || 0) >= 1;
+      
+      // Stuff bonus based on whiff%
+      let stuffBonus = 0;
+      if(whiff >= 30) stuffBonus = 5;
+      else if(whiff >= 25) stuffBonus = 3;
+      else if(whiff >= 20) stuffBonus = 1;
+      
+      // Prior closer bonus
+      const priorCloserBonus = (p.isPriorCloser || (p.prevSaves || 0) >= 8) ? 10 : 0;
+      
+      // Next Up Score: holds (setup role) + GF (finishing games) + saves + stuff
+      const nextUpScore = isRelieverProfile && hasActivity
+        ? ((p.holds || 0) * 2) + ((p.gf || 0) * 1.5) + ((p.saves || 0) * 1) + stuffBonus + priorCloserBonus
+        : 0;
+      
+      return { ...p, whiff, kbb, nextUpScore, isRelieverProfile, hasActivity };
+    })
+    .filter(p => p.isRelieverProfile && p.hasActivity)
+    .sort((a, b) => b.nextUpScore - a.nextUpScore);
+    
+    // Assign roles: CL, 1st, 2nd, 3rd...
+    let nextUpCounter = 0;
+    rankedPitchers.forEach((p, i) => {
+      const isCloser = team.closerName && normName(p.name) === normName(team.closerName);
+      if(isCloser) {
+        p.role = 'CL';
+      } else {
+        nextUpCounter++;
+        if(nextUpCounter <= 3) {
+          p.role = ['1st', '2nd', '3rd'][nextUpCounter - 1];
+        } else {
+          p.role = null;
+        }
+      }
+    });
+    
+    // Build a lookup for roles
+    const roleMap = {};
+    rankedPitchers.forEach(p => { if(p.role) roleMap[normName(p.name)] = p; });
 
     const renderPitcher = p => {
-        const isCloser = team.closerName && normName(p.name) === normName(team.closerName);
+      const ranked = roleMap[normName(p.name)];
+      const isCloser = team.closerName && normName(p.name) === normName(team.closerName);
       const isFA     = isFAInLeague(p.name);
       const isIL     = p.injured || isILPlayer(p.name);
       const faTag    = isFA ? '<span class="bp-fa">FA</span>' : '';
-      const closerTag = isCloser ? '<span class="bp-closer">C</span>' : '';
+      
+      // Role tag (CL, 1st, 2nd, 3rd)
+      let roleTag = '';
+      if(ranked?.role === 'CL') {
+        roleTag = '<span class="bp-closer">CL</span>';
+      } else if(ranked?.role) {
+        roleTag = `<span class="bp-role">${ranked.role}</span>`;
+      }
+      
       const injTag   = isIL ? '<span class="bp-inj">IL</span>' : '';
-      const prevYr   = (new Date().getFullYear()-1).toString().slice(2);
-      const priorTag = '';
+      
+      // Whiff display for context
+      const whiffDisplay = ranked?.whiff != null ? `<span class="bp-whiff">${ranked.whiff.toFixed(1)}%</span>` : '';
+      
       return `<div class="bp-pitcher">
         <img class="bp-avatar" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
-        <span class="bp-name">${p.name}${closerTag}${faTag}${injTag}</span>
+        <span class="bp-name">${p.name}${roleTag}${faTag}${injTag}</span>
         <span class="bp-stats">
           <span class="bp-stat-val">${p.saves}</span>SV
           <span style="margin:0 3px">·</span>
           <span class="bp-stat-val">${p.holds}</span>HLD
           <span style="margin:0 3px">·</span>
           ${p.ip}IP
+          ${whiffDisplay ? '<span style="margin:0 3px">·</span>' + whiffDisplay : ''}
         </span>
       </div>`;
     };
 
-    const activePitchersHTML = activePitchers.map(renderPitcher).join('');
+    // Sort active pitchers by nextUpScore for display order
+    const sortedActive = [...activePitchers].sort((a, b) => {
+      const aRank = roleMap[normName(a.name)]?.nextUpScore ?? -1;
+      const bRank = roleMap[normName(b.name)]?.nextUpScore ?? -1;
+      return bRank - aRank;
+    });
+
+    const activePitchersHTML = sortedActive.map(renderPitcher).join('');
     const injuredDivider = injuredPitchers.length
       ? `<div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin:8px 0 4px;">Injured</div>`
         + injuredPitchers.map(renderPitcher).join('')
