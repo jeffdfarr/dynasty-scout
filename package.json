@@ -1,6 +1,6 @@
 {
   "name": "fantrax-proxy",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Local CORS proxy for Fantrax API with Pitcher Scout dashboard",
   "main": "server.js",
   "scripts": {
@@ -8,10 +8,12 @@
     "notify": "node notify.js"
   },
   "engines": {
-    "node": ">=14"
+    "node": ">=18"
   },
   "dependencies": {
-    "dotenv": "^16.3.1",
-    "nodemailer": "^8.0.4"
+    "nodemailer": "^6.9.0"
+  },
+  "optionalDependencies": {
+    "dotenv": "^16.3.1"
   }
 }
