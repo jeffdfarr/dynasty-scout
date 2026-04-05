@@ -261,6 +261,7 @@
   .bp-card.injured-closer { border-color: #EF9F27; }
   .bp-injured-banner { font-size:11px; color:#854F0B; background:#fff8e8; border:1px solid #FAC775; border-radius:4px; padding:4px 8px; margin-bottom:8px; }
   .bp-prior-badge { font-size:10px; padding:1px 5px; border-radius:3px; background:#e6f1fb; color:#185FA5; font-weight:600; margin-left:3px; }
+  .bp-closer { font-size:10px; padding:1px 5px; border-radius:3px; background:#1a56a0; color:#fff; font-weight:700; margin-left:4px; letter-spacing:.03em; }
   .bp-pitcher { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); }
   .bp-pitcher:last-child { border-bottom:none; }
   .bp-avatar { width:26px; height:26px; border-radius:50%; object-fit:cover; border:1px solid var(--border); background:var(--bg2); flex-shrink:0; }
@@ -1592,16 +1593,17 @@ function renderBPTeams() {
     });
 
     const renderPitcher = p => {
+        const isCloser = team.closerName && normName(p.name) === normName(team.closerName);
       const isFA     = isFAInLeague(p.name);
       const isIL     = p.injured || isILPlayer(p.name);
       const faTag    = isFA ? '<span class="bp-fa">FA</span>' : '';
+      const closerTag = isCloser ? '<span class="bp-closer">C</span>' : '';
       const injTag   = isIL ? '<span class="bp-inj">IL</span>' : '';
       const prevYr   = (new Date().getFullYear()-1).toString().slice(2);
-      const priorTag = p.isPriorCloser && (p.prevSaves||0) >= 8
-        ? `<span class="bp-prior-badge">${p.prevSaves}SV '${prevYr}</span>` : '';
+      const priorTag = '';
       return `<div class="bp-pitcher">
         <img class="bp-avatar" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
-        <span class="bp-name">${p.name}${priorTag}${faTag}${injTag}</span>
+        <span class="bp-name">${p.name}${closerTag}${faTag}${injTag}</span>
         <span class="bp-stats">
           <span class="bp-stat-val">${p.saves}</span>SV
           <span style="margin:0 3px">·</span>

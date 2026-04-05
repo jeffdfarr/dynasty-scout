@@ -810,20 +810,44 @@ const server = http.createServer(async (req, res) => {
           t.situation = 'LOCKED';
           t.lockedPitcher = effectivePriorCloser.name;
         } else if(effectivelyDominant && effectivelyInjured) {
-          // Use EMERGING since someone new is stepping in
           if(healthyWithSaves.length === 0) t.situation = 'NO_SAVES';
           else if(healthyWithSaves.length >= 2) t.situation = 'COMMITTEE';
           else t.situation = 'EMERGING';
-          // Only set injuredCloser flag for current-year injuries
           if(isCurrentYearInjury) t.injuredCloser = effectivePriorCloser.name;
           t.recentInjury = isRecentInjury;
         } else {
-          // No established prior closer — use current save distribution
           if(allWithSaves.length === 0) t.situation = 'NO_SAVES';
           else if(allWithSaves.length >= 3) t.situation = 'COMMITTEE';
           else if(allWithSaves.length === 2 && Math.abs(allWithSaves[0].saves - allWithSaves[1].saves) <= 2) t.situation = 'COMMITTEE';
           else if(allWithSaves.length === 1 && allWithSaves[0].saves >= 3) t.situation = 'LOCKED';
           else t.situation = 'EMERGING';
+        }
+
+        // Determine closer tag — who to badge as THE closer on this card
+        // Primary: allWithSaves[0] leads in current saves
+        // Rules:
+        //   LOCKED: tag the leader unconditionally (prior closer confirmed)
+        //   EMERGING: tag leader only if clear lead (≥2 save gap, sole leader, or isPriorCloser)
+        //   COMMITTEE/NO_SAVES: no tag
+        const saveLeader = allWithSaves[0];
+        const saveLeader2 = allWithSaves[1];
+        const saveGap = saveLeader && saveLeader2
+          ? (saveLeader.saves - saveLeader2.saves)
+          : (saveLeader?.saves || 0);
+        const leaderIsPriorCloser = saveLeader
+          ? (saveLeader.isPriorCloser || (prevSaves[saveLeader.mlbId] || 0) >= 8)
+          : false;
+        const leaderHasClearLead = saveLeader && (
+          allWithSaves.length === 1 ||   // sole save getter
+          saveGap >= 2 ||                // leads by 2+
+          leaderIsPriorCloser            // prior closer, trust their role
+        );
+        const leaderHasMinSaves = (saveLeader?.saves || 0) >= 2 || leaderIsPriorCloser;
+
+        if(saveLeader && !saveLeader.injured && (t.situation === 'LOCKED' || (t.situation === 'EMERGING' && leaderHasClearLead && leaderHasMinSaves))) {
+          t.closerName = saveLeader.name;
+        } else {
+          t.closerName = null;
         }
       });
 
