@@ -1805,12 +1805,12 @@ function renderBPTransitions() {
       const sv = svMap2.get(stripAccents(normName(name)));
       const bpTeam = G_bpData?.find(t => t.pitchers.some(r => r.name === (m.name||name)));
       const sit = bpTeam?.situation;
-      // Badge label describes the pitcher's actual role, not just the team tag
+      // Badge label describes the team situation, not a role prediction
       const roleLabel = {
-        COMMITTEE: 'Shared Closer',
-        EMERGING:  'Emerging Closer',
-        NO_SAVES:  'First Saves',
-      }[sit] || 'Transition';
+        COMMITTEE: 'Committee',
+        EMERGING:  'Save Leader',
+        NO_SAVES:  'First Save',
+      }[sit] || 'Emerging';
       return {
         name: m.name||name, saves: m.saves||0, holds: m.holds||0,
         ip: m.ip||'—', era: m.era||null,
@@ -1822,7 +1822,7 @@ function renderBPTransitions() {
     .sort((a,b) => (b.saves - a.saves) || ((b.kbb||0) - (a.kbb||0)));
 
   if(!transitions.length) {
-    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No FA role transitions detected. Check back as the season progresses.</span>';
+    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No available save leaders found. Check back as the season progresses.</span>';
     return;
   }
   el.innerHTML = transitions.map(p => {
@@ -1899,7 +1899,7 @@ function renderBPWaiting() {
     })
     .sort((a,b) => ((b.kbb||0)+(b.whiff||0)) - ((a.kbb||0)+(a.whiff||0)));
   if(!waiting.length) {
-    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No closers-in-waiting found with current filters.</span>';
+    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No elite setup arms found matching filters.</span>';
     return;
   }
   el.innerHTML = waiting.map(p => {
@@ -1912,7 +1912,7 @@ function renderBPWaiting() {
         <div class="role-team">${p.holds}HLD · ${p.gf}GF · ${p.ip}IP · ERA ${p.era?.toFixed(2)||'—'}</div>
         <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
       </div>
-      <span class="role-badge waiting">Next In Line</span>
+      <span class="role-badge waiting">Elite Stuff</span>
     </div>`;
   }).join('');
 }
@@ -1923,13 +1923,13 @@ function renderBPWaiting() {
   <div id="pane-bullpen" class="pane active">
     <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Bullpen situations · <span id="bpUpdated">—</span></div>
     <div style="margin-bottom:20px">
-      <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">Role Transitions</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">Leading their team in saves, non-locked situation.</div>
+      <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">Save Leaders Available</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">Leading or tied in saves on teams without a locked closer.</div>
       <div id="bpTransitions" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">
-      <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">Elite Arms — Next In Line</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">2+ IP, 2+ HLD/GF, K-BB% ≥18% or K/9 ≥10</div>
+      <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">Elite Setup Arms Available</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with late-inning usage (2+ HLD/GF) and elite stuff (K-BB% ≥18% or K/9 ≥10)</div>
       <div id="bpWaiting" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">
