@@ -15,11 +15,12 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+// Load .env file for local development
+try { require('dotenv').config(); } catch(e) { /* dotenv optional */ }
+
 // ── CREDENTIALS — must be set as environment variables ───────────────────────
-// Local: create a .env file or export them in your shell
-// Cloud: set in Railway dashboard under Variables
 const CONFIG = {
-  ntfyTopic:       process.env.NTFY_TOPIC        || 'jeffdynastyscout', // ok to hardcode topic
+  ntfyTopic:       process.env.NTFY_TOPIC        || 'jeffdynastyscout',
   fantraxSecretId: process.env.FANTRAX_SECRET_ID || '',
   fantraxLeagueId: process.env.FANTRAX_LEAGUE_ID || '',
   proxyBase:       process.env.PROXY_BASE        || 'http://localhost:3001',
@@ -77,12 +78,21 @@ function normName(n) {
     .trim();
 }
 
+// FIX #5: Improved CSV parser that handles escaped quotes
 function parseCSVLine(line) {
   const fields = [];
   let cur = '', inQ = false;
   for(let i = 0; i < line.length; i++){
     const ch = line[i];
-    if(ch === '"'){ inQ = !inQ; }
+    if(ch === '"'){
+      // Handle escaped quotes ("") inside quoted fields
+      if(inQ && line[i+1] === '"') {
+        cur += '"';
+        i++; // skip next quote
+      } else {
+        inQ = !inQ;
+      }
+    }
     else if(ch === ',' && !inQ){ fields.push(cur.trim()); cur = ''; }
     else { cur += ch; }
   }
@@ -128,12 +138,11 @@ async function checkFortyManAdditions(stats25, stats26) {
     // Filter to pitchers only AND prospects (age ≤ 26 or minimal 2025 MLB experience)
     const currentPitchers = {};
     Object.entries(current).forEach(([key, p]) => {
-      if(!PITCHER_POS_40.has(p.pos)) return; // pitchers only
-      // Only flag pitchers with < 25 IP (~75 BF) combined MLB experience
+      if(!PITCHER_POS_40.has(p.pos)) return;
       const s25 = stats25[key] || Object.entries(stats25).find(([k])=>normName(k)===normName(key))?.[1];
       const s26 = stats26 && (stats26[key] || Object.entries(stats26).find(([k])=>normName(k)===normName(key))?.[1]);
       const totalBF = (s25?.bf || 0) + (s26?.bf || 0);
-      if(totalBF >= 15) return; // 15 BF ≈ 4 IP — skip anyone with meaningful MLB experience
+      if(totalBF >= 15) return;
       currentPitchers[key] = p;
     });
 
@@ -144,7 +153,7 @@ async function checkFortyManAdditions(stats25, stats26) {
       catch(e) { previous = {}; }
     }
 
-    // Find new additions (in current but not in previous)
+    // Find new additions
     const newAdditions = [];
     Object.entries(currentPitchers).forEach(([key, p]) => {
       if(!previous[key]) {
@@ -235,7 +244,7 @@ async function run() {
     fetchJSON(`${CONFIG.proxyBase}/aaa-stats`, 60000),
     fetchJSON(`${CONFIG.proxyBase}/mlb-stats?year=${CURRENT_YEAR}`, 60000),
   ]);
-  console.log(`Statcast loaded — 2026: ${Object.keys(stats26).length}, 2025: ${Object.keys(stats25).length}, L7: ${Object.keys(recent).length}, AAA: ${Object.keys(aaaStats).length} pitchers`);
+  console.log(`Statcast loaded — ${CURRENT_YEAR}: ${Object.keys(stats26).length}, ${PREV_YEAR}: ${Object.keys(stats25).length}, L7: ${Object.keys(recent).length}, AAA: ${Object.keys(aaaStats).length} pitchers`);
 
   // Check for new 40-man pitcher additions
   console.log('Checking 40-man roster additions...');
@@ -278,7 +287,6 @@ async function run() {
     // Skip if notified in last 7 days
     if(faCacheData[nn]) return;
 
-    // 🔥 HOT: dominant with real sample, whiff% confirms stuff
     // 🔥 HOT: dominant with real sample, whiff% is primary signal
     const isDominating = bf26 >= 15 && whiff >= 30 && kbb26 >= 15;
     // 🆕 NEW: fresh callup, high whiff% immediately
@@ -287,10 +295,9 @@ async function run() {
     const isTrending   = bf7 >= 5 && kbb7 != null && kbb26 != null && kbb7 > kbb26 + 6;
     // ✅ SOLID: reliable option, good sample, decent whiff%
     const isStrongSP   = bf26 >= 8 && whiff >= 24 && kbb26 >= 15;
-    // 💤 SLEEPER: great 2025 whiff%, no 2026 data yet
+    // 💤 SLEEPER: great prior year whiff%, no current year data yet
     const isSleeper    = bf26 === 0 && bf25 >= 100 && whiff25 >= 28 && kbb25 >= 15;
     if(!isDominating && !isCallup && !isTrending && !isStrongSP && !isSleeper) return;
-
 
     const label = isDominating ? '🔥'
                 : isCallup     ? '🆕'
@@ -310,9 +317,6 @@ async function run() {
     if(whiff != null)     statParts.push(`${whiff}%Whiff`);
     if(!statParts.length && k_pct25 != null)  statParts.push(`${k_pct25}%K('25)`);
     if(!statParts.length && bb_pct25 != null) statParts.push(`${bb_pct25}%BB('25)`);
-
-      // Skip if seen in last 7 days
-    if(faCacheData[nn]) { return; }
 
     candidates.push({ name, pos, label, statStr: statParts.join(' '), kbb26, whiff, bf26, nn });
   });
@@ -383,7 +387,7 @@ async function run() {
 
   // Split into new finds vs returning
   const newAAA = aaaCandidates.filter(p => !prevAAANames.has(normName(p.name)));
-  const aaaToReport = newAAA.length > 0 ? newAAA.slice(0,4) : []; // only report new finds
+  const aaaToReport = newAAA.length > 0 ? newAAA.slice(0,4) : [];
 
   // Update cache with current candidates
   try {
@@ -406,7 +410,6 @@ async function run() {
     parts.push(DIV);
     top.forEach(c => {
       parts.push(`${c.label} ${c.name}`);
-      // Split each stat onto same line with clear spacing like AAA section
       const statParts = c.statStr.split(' ').filter(Boolean);
       parts.push('   ' + statParts.join('    '));
       parts.push('');
@@ -491,7 +494,14 @@ async function run() {
   console.log(`Notification sent to ntfy topic: ${CONFIG.ntfyTopic}`);
 }
 
-run().catch(e => {
-  console.error('Error:', e.message);
-  console.error(e.stack);
-});
+// FIX #3: Export run function for server.js cron job
+module.exports = { run };
+
+// FIX #3: Only auto-run when called directly (not when required)
+if (require.main === module) {
+  run().catch(e => {
+    console.error('Error:', e.message);
+    console.error(e.stack);
+    process.exit(1);
+  });
+}

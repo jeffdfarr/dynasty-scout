@@ -707,7 +707,6 @@ async function loadLeague(){
     const rosterSample = Object.values(rosters)[0]?.players?.slice(0,2);
     console.log('[scout] raw roster player sample:', JSON.stringify(rosterSample));
     console.log('[scout] nameToTeam size:', Object.keys(nameToTeam).length, '| sample:', JSON.stringify(Object.entries(nameToTeam).slice(0,5)));
-    G.teams = teams; G.rosters = rosters; G.faNames = faNames; G.playerInfo = playerInfo; G.nameToTeam = nameToTeam;
 
     // Build IL set from rosterData.rosters INJURED_RESERVE status
     G.ilPlayerIds = new Set();
@@ -721,9 +720,10 @@ async function loadLeague(){
         }
       });
     });
-    _rosteredSet = null; _savantStatusMap = null; // invalidate lookup caches
+    
+    // Set global state and invalidate caches
     G.teams = teams; G.rosters = rosters; G.faNames = faNames; G.playerInfo = playerInfo; G.nameToTeam = nameToTeam;
-    _rosteredSet = null; _savantStatusMap = null; // invalidate lookup caches
+    _rosteredSet = null; _savantStatusMap = null;
 
     renderFA();
 
