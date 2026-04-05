@@ -1652,16 +1652,18 @@ function renderBPTeams() {
 
     const renderPitcher = p => {
       const ranked = roleMap[normName(p.name)];
-      const isCloser = team.closerName && normName(p.name) === normName(team.closerName);
+      // Check if this is the closer - either from closerName OR lockedPitcher (for LOCKED teams)
+      const isCloser = (team.closerName && normName(p.name) === normName(team.closerName)) 
+                    || (team.lockedPitcher && normName(p.name) === normName(team.lockedPitcher));
       const isFA     = isFAInLeague(p.name);
       const isIL     = p.injured || isILPlayer(p.name);
       const faTag    = isFA ? '<span class="bp-fa">FA</span>' : '';
       
       // Role tag (CL, 1st, 2nd, 3rd)
       let roleTag = '';
-      if(ranked?.role === 'CL') {
+      if(isCloser) {
         roleTag = '<span class="bp-closer">CL</span>';
-      } else if(ranked?.role) {
+      } else if(ranked?.role && ranked.role !== 'CL') {
         roleTag = `<span class="bp-role">${ranked.role}</span>`;
       }
       
@@ -1684,8 +1686,16 @@ function renderBPTeams() {
       </div>`;
     };
 
-    // Sort active pitchers by nextUpScore for display order
+    // Sort active pitchers by nextUpScore for display order, but closer always first
     const sortedActive = [...activePitchers].sort((a, b) => {
+      // Closer always first
+      const aIsCloser = (team.closerName && normName(a.name) === normName(team.closerName)) 
+                     || (team.lockedPitcher && normName(a.name) === normName(team.lockedPitcher));
+      const bIsCloser = (team.closerName && normName(b.name) === normName(team.closerName)) 
+                     || (team.lockedPitcher && normName(b.name) === normName(team.lockedPitcher));
+      if(aIsCloser && !bIsCloser) return -1;
+      if(!aIsCloser && bIsCloser) return 1;
+      // Then by nextUpScore
       const aRank = roleMap[normName(a.name)]?.nextUpScore ?? -1;
       const bRank = roleMap[normName(b.name)]?.nextUpScore ?? -1;
       return bRank - aRank;
