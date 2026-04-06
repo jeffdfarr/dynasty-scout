@@ -1971,14 +1971,16 @@ function renderBPEliteArms() {
       // NO late-inning requirement — this is the difference from Elite Setup Arms
       // Must have actually pitched — minimum 2 IP
       if((m.ipNum||0) < 2.0) return false;
-      // Use savant data if available, fall back to mlbStats K9/BB9
+      // Use savant data for filtering
       const sv = svMap.get(stripAccents(normName(name)));
       if(sv) {
         if((sv.kbb||0) < 18) return false;   // K-BB% >= 18%
-        if((sv.whiff||0) < 27) return false;  // Whiff% >= 27%
+        if((sv.whiff||0) < 22) return false;  // Whiff% >= 22%
+        if((sv.xera||99) > 4.0) return false; // xERA <= 4.00
       } else {
         if((m.k9||0) < 10.0) return false;   // K/9 >= 10.0
         if((m.bb9||99) > 3.0) return false;  // BB/9 <= 3.0
+        if((m.era||99) > 4.0) return false;  // ERA <= 4.00 (fallback)
       }
       return true;
     })
@@ -1990,13 +1992,13 @@ function renderBPEliteArms() {
       ));
       const bpP = bpTeam?.pitchers.find(r => stripAccents(normName(r.name.toLowerCase())) === nn);
       return {
-        name: m.name||name, holds: m.holds||0, gf: m.gamesFinished||0,
+        name: m.name||name,
         gp: m.gamesPlayed||0,
-        ip: m.ip||'—', era: m.era||null,
+        ip: m.ip||'—', xera: sv?.xera||null,
         kbb: sv?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
         whiff: sv?.whiff||null,
         mlbId: sv?.mlbId || bpP?.mlbId || null,
-        teamSit: bpTeam?.situation||'', teamName: bpTeam?.name||''
+        teamName: bpTeam?.name||''
       };
     })
     .sort((a,b) => ((b.kbb||0)+(b.whiff||0)) - ((a.kbb||0)+(a.whiff||0)));
@@ -2005,13 +2007,12 @@ function renderBPEliteArms() {
     return;
   }
   el.innerHTML = eliteArms.map(p => {
-    const sit = p.teamSit ? `<span class="bp-sit ${p.teamSit}" style="font-size:10px">${p.teamSit}</span>` : '';
     return `<div class="role-card">
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
-        <div class="role-name">${p.name} ${sit}</div>
+        <div class="role-name">${p.name}</div>
         <div class="role-name-sub">${teamNickname(p.teamName)}</div>
-        <div class="role-team">${p.gp}GP · ${p.holds}HLD · ${p.ip}IP · ERA ${p.era?.toFixed(2)||'—'}</div>
+        <div class="role-team">${p.gp}GP · ${p.ip}IP · xERA ${p.xera?.toFixed(2)||'—'}</div>
         <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
       </div>
       <span class="role-badge waiting">Rising Arm</span>
@@ -2036,7 +2037,7 @@ function renderBPEliteArms() {
     </div>
     <div style="margin-bottom:20px">
       <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">Elite Arms Available</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with elite stuff (K-BB% ≥18% and Whiff% ≥27%) not yet in high-leverage roles</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with elite stuff (K-BB% ≥18%, Whiff% ≥22%, xERA ≤4.00) not yet in high-leverage roles</div>
       <div id="bpEliteArms" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">
