@@ -771,6 +771,7 @@ async function loadLeague(){
         renderBPTeams();  // Re-render with Savant whiff% data for bullpen order
         renderBPTransitions();
         renderBPWaiting();
+        renderBPEliteArms();
         const bpUpd = document.getElementById('bpUpdated');
         if(bpUpd) bpUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
       }
@@ -916,7 +917,7 @@ function showBPSkeleton() {
           <div class="skeleton-cell" style="width:70px;height:11px;border-radius:4px"></div>
         </div>`).join('')}
     </div>`).join('');
-  ['bpTransitions','bpWaiting'].forEach(id => {
+  ['bpTransitions','bpWaiting','bpEliteArms'].forEach(id => {
     const e = document.getElementById(id);
     if(e) e.innerHTML = Array.from({length:4}, () => `
       <div class="role-card">
@@ -1470,6 +1471,7 @@ function tryRenderBPFASections() {
   if(!G.mlbStats || !G.savantLoaded || !G_bpData || G.preFetching) return;
   renderBPTransitions();
   renderBPWaiting();
+  renderBPEliteArms();
   const bpUpd = document.getElementById('bpUpdated');
   if(bpUpd) bpUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
 }
@@ -1924,6 +1926,99 @@ function renderBPWaiting() {
   }).join('');
 }
 
+function renderBPEliteArms() {
+  const el = document.getElementById('bpEliteArms');
+  if(!G.mlbStats && G.yearCache[CURRENT_YEAR]) G.mlbStats = G.yearCache[CURRENT_YEAR].mlbStats;
+  if(!el || !G.mlbStats || !G.savantLoaded || !G_bpData) {
+    return;
+  }
+  const svMap = getSavantDataMap();
+
+  // Build Set of pitchers confirmed active in MLB bullpens this year via bullpen-watch data
+  const activeBullpenNames = new Set();
+  (G_bpData||[]).forEach(team => {
+    (team.pitchers||[]).forEach(p => {
+      activeBullpenNames.add(stripAccents(normName(p.name.toLowerCase())));
+    });
+  });
+
+  // Build Set of pitchers already shown in Elite Setup Arms (to avoid duplicates)
+  const setupArmNames = new Set();
+  Object.entries(G.mlbStats).forEach(([name, m]) => {
+    if(!isFAInLeague(name)) return;
+    if(!activeBullpenNames.has(stripAccents(normName(name)))) return;
+    if((m.holds||0) < 2 && (m.gamesFinished||0) < 3) return;
+    if((m.ipNum||0) < 2.0) return;
+    const sv = svMap.get(stripAccents(normName(name)));
+    if(sv) {
+      if((sv.kbb||0) >= 18 && (sv.whiff||0) >= 27) {
+        setupArmNames.add(stripAccents(normName(name)));
+      }
+    } else {
+      if((m.k9||0) >= 10.0 && (m.bb9||99) <= 3.0) {
+        setupArmNames.add(stripAccents(normName(name)));
+      }
+    }
+  });
+
+  const eliteArms = Object.entries(G.mlbStats)
+    .filter(([name, m]) => {
+      if(!isFAInLeague(name)) return false;
+      // Must be confirmed active in an MLB bullpen this year
+      if(!activeBullpenNames.has(stripAccents(normName(name)))) return false;
+      // Skip if already in Elite Setup Arms section
+      if(setupArmNames.has(stripAccents(normName(name)))) return false;
+      // NO late-inning requirement — this is the difference from Elite Setup Arms
+      // Must have actually pitched — minimum 2 IP
+      if((m.ipNum||0) < 2.0) return false;
+      // Use savant data if available, fall back to mlbStats K9/BB9
+      const sv = svMap.get(stripAccents(normName(name)));
+      if(sv) {
+        if((sv.kbb||0) < 18) return false;   // K-BB% >= 18%
+        if((sv.whiff||0) < 27) return false;  // Whiff% >= 27%
+      } else {
+        if((m.k9||0) < 10.0) return false;   // K/9 >= 10.0
+        if((m.bb9||99) > 3.0) return false;  // BB/9 <= 3.0
+      }
+      return true;
+    })
+    .map(([name, m]) => {
+      const sv = svMap.get(stripAccents(normName(name)));
+      const nn = stripAccents(normName((m.name||name).toLowerCase()));
+      const bpTeam = G_bpData?.find(t => t.pitchers.some(r =>
+        stripAccents(normName(r.name.toLowerCase())) === nn
+      ));
+      const bpP = bpTeam?.pitchers.find(r => stripAccents(normName(r.name.toLowerCase())) === nn);
+      return {
+        name: m.name||name, holds: m.holds||0, gf: m.gamesFinished||0,
+        gp: m.gamesPlayed||0,
+        ip: m.ip||'—', era: m.era||null,
+        kbb: sv?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
+        whiff: sv?.whiff||null,
+        mlbId: sv?.mlbId || bpP?.mlbId || null,
+        teamSit: bpTeam?.situation||'', teamName: bpTeam?.name||''
+      };
+    })
+    .sort((a,b) => ((b.kbb||0)+(b.whiff||0)) - ((a.kbb||0)+(a.whiff||0)));
+  if(!eliteArms.length) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No elite arms found matching filters.</span>';
+    return;
+  }
+  el.innerHTML = eliteArms.map(p => {
+    const sit = p.teamSit ? `<span class="bp-sit ${p.teamSit}" style="font-size:10px">${p.teamSit}</span>` : '';
+    return `<div class="role-card">
+      <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
+      <div class="role-info">
+        <div class="role-name">${p.name} ${sit}</div>
+        <div class="role-name-sub">${teamNickname(p.teamName)}</div>
+        <div class="role-team">${p.gp}GP · ${p.holds}HLD · ${p.ip}IP · ERA ${p.era?.toFixed(2)||'—'}</div>
+        <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
+      </div>
+      <span class="role-badge waiting">Rising Arm</span>
+    </div>`;
+  }).join('');
+}
+
 // fetchBullpenWatch is called from the tab onclick directly
 
 </script>
@@ -1936,8 +2031,13 @@ function renderBPWaiting() {
     </div>
     <div style="margin-bottom:20px">
       <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">Elite Setup Arms Available</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with late-inning usage (2+ HLD/GF) and elite stuff (K-BB% ≥18% or K/9 ≥10)</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with late-inning usage (2+ HLD/GF) and elite stuff (K-BB% ≥18% and Whiff% ≥27%)</div>
       <div id="bpWaiting" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
+    </div>
+    <div style="margin-bottom:20px">
+      <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">Elite Arms Available</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with elite stuff (K-BB% ≥18% and Whiff% ≥27%) not yet in high-leverage roles</div>
+      <div id="bpEliteArms" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">
       <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:10px">MLB Bullpens</div>
