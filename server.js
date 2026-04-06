@@ -723,10 +723,18 @@ const server = http.createServer(async (req, res) => {
   if (path === '/clear-cache') {
     server._bpCache = null;
     server._photoCache = {};
+    // Also clear injury tracking file
+    const injuryCacheFile = nodePath.join(__dirname, '.injury-first-seen.json');
+    try {
+      fs.writeFileSync(injuryCacheFile, '{}');
+      console.log('[proxy] Injury cache file cleared');
+    } catch(e) {
+      console.log('[proxy] Could not clear injury cache file:', e.message);
+    }
     console.log('[proxy] All caches cleared');
     setCORS(res, reqOrigin);
     res.writeHead(200, {'Content-Type':'application/json'});
-    res.end(JSON.stringify({ success: true, message: 'All caches cleared' }));
+    res.end(JSON.stringify({ success: true, message: 'All caches cleared (including injury tracking)' }));
     return;
   }
 
@@ -747,7 +755,7 @@ const server = http.createServer(async (req, res) => {
     
     // Injury first-seen tracking — only highlight cards for 3 days after detection
     const INJURY_CACHE_FILE = nodePath.join(__dirname, '.injury-first-seen.json');
-    const INJURY_HIGHLIGHT_DAYS = 3;
+    const INJURY_HIGHLIGHT_DAYS = 1;
     const INJURY_HIGHLIGHT_MS = INJURY_HIGHLIGHT_DAYS * 24 * 60 * 60 * 1000;
     
     // Load existing injury timestamps
@@ -1018,7 +1026,9 @@ const server = http.createServer(async (req, res) => {
             if(bs >= 2) redFlags.push({ type: 'BS', value: bs, msg: `${bs} blown saves` });
             else if(bs === 1) redFlags.push({ type: 'BS', value: bs, msg: '1 blown save' });
             
-            if(p.era && p.era > 8.0 && p.gp >= 3) {
+            // ERA red flag: require 4+ IP to avoid one bad outing skewing everything
+            // (e.g., 4 ER in 1 IP = 36.00 ERA, but with 3 other clean IP it's only 9.00)
+            if(p.era && p.era > 8.0 && ipNum >= 4.0) {
               redFlags.push({ type: 'ERA', value: p.era.toFixed(2), msg: `${p.era.toFixed(2)} ERA` });
             }
             
@@ -1031,13 +1041,18 @@ const server = http.createServer(async (req, res) => {
               emergingSignals.push({ type: 'GF', value: p.gf, msg: `${p.gf} games finished` });
             }
             
-            return { ...p, closerScore, ipPerGame, penalties, redFlags, emergingSignals };
+            // Flag long relievers (not real closer candidates)
+            const isLongReliever = ipPerGame > 1.4;
+            
+            return { ...p, closerScore, ipPerGame, penalties, redFlags, emergingSignals, isLongReliever };
           })
           .filter(Boolean)
           .sort((a, b) => b.closerScore - a.closerScore);
         
-        const topCloser = closerCandidates[0];
-        const runnerUp = closerCandidates[1];
+        // Find top closer candidate (skip long relievers - they finish blowouts, not save situations)
+        const realCloserCandidates = closerCandidates.filter(c => !c.isLongReliever);
+        const topCloser = realCloserCandidates[0] || closerCandidates[0]; // Fallback if all are long relievers
+        const runnerUp = realCloserCandidates[1] || closerCandidates[1];
         
         // Determine if top closer has clear lead
         const scoregap = topCloser && runnerUp 
@@ -1058,9 +1073,10 @@ const server = http.createServer(async (req, res) => {
         // ===== VOLATILE DETECTION =====
         // Flag situations where top closer has significant red flags
         const topHasRedFlags = topCloser?.redFlags?.length >= 1;
+        const topCloserIp = topCloser ? ipToDec(topCloser.ip) : 0;
         const topHasSeriousRedFlags = topCloser?.redFlags?.length >= 2 || 
           (topCloser?.blownSaves >= 2) ||
-          (topCloser?.era && topCloser.era > 10.0);
+          (topCloser?.era && topCloser.era > 10.0 && topCloserIp >= 4.0); // Require 4+ IP
         
         // Find emerging arm: someone with strong signals but no saves
         const emergingArm = closerCandidates.find(p => 
@@ -1102,6 +1118,7 @@ const server = http.createServer(async (req, res) => {
           closerScore: c.closerScore,
           redFlags: c.redFlags || [],
           emergingSignals: c.emergingSignals || [],
+          isLongReliever: c.isLongReliever || false,
         }));
       });
       

@@ -283,7 +283,7 @@
   .bp-sit.LOCKED     { background:transparent; color:var(--text); font-size:18px; padding:0; }
   .bp-sit.EMERGING   { background:#2563eb; color:#fff; }
   .bp-sit.NO_SAVES   { background:#6b7280; color:#fff; }
-  .bp-card.injured-closer { border-color: #EF9F27; }
+  .bp-card.injured-closer { border: 2px solid #EF9F27; box-shadow: 0 0 0 1px #EF9F27, 0 2px 8px rgba(239, 159, 39, 0.15); }
   .bp-injured-banner { font-size:11px; color:#854F0B; background:#fff8e8; border:1px solid #FAC775; border-radius:4px; padding:4px 8px; margin-bottom:8px; }
   .bp-prior-badge { font-size:10px; padding:1px 5px; border-radius:3px; background:#e6f1fb; color:#185FA5; font-weight:600; margin-left:3px; }
   .bp-closer { font-size:10px; padding:1px 5px; border-radius:3px; background:#1a56a0; color:#fff; font-weight:700; margin-left:4px; letter-spacing:.03em; }
@@ -1765,29 +1765,33 @@ function renderBPTeams() {
     } else if(lockedMatch) {
       deFactoCloser = lockedMatch.name;
     } else if(rankedPitchers.length > 0 && (team.situation === 'EMERGING' || team.situation === 'LOCKED' || team.injuredCloser)) {
-      // Closer is injured or missing — top healthy guy is de facto CL
-      deFactoCloser = rankedPitchers[0].name;
+      // Closer is injured or missing — top healthy guy is de facto CL (skip long relievers)
+      const topNonLongRP = rankedPitchers.find(p => !p.isLongReliever);
+      deFactoCloser = topNonLongRP?.name || rankedPitchers[0].name;
     }
     
-    // Assign roles: CL to de facto closer, then 1st, 2nd, 3rd to others
+    // Assign roles: CL to de facto closer, then 1st, 2nd to non-long-relievers
     let nextUpCounter = 0;
     rankedPitchers.forEach((p, i) => {
       const isDeFactoCloser = deFactoCloser && namesMatch(p.name, deFactoCloser);
       if(isDeFactoCloser) {
         p.role = 'CL';
-      } else {
+      } else if(!p.isLongReliever && nextUpCounter < 2) {
+        // Only assign 1st/2nd to non-long-relievers
         nextUpCounter++;
-        if(nextUpCounter <= 3) {
-          p.role = ['1st', '2nd', '3rd'][nextUpCounter - 1];
-        } else {
-          p.role = null;
-        }
+        p.role = ['1st', '2nd'][nextUpCounter - 1];
+      } else {
+        p.role = null;
       }
     });
     
-    // Build a lookup for roles
+    // Build a lookup for roles (only those with roles)
     const roleMap = {};
     rankedPitchers.forEach(p => { if(p.role) roleMap[normName(p.name)] = p; });
+    
+    // Build a lookup for ALL ranked pitchers (for isLongReliever, ipPerGame, etc.)
+    const allRankedMap = {};
+    rankedPitchers.forEach(p => { allRankedMap[normName(p.name)] = p; });
     
     // Build a lookup for closer candidates (has red flags, emerging signals from server)
     const closerCandidateMap = {};
@@ -1797,6 +1801,7 @@ function renderBPTeams() {
 
     const renderPitcher = p => {
       const ranked = roleMap[normName(p.name)];
+      const allRanked = allRankedMap[normName(p.name)];
       const candidate = closerCandidateMap[normName(p.name)];
       const isIL     = p.injured || isILPlayer(p.name);
       
@@ -1822,10 +1827,11 @@ function renderBPTeams() {
       
       // Blown saves badge
       const blownSaves = candidate?.blownSaves || p.blownSaves || 0;
-      // Long reliever indicator (from ranked data)
-      const isLongReliever = ranked?.isLongReliever || ranked?.ipPerGame > 1.4;
+      
+      // Long reliever indicator (from allRanked data - includes all pitchers, not just those with roles)
+      const isLongReliever = allRanked?.isLongReliever || allRanked?.ipPerGame > 1.4 || candidate?.isLongReliever;
       const longRPTag = isLongReliever 
-        ? `<span class="bp-flag-warning" title="Long relief role (${(ranked?.ipPerGame||0).toFixed(1)} IP/G)">LRP</span>` 
+        ? `<span class="bp-flag-warning" title="Long relief role (${(allRanked?.ipPerGame||0).toFixed(1)} IP/G)">LRP</span>` 
         : '';
       
       // Statcast data for warnings
@@ -1849,13 +1855,17 @@ function renderBPTeams() {
         : '';
       
       // Warning line below name (xERA, hard hit, etc.)
+      // Only show warnings if pitcher has 2+ IP (enough sample for Statcast data)
+      const pitcherIpNum = ipToDecimal(p.ip || '0');
       let warningLine = '';
-      if(xera && xera > 5.0) {
-        warningLine = `<div class="bp-warning-line">⚠️ ${xera.toFixed(2)} xERA</div>`;
-      } else if(hardHit && hardHit > 45) {
-        warningLine = `<div class="bp-warning-line">⚠️ ${hardHit.toFixed(0)}% Hard Hit</div>`;
-      } else if(barrel && barrel > 12) {
-        warningLine = `<div class="bp-warning-line">⚠️ ${barrel.toFixed(0)}% Barrel</div>`;
+      if(pitcherIpNum >= 2.0) {
+        if(xera && xera > 5.0) {
+          warningLine = `<div class="bp-warning-line">⚠️ ${xera.toFixed(2)} xERA</div>`;
+        } else if(hardHit && hardHit > 45) {
+          warningLine = `<div class="bp-warning-line">⚠️ ${hardHit.toFixed(0)}% Hard Hit</div>`;
+        } else if(barrel && barrel > 12) {
+          warningLine = `<div class="bp-warning-line">⚠️ ${barrel.toFixed(0)}% Barrel</div>`;
+        }
       }
       
       return `<div class="bp-pitcher">
@@ -1892,10 +1902,11 @@ function renderBPTeams() {
         + injuredPitchers.map(renderPitcher).join('')
       : '';
 
-    // Volatile warning banner
+    // Volatile warning banner - use closer's last name
+    const closerLastName = team.closerName ? team.closerName.split(' ').pop() : 'Closer';
     const volatileBanner = team.volatile 
       ? `<div style="font-size:10px;color:#dc2626;background:#fee2e2;border-radius:4px;padding:4px 8px;margin-bottom:8px;">
-           ⚠️ <strong>Volatile:</strong> ${team.volatileReason || 'Closer role unstable'}
+           ⚠️ <strong>${closerLastName}:</strong> ${team.volatileReason || 'Closer role unstable'}
          </div>`
       : '';
     
@@ -2181,7 +2192,25 @@ function renderBPEliteArms() {
       <div id="bpEliteArms" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">
-      <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:10px">MLB Bullpens</div>
+      <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:6px">MLB Bullpens</div>
+      <div style="font-size:10px;color:var(--text2);margin-bottom:12px;line-height:1.6">
+        <div style="margin-bottom:4px">
+          <span class="bp-closer" style="font-size:9px;padding:1px 4px">CL</span> Closer (highest closer score: GF×2 + SV×3 − HLD×0.5)
+          <span style="margin-left:12px"><span class="bp-role" style="font-size:9px;padding:1px 4px">1st</span> <span class="bp-role" style="font-size:9px;padding:1px 4px">2nd</span> Next in line (non-LRP with highest scores)</span>
+        </div>
+        <div style="margin-bottom:4px">
+          <span class="bp-flag-warning" style="font-size:9px;padding:1px 4px">LRP</span> Long Relief (≥1.4 IP/game — mop-up role, not closer candidate)
+          <span style="margin-left:12px"><span class="bp-stat-bs">2</span>BS Blown saves</span>
+          <span style="margin-left:12px"><span class="bp-fa" style="font-size:9px;padding:1px 4px">FA</span> Free agent in your league</span>
+          <span style="margin-left:12px"><span class="bp-inj" style="font-size:9px;padding:1px 4px">IL</span> Injured list</span>
+        </div>
+        <div>
+          <span class="bp-sit LOCKED" style="font-size:9px;padding:1px 6px">🔒</span> Prior closer (8+ SV last yr) healthy
+          <span style="margin-left:12px"><span class="bp-sit EMERGING" style="font-size:9px;padding:1px 6px">Emerging</span> One clear leader emerging</span>
+          <span style="margin-left:12px"><span class="bp-sit COMMITTEE" style="font-size:9px;padding:1px 6px">Committee</span> 2+ pitchers splitting saves</span>
+          <span style="margin-left:12px"><span class="bp-sit VOLATILE" style="font-size:9px;padding:1px 6px">⚠️ Volatile</span> Closer has 2+ red flags (BS, ERA>8 w/ 4+IP, or LRP)</span>
+        </div>
+      </div>
       <div id="bpTeams" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
     </div>
   </div>
