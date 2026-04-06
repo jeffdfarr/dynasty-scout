@@ -241,6 +241,80 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // /savant-contact -> fetch contact quality metrics (hard hit%, barrel%, avg EV) for pitchers
+  if (path.startsWith('/savant-contact')) {
+    const params = new URLSearchParams(req.url.includes('?') ? req.url.split('?')[1] : '');
+    const year = params.get('year') || String(new Date().getFullYear());
+    // Use statcast leaderboard for exit velocity and barrels (pitcher view)
+    const statcastUrl = `/leaderboard/statcast?type=pitcher&year=${year}&position=&team=&min=1&csv=true`;
+    console.log(`[proxy] fetching statcast contact quality ${year}...`);
+    const opts = {
+      hostname: 'baseballsavant.mlb.com', port: 443, path: statcastUrl, method: 'GET',
+      headers: {'User-Agent':'Mozilla/5.0','Accept':'text/csv,*/*'}
+    };
+    const pr = https.request(opts, sr => {
+      let body = '';
+      sr.on('data', c => body += c);
+      sr.on('end', () => {
+        const lines = body.trim().split('\n');
+        if(lines.length < 2){ 
+          console.log('[proxy] savant-contact: no data or bad response');
+          setCORS(res, reqOrigin);
+          res.writeHead(200); res.end('{}'); 
+          return; 
+        }
+
+        const headers = parseCSVLine(lines[0]).map(h => h.replace(/^\uFEFF/,'').replace(/^﻿/,'').trim().toLowerCase());
+        console.log('[proxy] savant-contact headers:', headers.join(', '));
+        
+        const col = name => headers.indexOf(name);
+        const iName = col('last_name, first_name') >= 0 ? col('last_name, first_name') : col('player_name');
+        const iPlayerId = col('player_id');
+        const iAvgEV = col('avg_hit_speed') >= 0 ? col('avg_hit_speed') : col('exit_velocity');
+        const iHardHit = col('hard_hit_percent') >= 0 ? col('hard_hit_percent') : col('hardhit%');
+        const iBarrel = col('barrel_batted_rate') >= 0 ? col('barrel_batted_rate') : col('barrel%');
+        const iBBE = col('batted_ball_events') >= 0 ? col('batted_ball_events') : col('bbe');
+
+        const result = {};
+        for(let i = 1; i < lines.length; i++){
+          const cols = parseCSVLine(lines[i]);
+          let name = cols[iName] || '';
+          // Convert "Last, First" to "First Last"
+          if(name.includes(',')) {
+            name = name.split(',').map(s=>s.trim()).reverse().join(' ');
+          }
+          if(!name) continue;
+          
+          const playerId = cols[iPlayerId] || '';
+          const avgEV = iAvgEV >= 0 ? parseFloat(cols[iAvgEV]) || null : null;
+          const hardHit = iHardHit >= 0 ? parseFloat(cols[iHardHit]) || null : null;
+          const barrel = iBarrel >= 0 ? parseFloat(cols[iBarrel]) || null : null;
+          const bbe = iBBE >= 0 ? parseInt(cols[iBBE]) || 0 : 0;
+          
+          result[name.toLowerCase()] = {
+            name,
+            mlbId: playerId,
+            avgEV,
+            hardHit,
+            barrel,
+            bbe,
+          };
+        }
+
+        console.log(`[proxy] savant-contact: ${Object.keys(result).length} pitchers with contact data`);
+        setCORS(res, reqOrigin);
+        res.writeHead(200, {'Content-Type':'application/json'});
+        res.end(JSON.stringify(result));
+      });
+    });
+    pr.on('error', e => {
+      console.error('[proxy] savant-contact error:', e.message);
+      res.writeHead(502); res.end('{}');
+    });
+    pr.end();
+    return;
+  }
+
   // FIX #2: /savant-recent -> fetch & aggregate last 7 days pitcher stats (dynamic year)
   if (path.startsWith('/savant-recent')) {
     const today = new Date();
@@ -756,6 +830,7 @@ const server = http.createServer(async (req, res) => {
           name:      s.player?.fullName || '',
           mlbId:     String(pid),
           saves, holds, gf, gp,
+          blownSaves: st.blownSaves || 0,
           ip:        ipRaw,
           era:       parseFloat(st.era) || null,
           whip:      parseFloat(st.whip) || null,
@@ -906,15 +981,57 @@ const server = http.createServer(async (req, res) => {
             
             if(!isRelieverProfile || !hasActivity) return null;
             
-            // Closer Score:
-            // - GF is the strongest signal (finishing games = closer role)
-            // - Saves are a bonus but not required (early season, blown saves, etc.)
-            // - High holds = setup man, penalize slightly
-            // - Prior closer status = big boost (only if they had 8+ saves — not just led a bad bullpen)
+            // ===== CLOSER SCORE CALCULATION =====
+            // Base score: GF + Saves - Holds
             const priorCloserBonus = (prevSaves[p.mlbId] || 0) >= 8 ? 10 : 0;
-            const closerScore = (p.gf * 2) + (p.saves * 3) - (p.holds * 0.5) + priorCloserBonus;
+            let closerScore = (p.gf * 2) + (p.saves * 3) - (p.holds * 0.5) + priorCloserBonus;
             
-            return { ...p, closerScore, ipPerGame };
+            // ===== PENALTIES =====
+            const penalties = {};
+            
+            // Long reliever penalty: high IP/game indicates bulk/mop-up role, not closer
+            // True closers average ~1.0 IP/game, long relievers average 1.5-2.0
+            if(ipPerGame > 1.3) {
+              // Reduce GF credit for long relievers (they finish blowouts, not save situations)
+              const longRelieverPenalty = Math.round((ipPerGame - 1.0) * p.gf * 1.5);
+              penalties.longReliever = longRelieverPenalty;
+              closerScore -= longRelieverPenalty;
+            }
+            
+            // Blown saves penalty: -4 per BS (huge red flag for closer role)
+            const bs = p.blownSaves || 0;
+            if(bs > 0) {
+              penalties.blownSaves = bs * 4;
+              closerScore -= penalties.blownSaves;
+            }
+            
+            // High ERA penalty: if ERA > 6.0 and has saves, penalize
+            // (guys getting save chances but blowing up)
+            if(p.saves >= 1 && p.era && p.era > 6.0) {
+              penalties.era = Math.min(Math.round((p.era - 5.0) * 1.5), 8);
+              closerScore -= penalties.era;
+            }
+            
+            // ===== RED FLAGS (for display) =====
+            const redFlags = [];
+            if(ipPerGame > 1.4) redFlags.push({ type: 'longRP', value: ipPerGame.toFixed(1), msg: 'Long relief role' });
+            if(bs >= 2) redFlags.push({ type: 'BS', value: bs, msg: `${bs} blown saves` });
+            else if(bs === 1) redFlags.push({ type: 'BS', value: bs, msg: '1 blown save' });
+            
+            if(p.era && p.era > 8.0 && p.gp >= 3) {
+              redFlags.push({ type: 'ERA', value: p.era.toFixed(2), msg: `${p.era.toFixed(2)} ERA` });
+            }
+            
+            // ===== EMERGING SIGNALS (positives for non-closers) =====
+            const emergingSignals = [];
+            if(p.holds >= 3 && p.saves === 0) {
+              emergingSignals.push({ type: 'holds', value: p.holds, msg: `${p.holds} holds (setup role)` });
+            }
+            if(p.gf >= 3 && p.saves === 0) {
+              emergingSignals.push({ type: 'GF', value: p.gf, msg: `${p.gf} games finished` });
+            }
+            
+            return { ...p, closerScore, ipPerGame, penalties, redFlags, emergingSignals };
           })
           .filter(Boolean)
           .sort((a, b) => b.closerScore - a.closerScore);
@@ -938,12 +1055,54 @@ const server = http.createServer(async (req, res) => {
         // Minimum threshold: at least 2 GF or 1 save or prior closer (8+ saves)
         const topMeetsMinimum = topCloser && (topCloser.gf >= 2 || topCloser.saves >= 1 || topIsPriorCloser);
         
+        // ===== VOLATILE DETECTION =====
+        // Flag situations where top closer has significant red flags
+        const topHasRedFlags = topCloser?.redFlags?.length >= 1;
+        const topHasSeriousRedFlags = topCloser?.redFlags?.length >= 2 || 
+          (topCloser?.blownSaves >= 2) ||
+          (topCloser?.era && topCloser.era > 10.0);
+        
+        // Find emerging arm: someone with strong signals but no saves
+        const emergingArm = closerCandidates.find(p => 
+          p.saves === 0 && 
+          p.emergingSignals?.length >= 1 &&
+          p.redFlags?.length === 0
+        );
+        
         if(topCloser && (t.situation === 'LOCKED' || (t.situation === 'EMERGING' && topHasClearLead && topMeetsMinimum))) {
           t.closerName = topCloser.name;
-          t.closerScore = topCloser.closerScore;  // Include for debugging
+          t.closerScore = topCloser.closerScore;
+          t.closerRedFlags = topCloser.redFlags || [];
+          t.closerBlownSaves = topCloser.blownSaves || 0;
+          
+          // If top closer has serious red flags, mark as volatile
+          if(topHasSeriousRedFlags) {
+            t.volatile = true;
+            t.volatileReason = topCloser.redFlags.map(f => f.msg).join(', ');
+          }
         } else {
           t.closerName = null;
         }
+        
+        // Include emerging arm info if found
+        if(emergingArm && (t.situation === 'COMMITTEE' || t.volatile)) {
+          t.emergingArm = emergingArm.name;
+          t.emergingSignals = emergingArm.emergingSignals || [];
+        }
+        
+        // Store all closer candidates for dashboard (top 4)
+        t.closerCandidates = closerCandidates.slice(0, 4).map(c => ({
+          name: c.name,
+          mlbId: c.mlbId,
+          saves: c.saves,
+          holds: c.holds,
+          gf: c.gf,
+          blownSaves: c.blownSaves || 0,
+          era: c.era,
+          closerScore: c.closerScore,
+          redFlags: c.redFlags || [],
+          emergingSignals: c.emergingSignals || [],
+        }));
       });
       
       // Clean up injury cache — remove players who are no longer injured (returned from IL)

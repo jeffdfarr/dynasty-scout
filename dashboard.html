@@ -297,6 +297,25 @@
   .bp-role { font-size:10px; padding:1px 5px; border-radius:3px; background:#faeeda; color:#854F0B; font-weight:600; margin-left:3px; }
   .bp-stats { font-size:11px; color:var(--text2); white-space:nowrap; }
   .bp-stat-val { font-weight:600; color:var(--text); }
+  .bp-stat-bs { font-weight:600; color:#dc2626; } /* Red text for blown saves */
+  .bp-warning-line { font-size:10px; color:#dc2626; margin-top:2px; } /* Warning below name */
+  
+  /* Red flags and warnings */
+  .bp-flag { font-size:9px; padding:1px 4px; border-radius:3px; font-weight:600; margin-left:3px; display:inline-flex; align-items:center; gap:2px; }
+  .bp-flag-danger { background:#fee2e2; color:#dc2626; }
+  .bp-flag-warning { background:#fef3c7; color:#d97706; }
+  .bp-flag-success { background:#dcfce7; color:#16a34a; }
+  .bp-bs { font-size:9px; padding:1px 4px; border-radius:3px; background:#fee2e2; color:#dc2626; font-weight:600; margin-left:3px; }
+  
+  /* Volatile situation badge */
+  .bp-sit.VOLATILE { background:#dc2626; color:#fff; }
+  .bp-volatile-reason { font-size:9px; color:#dc2626; margin-top:2px; display:block; }
+  .bp-emerging-arm { font-size:10px; color:#16a34a; margin-top:4px; padding:3px 6px; background:#dcfce7; border-radius:4px; display:inline-block; }
+  
+  /* Contact quality indicators */
+  .bp-contact-bad { font-size:9px; color:#dc2626; margin-left:4px; }
+  .bp-contact-good { font-size:9px; color:#16a34a; margin-left:4px; }
+  
   .role-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-lg); padding:12px 14px; display:flex; gap:10px; align-items:center; }
   .role-info { flex:1; min-width:0; }
   .role-name { font-size:13px; font-weight:600; color:var(--text); }
@@ -1191,16 +1210,20 @@ async function fetchSavantData(year){
 
     // Fetch aggregated K%, BB%, Whiff% from proxy statcast aggregation
     try {
-      const [r2, r3, r4] = await Promise.all([
+      const [r2, r3, r4, r5] = await Promise.all([
         fetch(`${PROXY}/savant-stats?year=${G.dataYear||CURRENT_YEAR}`),
         fetch(`${PROXY}/savant-recent`),
         fetch(`${PROXY}/mlb-stats?year=${G.dataYear||CURRENT_YEAR}`),
+        fetch(`${PROXY}/savant-contact?year=${G.dataYear||CURRENT_YEAR}`),
       ]);
       const statsJson  = await r2.json();
       const recentJson = await r3.json();
       const mlbJson    = await r4.json();
+      const contactJson = await r5.json();
       G.recentStats = recentJson;
       G.mlbStats = mlbJson;
+      G.contactStats = contactJson; // Store contact quality data globally
+      
       // Merge MLB traditional stats (IP, WHIP, K9, BB9, GB%) into liveData
       Object.entries(mlbJson).forEach(([lname, m]) => {
         const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
@@ -1215,6 +1238,23 @@ async function fetchSavantData(year){
           if(m.holds != null) liveData[key].holds  = m.holds;
         }
       });
+
+      // Merge contact quality stats (hardHit%, barrel%, avgEV) into liveData
+      Object.entries(contactJson).forEach(([lname, c]) => {
+        const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
+        const key = match || lname;
+        if(liveData[key]) {
+          if(c.hardHit != null) liveData[key].hardHit = c.hardHit;
+          if(c.barrel  != null) liveData[key].barrel  = c.barrel;
+          if(c.avgEV   != null) liveData[key].avgEV   = c.avgEV;
+        } else {
+          liveData[key] = {
+            name: c.name, mlbId: c.mlbId || '',
+            hardHit: c.hardHit, barrel: c.barrel, avgEV: c.avgEV,
+          };
+        }
+      });
+      console.log('[scout] savant-contact pitchers:', Object.keys(contactJson).length);
 
       // Merge 7-day recent stats into liveData
       Object.entries(recentJson).forEach(([lname, s]) => {
@@ -1591,14 +1631,17 @@ function isILPlayer(name) {
 function renderBPTeams() {
   const el = document.getElementById('bpTeams');
   if(!el) return;
-  const sitLabel = {COMMITTEE:'Committee',LOCKED:'🔒',EMERGING:'Emerging',NO_SAVES:'No Saves Yet'};
+  const sitLabel = {COMMITTEE:'Committee',LOCKED:'🔒',EMERGING:'Emerging',NO_SAVES:'No Saves Yet',VOLATILE:'⚠️ Volatile'};
   // Map full team names to just the team nickname
   const teamNickname = name => name
     .replace(/^(Arizona|Atlanta|Baltimore|Boston|Chicago|Cincinnati|Cleveland|Colorado|Detroit|Houston|Kansas City|Los Angeles|Miami|Milwaukee|Minnesota|New York|Oakland|Philadelphia|Pittsburgh|San Diego|San Francisco|Seattle|St\. Louis|Tampa Bay|Texas|Toronto|Washington|Athletics)\s+/i, '');
 
-  const sitOrder = { EMERGING:0, COMMITTEE:1, LOCKED:2, NO_SAVES:3 };
+  const sitOrder = { VOLATILE:-1, EMERGING:0, COMMITTEE:1, LOCKED:2, NO_SAVES:3 };
   const sorted = [...G_bpData].sort((a,b) => {
-    // Only feature recently-injured closer cards first (within 7 days, this year)
+    // Volatile teams first (highest priority)
+    if(a.volatile && !b.volatile) return -1;
+    if(!a.volatile && b.volatile) return 1;
+    // Then recently-injured closer cards
     const aIL = a.recentInjury ? 1 : 0;
     const bIL = b.recentInjury ? 1 : 0;
     if(aIL !== bIL) return bIL - aIL;
@@ -1641,6 +1684,12 @@ function renderBPTeams() {
       const k9 = savantData?.k9 ?? mlbData?.k9 ?? null;
       const bb9 = savantData?.bb9 ?? mlbData?.bb9 ?? null;
       
+      // Contact quality data (for penalties)
+      const contactData = G.contactStats ? G.contactStats[p.name?.toLowerCase()] : null;
+      const hardHit = contactData?.hardHit ?? savantData?.hardHit;
+      const barrel = contactData?.barrel ?? savantData?.barrel;
+      const xera = savantData?.xera;
+      
       // Calculate reliever profile
       const ipNum = ipToDecimal(p.ip);
       const ipPerGame = p.gp > 0 ? ipNum / p.gp : 0;
@@ -1656,12 +1705,39 @@ function renderBPTeams() {
       // Prior closer bonus
       const priorCloserBonus = (p.isPriorCloser || (p.prevSaves || 0) >= 8) ? 10 : 0;
       
-      // Next Up Score: holds (setup role) + GF (finishing games) + saves + stuff
+      // ===== PENALTIES =====
+      let penalty = 0;
+      
+      // Long reliever penalty: high IP/game indicates bulk/mop-up role, not closer
+      // True closers average ~1.0 IP/game, long relievers average 1.5-2.0
+      if(ipPerGame > 1.3) {
+        const longRelieverPenalty = Math.round((ipPerGame - 1.0) * (p.gf || 0) * 1.5);
+        penalty += longRelieverPenalty;
+      }
+      
+      // Blown saves penalty: -4 per BS
+      const blownSaves = p.blownSaves || 0;
+      if(blownSaves > 0) penalty += blownSaves * 4;
+      
+      // High ERA penalty (if saves > 0 and ERA > 6.0)
+      if((p.saves || 0) >= 1 && p.era && p.era > 6.0) {
+        penalty += Math.min(Math.round((p.era - 5.0) * 1.5), 8);
+      }
+      
+      // Contact quality penalties (Statcast-based)
+      if(hardHit && hardHit > 50) penalty += Math.min((hardHit - 45) / 5, 4);
+      if(barrel && barrel > 15) penalty += Math.min((barrel - 12) / 3, 3);
+      if(xera && xera > 6.0) penalty += Math.min((xera - 5.0) * 1.5, 6);
+      
+      // Next Up Score: holds (setup role) + GF (finishing games) + saves + stuff - penalties
       const nextUpScore = isRelieverProfile && hasActivity
-        ? ((p.holds || 0) * 2) + ((p.gf || 0) * 1.5) + ((p.saves || 0) * 1) + stuffBonus + priorCloserBonus
+        ? ((p.holds || 0) * 2) + ((p.gf || 0) * 1.5) + ((p.saves || 0) * 1) + stuffBonus + priorCloserBonus - penalty
         : 0;
       
-      return { ...p, whiff, kbb, k9, bb9, nextUpScore, isRelieverProfile, hasActivity };
+      // Track if this is a long reliever for display
+      const isLongReliever = ipPerGame > 1.4;
+      
+      return { ...p, whiff, kbb, k9, bb9, hardHit, barrel, xera, blownSaves, nextUpScore, isRelieverProfile, hasActivity, penalty, ipPerGame, isLongReliever };
     })
     .filter(p => p.isRelieverProfile && p.hasActivity)
     .sort((a, b) => b.nextUpScore - a.nextUpScore);
@@ -1712,9 +1788,16 @@ function renderBPTeams() {
     // Build a lookup for roles
     const roleMap = {};
     rankedPitchers.forEach(p => { if(p.role) roleMap[normName(p.name)] = p; });
+    
+    // Build a lookup for closer candidates (has red flags, emerging signals from server)
+    const closerCandidateMap = {};
+    (team.closerCandidates || []).forEach(c => {
+      closerCandidateMap[normName(c.name)] = c;
+    });
 
     const renderPitcher = p => {
       const ranked = roleMap[normName(p.name)];
+      const candidate = closerCandidateMap[normName(p.name)];
       const isIL     = p.injured || isILPlayer(p.name);
       
       // CL tag only for de facto closer (must be healthy - double check IL status)
@@ -1737,13 +1820,52 @@ function renderBPTeams() {
       
       const injTag   = isIL ? '<span class="bp-inj">IL</span>' : '';
       
+      // Blown saves badge
+      const blownSaves = candidate?.blownSaves || p.blownSaves || 0;
+      // Long reliever indicator (from ranked data)
+      const isLongReliever = ranked?.isLongReliever || ranked?.ipPerGame > 1.4;
+      const longRPTag = isLongReliever 
+        ? `<span class="bp-flag-warning" title="Long relief role (${(ranked?.ipPerGame||0).toFixed(1)} IP/G)">LRP</span>` 
+        : '';
+      
+      // Statcast data for warnings
+      const savantData = findSavant(p.name);
+      const contactData = G.contactStats ? G.contactStats[p.name?.toLowerCase()] : null;
+      const hardHit = contactData?.hardHit ?? savantData?.hardHit;
+      const barrel = contactData?.barrel ?? savantData?.barrel;
+      const xera = savantData?.xera;
+      
+      // Emerging signals (positive indicators for non-closers)
+      const emergingSignals = candidate?.emergingSignals || [];
+      let emergingTag = '';
+      if(!isDeFactoCloser && emergingSignals.length > 0) {
+        const sig = emergingSignals[0];
+        emergingTag = `<span class="bp-flag-success" title="${sig.msg}">↑</span>`;
+      }
+      
+      // Blown saves for stats line (red text, no background)
+      const bsStatDisplay = blownSaves > 0 
+        ? `<span style="margin:0 3px">·</span><span class="bp-stat-bs">${blownSaves}</span>BS` 
+        : '';
+      
+      // Warning line below name (xERA, hard hit, etc.)
+      let warningLine = '';
+      if(xera && xera > 5.0) {
+        warningLine = `<div class="bp-warning-line">⚠️ ${xera.toFixed(2)} xERA</div>`;
+      } else if(hardHit && hardHit > 45) {
+        warningLine = `<div class="bp-warning-line">⚠️ ${hardHit.toFixed(0)}% Hard Hit</div>`;
+      } else if(barrel && barrel > 12) {
+        warningLine = `<div class="bp-warning-line">⚠️ ${barrel.toFixed(0)}% Barrel</div>`;
+      }
+      
       return `<div class="bp-pitcher">
         <img class="bp-avatar" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
         <div class="bp-info">
-          <span class="bp-name">${p.name}${roleTag}${faTag}${injTag}</span>
+          <span class="bp-name">${p.name}${roleTag}${faTag}${injTag}${longRPTag}${emergingTag}</span>
+          ${warningLine}
         </div>
         <span class="bp-stats">
-          <span class="bp-stat-val">${p.saves}</span>SV
+          <span class="bp-stat-val">${p.saves}</span>SV${bsStatDisplay}
           <span style="margin:0 3px">·</span>
           <span class="bp-stat-val">${p.holds}</span>HLD
           <span style="margin:0 3px">·</span>
@@ -1770,14 +1892,32 @@ function renderBPTeams() {
         + injuredPitchers.map(renderPitcher).join('')
       : '';
 
+    // Volatile warning banner
+    const volatileBanner = team.volatile 
+      ? `<div style="font-size:10px;color:#dc2626;background:#fee2e2;border-radius:4px;padding:4px 8px;margin-bottom:8px;">
+           ⚠️ <strong>Volatile:</strong> ${team.volatileReason || 'Closer role unstable'}
+         </div>`
+      : '';
+    
+    // Emerging arm banner
+    const emergingArmBanner = team.emergingArm && (team.situation === 'COMMITTEE' || team.volatile)
+      ? `<div class="bp-emerging-arm">↗ Watch: ${team.emergingArm}</div>`
+      : '';
+
+    // Use VOLATILE situation class if team is volatile
+    const effectiveSitClass = team.volatile ? 'VOLATILE' : sitClass;
+    const effectiveSitLabel = team.volatile ? '⚠️ Volatile' : (sitLabel[sitClass]||sitClass);
+
     return `<div class="${cardClass}">
       <div class="bp-card-header">
         <span class="bp-team">${shortName}</span>
-        <span class="bp-sit ${sitClass}">${sitLabel[sitClass]||sitClass}</span>
+        <span class="bp-sit ${effectiveSitClass}">${effectiveSitLabel}</span>
       </div>
+      ${volatileBanner}
       ${injuredBanner}
       ${activePitchersHTML || '<span style="font-size:11px;color:var(--text2)">No save/hold data</span>'}
       ${injuredDivider}
+      ${emergingArmBanner}
     </div>`;
   }).join('');
 }
