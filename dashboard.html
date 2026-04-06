@@ -830,7 +830,7 @@ function renderAAA(){
 
   const list = Object.values(G.aaaStats || {}).filter(p => {
     if(role !== 'all' && p.role !== role) return false;
-    if(minBF > 0 && p.bf < minBF) return false;
+    if(minBF > 0 && (p.bf || 0) < minBF) return false;
     if(search && !p.name.toLowerCase().includes(search)) return false;
     if(aaaTeamF !== 'all' && p.mlbOrg !== aaaTeamF) return false;
     return true;
@@ -1301,6 +1301,7 @@ async function fetchSavantData(year){
           mlbId: d.mlbId || null,
           pitchMix: d.pitchMix || {},
           ip: d.ip || null,
+          pa: d.pa || 0,
           kbb: d.kbb||0, xera: d.xera||4.50, xba: d.xba||.260,
           whiff: d.whiff||20, chase: d.chase||26, stuff: 95,
           fxStatus: 'unknown', fxTeam: '',
@@ -1821,7 +1822,7 @@ function renderBPTransitions() {
         name: m.name||name, saves: m.saves||0, holds: m.holds||0,
         ip: m.ip||'—', era: m.era||null,
         kbb: sv?.kbb||null, whiff: sv?.whiff||null, mlbId: sv?.mlbId||null,
-        sit, roleLabel,
+        sit, roleLabel, teamName: bpTeam?.name || '',
         injured: bpTeam?.pitchers.find(r => r.name === (m.name||name))?.injured || false,
       };
     })
