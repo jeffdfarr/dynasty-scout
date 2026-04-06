@@ -725,14 +725,13 @@ const server = http.createServer(async (req, res) => {
       });
 
       // Group current year by MLB team
+      // Use LAST split seen (most recent team) rather than most IP
       const bestCur = {};
       curSplits.forEach(s => {
         const pid = s.player?.id;
         if(!pid) return;
-        const ip = parseFloat(s.stat?.inningsPitched||'0');
-        if(!bestCur[pid] || ip > parseFloat(bestCur[pid].stat?.inningsPitched||'0')) {
-          bestCur[pid] = s;
-        }
+        // Always overwrite with latest split — traded players will end up on current team
+        bestCur[pid] = s;
       });
       const teams = {};
       Object.values(bestCur).forEach(s => {
@@ -743,8 +742,10 @@ const server = http.createServer(async (req, res) => {
         const gf    = st.gamesFinished || 0;
         const gp    = st.gamesPlayed || 0;
         const gs    = st.gamesStarted || 0;
+        // Filter out starters (more than half games started)
         if(gs > gp * 0.5) return;
-        if(saves === 0 && holds === 0 && gf === 0) return;
+        // Require at least 1 game played (loosened from requiring SV/HLD/GF)
+        if(gp === 0) return;
         const teamName = s.team?.name || '';
         const teamAbbr = s.team?.abbreviation || '';
         const teamId   = String(s.team?.id || '');
@@ -759,7 +760,7 @@ const server = http.createServer(async (req, res) => {
           era:       parseFloat(st.era) || null,
           whip:      parseFloat(st.whip) || null,
           injured:   injuredIds.has(pid),
-          prevSaves: prevSaves[pid] || 0,
+          prevSaves: prevSaves[String(pid)] || 0,
         });
       });
 
