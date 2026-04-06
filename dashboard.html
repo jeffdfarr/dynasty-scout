@@ -280,7 +280,7 @@
   .bp-team { font-size:16px; font-weight:700; color:var(--text); }
   .bp-sit { font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; letter-spacing:.05em; }
   .bp-sit.COMMITTEE  { background:#d97706; color:#fff; }
-  .bp-sit.LOCKED     { background:#16a34a; color:#fff; }
+  .bp-sit.LOCKED     { background:transparent; color:var(--text); font-size:18px; padding:0; }
   .bp-sit.EMERGING   { background:#2563eb; color:#fff; }
   .bp-sit.NO_SAVES   { background:#6b7280; color:#fff; }
   .bp-card.injured-closer { border-color: #EF9F27; }
@@ -290,13 +290,11 @@
   .bp-pitcher { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); }
   .bp-pitcher:last-child { border-bottom:none; }
   .bp-avatar { width:26px; height:26px; border-radius:50%; object-fit:cover; border:1px solid var(--border); background:var(--bg2); flex-shrink:0; }
-  .bp-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+  .bp-info { flex:1; min-width:0; }
   .bp-name { font-size:12px; font-weight:500; color:var(--text); }
-  .bp-whiff-line { font-size:10px; color:var(--text3); }
   .bp-fa  { font-size:10px; padding:1px 5px; border-radius:3px; background:#e1f5ee; color:#0F6E56; font-weight:600; margin-left:3px; }
   .bp-inj { font-size:10px; padding:1px 5px; border-radius:3px; background:#fcebeb; color:#A32D2D; font-weight:600; margin-left:3px; }
   .bp-role { font-size:10px; padding:1px 5px; border-radius:3px; background:#faeeda; color:#854F0B; font-weight:600; margin-left:3px; }
-  .bp-whiff { font-size:10px; color:#1D9E75; font-weight:600; }
   .bp-stats { font-size:11px; color:var(--text2); white-space:nowrap; }
   .bp-stat-val { font-weight:600; color:var(--text); }
   .role-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-lg); padding:12px 14px; display:flex; gap:10px; align-items:center; }
@@ -1590,7 +1588,7 @@ function isILPlayer(name) {
 function renderBPTeams() {
   const el = document.getElementById('bpTeams');
   if(!el) return;
-  const sitLabel = {COMMITTEE:'Committee',LOCKED:'🔒 Locked',EMERGING:'Emerging',NO_SAVES:'No Saves Yet'};
+  const sitLabel = {COMMITTEE:'Committee',LOCKED:'🔒',EMERGING:'Emerging',NO_SAVES:'No Saves Yet'};
   // Map full team names to just the team nickname
   const teamNickname = name => name
     .replace(/^(Arizona|Atlanta|Baltimore|Boston|Chicago|Cincinnati|Cleveland|Colorado|Detroit|Houston|Kansas City|Los Angeles|Miami|Milwaukee|Minnesota|New York|Oakland|Philadelphia|Pittsburgh|San Diego|San Francisco|Seattle|St\. Louis|Tampa Bay|Texas|Toronto|Washington|Athletics)\s+/i, '');
@@ -1629,8 +1627,16 @@ function renderBPTeams() {
     const rankedPitchers = activePitchers.map(p => {
       // Merge Savant stuff metrics
       const savantData = findSavant(p.name);
+      // Also check G.mlbStats for k9/bb9 (they live there, not in savant array)
+      const mlbStatsKey = Object.keys(G.mlbStats || {}).find(k => 
+        stripAccents(normName(k)) === stripAccents(normName(p.name))
+      );
+      const mlbData = mlbStatsKey ? G.mlbStats[mlbStatsKey] : null;
+      
       const whiff = savantData?.whiff ?? null;
       const kbb = savantData?.kbb ?? null;
+      const k9 = savantData?.k9 ?? mlbData?.k9 ?? null;
+      const bb9 = savantData?.bb9 ?? mlbData?.bb9 ?? null;
       
       // Calculate reliever profile
       const ipNum = ipToDecimal(p.ip);
@@ -1652,7 +1658,7 @@ function renderBPTeams() {
         ? ((p.holds || 0) * 2) + ((p.gf || 0) * 1.5) + ((p.saves || 0) * 1) + stuffBonus + priorCloserBonus
         : 0;
       
-      return { ...p, whiff, kbb, nextUpScore, isRelieverProfile, hasActivity };
+      return { ...p, whiff, kbb, k9, bb9, nextUpScore, isRelieverProfile, hasActivity };
     })
     .filter(p => p.isRelieverProfile && p.hasActivity)
     .sort((a, b) => b.nextUpScore - a.nextUpScore);
@@ -1728,16 +1734,10 @@ function renderBPTeams() {
       
       const injTag   = isIL ? '<span class="bp-inj">IL</span>' : '';
       
-      // Whiff display for context - now shown below name
-      const whiffLine = ranked?.whiff != null 
-        ? `<div class="bp-whiff-line">Whiff% <span class="bp-whiff">${ranked.whiff.toFixed(1)}%</span></div>` 
-        : '';
-      
       return `<div class="bp-pitcher">
         <img class="bp-avatar" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
         <div class="bp-info">
           <span class="bp-name">${p.name}${roleTag}${faTag}${injTag}</span>
-          ${whiffLine}
         </div>
         <span class="bp-stats">
           <span class="bp-stat-val">${p.saves}</span>SV
