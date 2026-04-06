@@ -1590,7 +1590,7 @@ function isILPlayer(name) {
 function renderBPTeams() {
   const el = document.getElementById('bpTeams');
   if(!el) return;
-  const sitLabel = {COMMITTEE:'Committee',LOCKED:'Locked In',EMERGING:'Emerging',NO_SAVES:'No Saves Yet'};
+  const sitLabel = {COMMITTEE:'Committee',LOCKED:'🔒 Locked',EMERGING:'Emerging',NO_SAVES:'No Saves Yet'};
   // Map full team names to just the team nickname
   const teamNickname = name => name
     .replace(/^(Arizona|Atlanta|Baltimore|Boston|Chicago|Cincinnati|Cleveland|Colorado|Detroit|Houston|Kansas City|Los Angeles|Miami|Milwaukee|Minnesota|New York|Oakland|Philadelphia|Pittsburgh|San Diego|San Francisco|Seattle|St\. Louis|Tampa Bay|Texas|Toronto|Washington|Athletics)\s+/i, '');

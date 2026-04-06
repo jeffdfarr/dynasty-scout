@@ -645,6 +645,17 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // /clear-cache -> clear all server-side caches (for debugging)
+  if (path === '/clear-cache') {
+    server._bpCache = null;
+    server._photoCache = {};
+    console.log('[proxy] All caches cleared');
+    setCORS(res, reqOrigin);
+    res.writeHead(200, {'Content-Type':'application/json'});
+    res.end(JSON.stringify({ success: true, message: 'All caches cleared' }));
+    return;
+  }
+
   // /bullpen-watch -> all 30 MLB teams bullpen data with saves, holds, injury status, prior year
   if (path.startsWith('/bullpen-watch')) {
     // Server-side cache — 2 hour TTL
@@ -699,17 +710,17 @@ const server = http.createServer(async (req, res) => {
       const injuredIds = new Set();
       const injuryDates = {};
 
-      // Build prior year saves lookup
+      // Build prior year saves lookup (use string keys for consistency with mlbId)
       const prevSaves = {};
       const prevTeamLeader = {};
       prevSplits.forEach(s => {
         const pid = s.player?.id;
         if(!pid) return;
         const sv = s.stat?.saves || 0;
-        prevSaves[pid] = sv;
+        prevSaves[String(pid)] = sv;
         const tid = s.team?.id;
         if(tid && (!prevTeamLeader[tid] || sv > prevTeamLeader[tid].saves)) {
-          prevTeamLeader[tid] = { pid, saves: sv, name: s.player?.fullName };
+          prevTeamLeader[tid] = { pid: String(pid), saves: sv, name: s.player?.fullName };
         }
       });
 
@@ -834,9 +845,34 @@ const server = http.createServer(async (req, res) => {
           t.situation = 'LOCKED';
           t.lockedPitcher = effectivePriorCloser.name;
         } else if(effectivelyDominant && effectivelyInjured) {
-          if(healthyWithSaves.length === 0) t.situation = 'NO_SAVES';
-          else if(healthyWithSaves.length >= 2) t.situation = 'COMMITTEE';
-          else t.situation = 'EMERGING';
+          // Check if any healthy save-getter is a prior closer (traded in, like Helsley)
+          const healthyPriorClosers = healthyWithSaves
+            .filter(p => (prevSaves[p.mlbId] || 0) >= 8)
+            .sort((a, b) => {
+              // Most prior saves first
+              const prevDiff = (prevSaves[b.mlbId] || 0) - (prevSaves[a.mlbId] || 0);
+              if (prevDiff !== 0) return prevDiff;
+              // Tiebreaker: most current saves
+              return (b.saves || 0) - (a.saves || 0);
+            });
+          
+          if(healthyPriorClosers.length === 1) {
+            // One clear prior closer available — he's the guy
+            t.situation = 'LOCKED';
+            t.lockedPitcher = healthyPriorClosers[0].name;
+            t.closerName = healthyPriorClosers[0].name;
+          } else if(healthyPriorClosers.length >= 2) {
+            // Two+ prior closers — tag as EMERGING, top guy gets nod
+            t.situation = 'EMERGING';
+            t.closerName = healthyPriorClosers[0].name;
+          } else if(healthyWithSaves.length === 0) {
+            t.situation = 'NO_SAVES';
+          } else if(healthyWithSaves.length >= 2) {
+            t.situation = 'COMMITTEE';
+          } else {
+            t.situation = 'EMERGING';
+          }
+          
           if(isCurrentYearInjury) t.injuredCloser = effectivePriorCloser.name;
           t.recentInjury = isRecentInjury;
         } else {
@@ -873,8 +909,8 @@ const server = http.createServer(async (req, res) => {
             // - GF is the strongest signal (finishing games = closer role)
             // - Saves are a bonus but not required (early season, blown saves, etc.)
             // - High holds = setup man, penalize slightly
-            // - Prior closer status = big boost (established role)
-            const priorCloserBonus = (p.isPriorCloser || (prevSaves[p.mlbId] || 0) >= 8) ? 10 : 0;
+            // - Prior closer status = big boost (only if they had 8+ saves — not just led a bad bullpen)
+            const priorCloserBonus = (prevSaves[p.mlbId] || 0) >= 8 ? 10 : 0;
             const closerScore = (p.gf * 2) + (p.saves * 3) - (p.holds * 0.5) + priorCloserBonus;
             
             return { ...p, closerScore, ipPerGame };
@@ -890,15 +926,15 @@ const server = http.createServer(async (req, res) => {
           ? topCloser.closerScore - runnerUp.closerScore 
           : (topCloser?.closerScore || 0);
         const topIsPriorCloser = topCloser 
-          ? (topCloser.isPriorCloser || (prevSaves[topCloser.mlbId] || 0) >= 8) 
+          ? (prevSaves[topCloser.mlbId] || 0) >= 8 
           : false;
         const topHasClearLead = topCloser && (
           closerCandidates.length === 1 ||  // Only candidate
           scoregap >= 4 ||                   // Clear score gap
-          topIsPriorCloser                   // Prior closer, trust the role
+          topIsPriorCloser                   // Prior closer (8+ saves), trust the role
         );
         
-        // Minimum threshold: at least 2 GF or 1 save or prior closer
+        // Minimum threshold: at least 2 GF or 1 save or prior closer (8+ saves)
         const topMeetsMinimum = topCloser && (topCloser.gf >= 2 || topCloser.saves >= 1 || topIsPriorCloser);
         
         if(topCloser && (t.situation === 'LOCKED' || (t.situation === 'EMERGING' && topHasClearLead && topMeetsMinimum))) {
