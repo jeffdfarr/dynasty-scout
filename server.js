@@ -493,6 +493,162 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // /team-schedules -> get upcoming games for all teams (next 7 days)
+  if (path === '/team-schedules') {
+    const today = new Date();
+    const weekLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const fmt = d => d.toISOString().split('T')[0];
+    const startDate = fmt(today);
+    const endDate = fmt(weekLater);
+    
+    const scheduleUrl = `/api/v1/schedule?sportId=1&startDate=${startDate}&endDate=${endDate}&hydrate=team`;
+    console.log(`[proxy] fetching team schedules (${startDate} to ${endDate})...`);
+
+    const opts = {
+      hostname: 'statsapi.mlb.com', port: 443, path: scheduleUrl, method: 'GET',
+      headers: {'User-Agent':'Mozilla/5.0','Accept':'application/json'}
+    };
+    
+    const pr = https.request(opts, sr => {
+      let body = '';
+      sr.on('data', c => body += c);
+      sr.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          const teamSchedules = {}; // keyed by team abbreviation
+          
+          // Team ID to abbreviation mapping
+          const teamAbbrev = {
+            108: 'LAA', 109: 'ARI', 110: 'BAL', 111: 'BOS', 112: 'CHC',
+            113: 'CIN', 114: 'CLE', 115: 'COL', 116: 'DET', 117: 'HOU',
+            118: 'KC', 119: 'LAD', 120: 'WSH', 121: 'NYM', 133: 'OAK',
+            134: 'PIT', 135: 'SD', 136: 'SEA', 137: 'SF', 138: 'STL',
+            139: 'TB', 140: 'TEX', 141: 'TOR', 142: 'MIN', 143: 'PHI',
+            144: 'ATL', 145: 'CWS', 146: 'MIA', 147: 'NYY', 158: 'MIL'
+          };
+          
+          (data.dates || []).forEach(dateObj => {
+            const gameDate = dateObj.date;
+            (dateObj.games || []).forEach(game => {
+              const homeId = game.teams?.home?.team?.id;
+              const awayId = game.teams?.away?.team?.id;
+              const homeAbbr = teamAbbrev[homeId] || game.teams?.home?.team?.abbreviation;
+              const awayAbbr = teamAbbrev[awayId] || game.teams?.away?.team?.abbreviation;
+              
+              if(!homeAbbr || !awayAbbr) return;
+              
+              // Add to home team's schedule
+              if(!teamSchedules[homeAbbr]) teamSchedules[homeAbbr] = [];
+              teamSchedules[homeAbbr].push({
+                date: gameDate,
+                opponent: awayAbbr,
+                home: true
+              });
+              
+              // Add to away team's schedule
+              if(!teamSchedules[awayAbbr]) teamSchedules[awayAbbr] = [];
+              teamSchedules[awayAbbr].push({
+                date: gameDate,
+                opponent: homeAbbr,
+                home: false
+              });
+            });
+          });
+          
+          // Sort each team's schedule by date
+          Object.values(teamSchedules).forEach(sched => {
+            sched.sort((a, b) => a.date.localeCompare(b.date));
+          });
+          
+          console.log(`[proxy] team-schedules: found schedules for ${Object.keys(teamSchedules).length} teams`);
+          setCORS(res, reqOrigin);
+          res.writeHead(200, {'Content-Type':'application/json'});
+          res.end(JSON.stringify(teamSchedules));
+        } catch(e) {
+          console.error('[proxy] team-schedules parse error:', e.message);
+          res.writeHead(500);
+          res.end('{}');
+        }
+      });
+    });
+    pr.on('error', e => { res.writeHead(502); res.end('{}'); });
+    pr.end();
+    return;
+  }
+
+  // /team-offense -> get team offensive rankings (runs per game, OPS)
+  if (path === '/team-offense') {
+    const currentYear = new Date().getFullYear();
+    const statsUrl = `/api/v1/teams/stats?sportId=1&season=${currentYear}&stats=season&group=hitting`;
+    console.log(`[proxy] fetching team offense stats...`);
+
+    const opts = {
+      hostname: 'statsapi.mlb.com', port: 443, path: statsUrl, method: 'GET',
+      headers: {'User-Agent':'Mozilla/5.0','Accept':'application/json'}
+    };
+    
+    const pr = https.request(opts, sr => {
+      let body = '';
+      sr.on('data', c => body += c);
+      sr.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          const teamStats = {};
+          
+          // Team ID to abbreviation mapping
+          const teamAbbrev = {
+            108: 'LAA', 109: 'ARI', 110: 'BAL', 111: 'BOS', 112: 'CHC',
+            113: 'CIN', 114: 'CLE', 115: 'COL', 116: 'DET', 117: 'HOU',
+            118: 'KC', 119: 'LAD', 120: 'WSH', 121: 'NYM', 133: 'OAK',
+            134: 'PIT', 135: 'SD', 136: 'SEA', 137: 'SF', 138: 'STL',
+            139: 'TB', 140: 'TEX', 141: 'TOR', 142: 'MIN', 143: 'PHI',
+            144: 'ATL', 145: 'CWS', 146: 'MIA', 147: 'NYY', 158: 'MIL'
+          };
+          
+          (data.stats || []).forEach(statGroup => {
+            (statGroup.splits || []).forEach(split => {
+              const teamId = split.team?.id;
+              const abbr = teamAbbrev[teamId];
+              if(!abbr) return;
+              
+              const s = split.stat || {};
+              const gamesPlayed = s.gamesPlayed || 1;
+              const runs = s.runs || 0;
+              
+              teamStats[abbr] = {
+                runsPerGame: parseFloat((runs / gamesPlayed).toFixed(2)),
+                ops: parseFloat(s.ops) || 0,
+                avg: parseFloat(s.avg) || 0,
+                hits: s.hits || 0,
+                homeRuns: s.homeRuns || 0,
+                gamesPlayed: gamesPlayed
+              };
+            });
+          });
+          
+          // Rank teams by runs per game (1 = most runs = toughest)
+          const sorted = Object.entries(teamStats)
+            .sort((a, b) => b[1].runsPerGame - a[1].runsPerGame);
+          sorted.forEach(([abbr, stats], idx) => {
+            teamStats[abbr].offenseRank = idx + 1; // 1 = best offense
+          });
+          
+          console.log(`[proxy] team-offense: found stats for ${Object.keys(teamStats).length} teams`);
+          setCORS(res, reqOrigin);
+          res.writeHead(200, {'Content-Type':'application/json'});
+          res.end(JSON.stringify(teamStats));
+        } catch(e) {
+          console.error('[proxy] team-offense parse error:', e.message);
+          res.writeHead(500);
+          res.end('{}');
+        }
+      });
+    });
+    pr.on('error', e => { res.writeHead(502); res.end('{}'); });
+    pr.end();
+    return;
+  }
+
   // /savant-debuts -> detect pitchers appearing in current year Statcast for first time
   if (path === '/savant-debuts') {
     const currentYear = new Date().getFullYear();

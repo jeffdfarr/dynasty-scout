@@ -1212,22 +1212,28 @@ async function fetchSavantData(year){
 
     // Fetch aggregated K%, BB%, Whiff% from proxy statcast aggregation
     try {
-      const [r2, r3, r4, r5, r6] = await Promise.all([
+      const [r2, r3, r4, r5, r6, r7, r8] = await Promise.all([
         fetch(`${PROXY}/savant-stats?year=${G.dataYear||CURRENT_YEAR}`),
         fetch(`${PROXY}/savant-recent`),
         fetch(`${PROXY}/mlb-stats?year=${G.dataYear||CURRENT_YEAR}`),
         fetch(`${PROXY}/savant-contact?year=${G.dataYear||CURRENT_YEAR}`),
         fetch(`${PROXY}/pitcher-rest`),
+        fetch(`${PROXY}/team-schedules`),
+        fetch(`${PROXY}/team-offense`),
       ]);
       const statsJson  = await r2.json();
       const recentJson = await r3.json();
       const mlbJson    = await r4.json();
       const contactJson = await r5.json();
       const restJson   = await r6.json();
+      const schedulesJson = await r7.json();
+      const offenseJson = await r8.json();
       G.recentStats = recentJson;
       G.mlbStats = mlbJson;
       G.contactStats = contactJson; // Store contact quality data globally
       G.pitcherRest = restJson;     // Store pitcher rest data globally
+      G.teamSchedules = schedulesJson; // Store team schedules
+      G.teamOffense = offenseJson;     // Store team offensive rankings
       
       // Merge MLB traditional stats (IP, WHIP, K9, BB9, GB%) into liveData
       Object.entries(mlbJson).forEach(([lname, m]) => {
@@ -2163,6 +2169,65 @@ function renderBPLongRelief() {
   }
   const svMap = getSavantDataMap();
   const restData = G.pitcherRest || {};
+  const schedules = G.teamSchedules || {};
+  const offense = G.teamOffense || {};
+
+  // Team name to abbreviation mapping
+  const teamNameToAbbr = {
+    'Angels': 'LAA', 'Diamondbacks': 'ARI', 'D-backs': 'ARI', 'Orioles': 'BAL', 
+    'Red Sox': 'BOS', 'Cubs': 'CHC', 'Reds': 'CIN', 'Guardians': 'CLE', 
+    'Rockies': 'COL', 'Tigers': 'DET', 'Astros': 'HOU', 'Royals': 'KC',
+    'Dodgers': 'LAD', 'Nationals': 'WSH', 'Mets': 'NYM', 'Athletics': 'OAK',
+    'Pirates': 'PIT', 'Padres': 'SD', 'Mariners': 'SEA', 'Giants': 'SF',
+    'Cardinals': 'STL', 'Rays': 'TB', 'Rangers': 'TEX', 'Blue Jays': 'TOR',
+    'Twins': 'MIN', 'Phillies': 'PHI', 'Braves': 'ATL', 'White Sox': 'CWS',
+    'Marlins': 'MIA', 'Yankees': 'NYY', 'Brewers': 'MIL'
+  };
+
+  // Helper: get team abbr from team name
+  const getTeamAbbr = (teamName) => {
+    if(!teamName) return null;
+    // Try direct match first
+    for(const [name, abbr] of Object.entries(teamNameToAbbr)) {
+      if(teamName.includes(name)) return abbr;
+    }
+    return null;
+  };
+
+  // Helper: calculate matchup quality for next N games
+  const getMatchupInfo = (teamAbbr, numGames = 5) => {
+    if(!teamAbbr || !schedules[teamAbbr]) return null;
+    
+    const upcoming = schedules[teamAbbr].slice(0, numGames);
+    if(upcoming.length === 0) return null;
+    
+    // Get opponent ranks (lower rank = better offense = harder matchup)
+    const oppRanks = upcoming.map(g => offense[g.opponent]?.offenseRank || 15);
+    const avgRank = oppRanks.reduce((a,b) => a + b, 0) / oppRanks.length;
+    
+    // Grade: 1-10 = tough (top offenses), 21-30 = easy (weak offenses)
+    let grade, gradeColor, gradeBg;
+    if(avgRank >= 21) {
+      grade = 'Easy Schedule';
+      gradeColor = '#059669';
+      gradeBg = '#d1fae5';
+    } else if(avgRank >= 11) {
+      grade = 'Mixed Schedule';
+      gradeColor = '#d97706';
+      gradeBg = '#fef3c7';
+    } else {
+      grade = 'Tough Schedule';
+      gradeColor = '#dc2626';
+      gradeBg = '#fee2e2';
+    }
+    
+    // Format opponents list (first 4)
+    const oppList = upcoming.slice(0, 4).map(g => 
+      (g.home ? 'vs' : '@') + g.opponent
+    ).join(', ');
+    
+    return { grade, gradeColor, gradeBg, avgRank, oppList, numGames: upcoming.length };
+  };
 
   // Build Set of pitchers confirmed active in MLB bullpens this year
   const activeBullpenNames = new Set();
@@ -2211,6 +2276,10 @@ function renderBPLongRelief() {
       const restInfo = restData[restKey];
       const daysRest = restInfo?.daysRest ?? null;
       
+      // Get team abbr and matchup info
+      const teamAbbr = getTeamAbbr(bpTeam?.name);
+      const matchup = getMatchupInfo(teamAbbr);
+      
       const ipNum = m.ipNum || 0;
       const gp = m.gamesPlayed || 0;
       const ipPerGame = gp > 0 ? (ipNum / gp).toFixed(1) : '—';
@@ -2226,13 +2295,21 @@ function renderBPLongRelief() {
         whiff: sv?.whiff || null,
         mlbId: sv?.mlbId || bpP?.mlbId || null,
         teamName: bpTeam?.name || '',
+        teamAbbr: teamAbbr,
         daysRest: daysRest,
-        lastDate: restInfo?.lastDate || null
+        lastDate: restInfo?.lastDate || null,
+        matchup: matchup
       };
     })
-    // Sort by days rest (most rest first = most likely to pitch), then by stuff
+    // Sort by: 1) matchup grade (easy first), 2) days rest (more rest first), 3) stuff
     .sort((a,b) => {
-      // Pitchers with rest data come first, sorted by most days rest
+      // Easy matchups first
+      const aMatchupScore = a.matchup?.avgRank || 15;
+      const bMatchupScore = b.matchup?.avgRank || 15;
+      if(Math.abs(aMatchupScore - bMatchupScore) >= 5) {
+        return bMatchupScore - aMatchupScore; // Higher rank = easier = better
+      }
+      // Then by days rest
       if(a.daysRest !== null && b.daysRest !== null) {
         if(b.daysRest !== a.daysRest) return b.daysRest - a.daysRest;
       }
@@ -2268,15 +2345,24 @@ function renderBPLongRelief() {
       }
     }
     
+    // Matchup info
+    const matchupBadge = p.matchup 
+      ? `<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;background:${p.matchup.gradeBg};color:${p.matchup.gradeColor}">${p.matchup.grade}</span>`
+      : '';
+    const oppList = p.matchup?.oppList || '';
+    
     return `<div class="role-card">
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
         <div class="role-name">${p.name}</div>
-        <div class="role-name-sub">${teamNickname(p.teamName)}</div>
+        <div class="role-name-sub">${teamNickname(p.teamName)}${oppList ? ` · <span style="color:var(--text3)">${oppList}</span>` : ''}</div>
         <div class="role-team">${p.ipPerGame} IP/G · ${p.ip}IP · ERA ${p.era?.toFixed(2)||'—'}</div>
         <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb.toFixed(1)+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
       </div>
-      <span class="role-badge" style="${restBadgeStyle}">${restLabel}</span>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        ${matchupBadge}
+        <span class="role-badge" style="${restBadgeStyle};font-size:9px;padding:2px 6px">${restLabel}</span>
+      </div>
     </div>`;
   }).join('');
 }
@@ -2303,8 +2389,8 @@ function renderBPLongRelief() {
     </div>
     <div style="margin-bottom:20px">
       <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">Long Relief Streamers</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with bulk innings (≥1.4 IP/G) and elite stuff (K-BB% ≥15%, Whiff% ≥22% or xERA ≤5.0). Sorted by rest.</div>
-      <div id="bpLongRelief" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with bulk innings (≥1.4 IP/G) and elite stuff (K-BB% ≥15%, Whiff% ≥22% or xERA ≤5.0). Sorted by matchup quality then rest.</div>
+      <div id="bpLongRelief" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">
       <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:6px">MLB Bullpens</div>
