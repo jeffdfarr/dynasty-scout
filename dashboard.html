@@ -2248,35 +2248,35 @@ function renderBPLongRelief() {
   }
 
   el.innerHTML = longRelievers.map(p => {
-    // Days rest badge - color coded
-    let restBadge = '';
+    // Days rest badge - color coded, goes in the badge position
+    let restBadgeStyle = 'background:#e5e7eb;color:#6b7280'; // gray default
+    let restLabel = '—';
+    
     if(p.daysRest !== null) {
-      let restColor = '#6b7280'; // gray - recent
-      let restLabel = `${p.daysRest}d rest`;
       if(p.daysRest >= 4) {
-        restColor = '#059669'; // green - very likely to pitch
+        restBadgeStyle = 'background:#d1fae5;color:#059669'; // green
         restLabel = `${p.daysRest}d rest 🔥`;
       } else if(p.daysRest >= 3) {
-        restColor = '#d97706'; // amber - likely
+        restBadgeStyle = 'background:#fef3c7;color:#d97706'; // amber
         restLabel = `${p.daysRest}d rest`;
       } else if(p.daysRest >= 2) {
-        restColor = '#6b7280'; // gray - maybe
+        restBadgeStyle = 'background:#e5e7eb;color:#6b7280'; // gray
         restLabel = `${p.daysRest}d rest`;
       } else {
-        restLabel = 'Pitched recently';
+        restBadgeStyle = 'background:#fee2e2;color:#dc2626'; // red - recently pitched
+        restLabel = `${p.daysRest}d rest`;
       }
-      restBadge = `<span style="font-size:10px;font-weight:600;color:${restColor}">${restLabel}</span>`;
     }
     
     return `<div class="role-card">
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
         <div class="role-name">${p.name}</div>
-        <div class="role-name-sub">${teamNickname(p.teamName)} ${restBadge}</div>
+        <div class="role-name-sub">${teamNickname(p.teamName)}</div>
         <div class="role-team">${p.ipPerGame} IP/G · ${p.ip}IP · ERA ${p.era?.toFixed(2)||'—'}</div>
         <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb.toFixed(1)+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
       </div>
-      <span class="role-badge" style="background:#fef3c7;color:#92400e">LRP</span>
+      <span class="role-badge" style="${restBadgeStyle}">${restLabel}</span>
     </div>`;
   }).join('');
 }
