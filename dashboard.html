@@ -317,6 +317,32 @@
   .bp-contact-bad { font-size:9px; color:#dc2626; margin-left:4px; }
   .bp-contact-good { font-size:9px; color:#16a34a; margin-left:4px; }
   
+  /* Collapsible legend */
+  .bp-key-arrow { transition: transform 0.2s; font-size:8px; }
+  .bp-key-open + .bp-key-arrow, .bp-key-open .bp-key-arrow { transform: rotate(180deg); }
+  .bp-key-panel { 
+    max-height: 0; 
+    overflow: hidden; 
+    transition: max-height 0.25s ease-out, margin 0.25s ease-out, padding 0.25s ease-out;
+    background: var(--surface2);
+    border-radius: 8px;
+    margin-bottom: 0;
+  }
+  .bp-key-open { 
+    max-height: 200px; 
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+  }
+  .bp-key-grid { 
+    display: grid; 
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); 
+    gap: 12px 20px; 
+  }
+  .bp-key-section { display: flex; flex-direction: column; gap: 4px; }
+  .bp-key-title { font-size: 10px; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
+  .bp-key-item { font-size: 10px; color: var(--text2); display: flex; align-items: center; gap: 6px; }
+
   .role-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-lg); padding:12px 14px; display:flex; gap:10px; align-items:center; }
   .role-info { flex:1; min-width:0; }
   .role-name { font-size:13px; font-weight:600; color:var(--text); }
@@ -2393,23 +2419,34 @@ function renderBPLongRelief() {
       <div id="bpLongRelief" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">
-      <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:6px">MLB Bullpens</div>
-      <div style="font-size:10px;color:var(--text2);margin-bottom:12px;line-height:1.6">
-        <div style="margin-bottom:4px">
-          <span class="bp-closer" style="font-size:9px;padding:1px 4px">CL</span> Closer (highest closer score: GF×2 + SV×3 − HLD×0.5)
-          <span style="margin-left:12px"><span class="bp-role" style="font-size:9px;padding:1px 4px">1st</span> <span class="bp-role" style="font-size:9px;padding:1px 4px">2nd</span> Next in line (non-LRP with highest scores)</span>
-        </div>
-        <div style="margin-bottom:4px">
-          <span class="bp-lrp" style="font-size:9px;padding:1px 4px">LRP</span> Long Relief (≥1.4 IP/game — mop-up role, not closer candidate)
-          <span style="margin-left:12px"><span class="bp-stat-bs">2</span>BS Blown saves</span>
-          <span style="margin-left:12px"><span class="bp-fa" style="font-size:9px;padding:1px 4px">FA</span> Free agent in your league</span>
-          <span style="margin-left:12px"><span class="bp-inj" style="font-size:9px;padding:1px 4px">IL</span> Injured list</span>
-        </div>
-        <div>
-          <span class="bp-sit LOCKED" style="font-size:9px;padding:1px 6px">🔒</span> Prior closer (8+ SV last yr) healthy
-          <span style="margin-left:12px"><span class="bp-sit EMERGING" style="font-size:9px;padding:1px 6px">Emerging</span> One clear leader emerging</span>
-          <span style="margin-left:12px"><span class="bp-sit COMMITTEE" style="font-size:9px;padding:1px 6px">Committee</span> 2+ pitchers splitting saves</span>
-          <span style="margin-left:12px"><span class="bp-sit VOLATILE" style="font-size:9px;padding:1px 6px">⚠️ Volatile</span> Closer has 2+ red flags (BS, ERA>8 w/ 4+IP, or LRP)</span>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+        <span style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px">MLB Bullpens</span>
+        <button onclick="const p=this.parentElement.nextElementSibling;p.classList.toggle('bp-key-open');this.querySelector('.bp-key-arrow').style.transform=p.classList.contains('bp-key-open')?'rotate(180deg)':''" 
+                style="font-size:10px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;cursor:pointer;display:flex;align-items:center;gap:4px">
+          <span style="font-size:12px">ℹ️</span> Legend <span class="bp-key-arrow" style="transition:transform 0.2s;font-size:8px">▼</span>
+        </button>
+      </div>
+      <div class="bp-key-panel">
+        <div class="bp-key-grid">
+          <div class="bp-key-section">
+            <div class="bp-key-title">Pitcher Roles</div>
+            <div class="bp-key-item"><span class="bp-closer" style="font-size:9px;padding:1px 4px">CL</span> Closer (GF×2 + SV×3 − HLD×0.5)</div>
+            <div class="bp-key-item"><span class="bp-role" style="font-size:9px;padding:1px 4px">1st</span> <span class="bp-role" style="font-size:9px;padding:1px 4px">2nd</span> Next in line</div>
+            <div class="bp-key-item"><span class="bp-lrp" style="font-size:9px;padding:1px 4px">LRP</span> Long Relief (≥1.4 IP/G)</div>
+          </div>
+          <div class="bp-key-section">
+            <div class="bp-key-title">Status</div>
+            <div class="bp-key-item"><span class="bp-fa" style="font-size:9px;padding:1px 4px">FA</span> Free agent in league</div>
+            <div class="bp-key-item"><span class="bp-inj" style="font-size:9px;padding:1px 4px">IL</span> Injured list</div>
+            <div class="bp-key-item"><span class="bp-stat-bs">2</span>BS Blown saves</div>
+          </div>
+          <div class="bp-key-section">
+            <div class="bp-key-title">Team Situation</div>
+            <div class="bp-key-item"><span class="bp-sit LOCKED" style="font-size:9px;padding:1px 6px">🔒</span> Prior closer healthy</div>
+            <div class="bp-key-item"><span class="bp-sit EMERGING" style="font-size:9px;padding:1px 6px">Emerging</span> One clear leader</div>
+            <div class="bp-key-item"><span class="bp-sit COMMITTEE" style="font-size:9px;padding:1px 6px">Committee</span> Saves split</div>
+            <div class="bp-key-item"><span class="bp-sit VOLATILE" style="font-size:9px;padding:1px 6px">⚠️ Volatile</span> 2+ red flags</div>
+          </div>
         </div>
       </div>
       <div id="bpTeams" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
