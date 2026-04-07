@@ -399,6 +399,100 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // /pitcher-rest -> get days since each pitcher last appeared (for streaming recommendations)
+  if (path === '/pitcher-rest') {
+    const today = new Date();
+    const tenDaysAgo = new Date(today - 10 * 24 * 60 * 60 * 1000);
+    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000); // Include today's games
+    const fmt = d => d.toISOString().split('T')[0];
+    const startDate = fmt(tenDaysAgo);
+    const endDate = fmt(tomorrow); // Use tomorrow to include today (game_date_lt is exclusive)
+    const currentYear = String(today.getFullYear());
+    
+    // Fetch game_date for each pitch in last 10 days
+    const statcastUrl = `/statcast_search/csv?all=true&hfGT=R%7C&hfSea=${currentYear}%7C&player_type=pitcher&group_by=name&min_pitches=1&game_date_gt=${startDate}&game_date_lt=${endDate}&sort_col=pitches&sort_order=desc&type=details&csv=true`;
+    console.log(`[proxy] fetching pitcher rest data (${startDate} to ${endDate})...`);
+
+    const opts = {
+      hostname: 'baseballsavant.mlb.com', port: 443, path: statcastUrl, method: 'GET',
+      headers: {'User-Agent':'Mozilla/5.0','Accept':'text/csv,*/*'}
+    };
+    
+    const pr = https.request(opts, sr => {
+      let body = '';
+      sr.on('data', c => body += c);
+      sr.on('end', () => {
+        const lines = body.trim().split('\n');
+        if(lines.length < 2){ res.writeHead(200); res.end('{}'); return; }
+
+        const headers = parseCSVLine(lines[0]).map(h => h.replace(/^\uFEFF/,''));
+        const col = name => headers.indexOf(name);
+        const iName = col('player_name');
+        const iDate = col('game_date');
+        const iPitcherId = col('pitcher');
+
+        // Helper to strip accents for matching
+        const stripAccents = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        
+        // Normalize name to match dashboard's normName function
+        const normName = s => s.toLowerCase()
+          .replace(/\./g, '')           // A.J. -> AJ
+          .replace(/\s+/g, ' ')         // multiple spaces -> one
+          .replace(/ jr$| sr$| ii$| iii$/, '') // remove suffixes
+          .trim();
+
+        const pitchers = {};
+        for(let i = 1; i < lines.length; i++){
+          if(!lines[i].trim()) continue;
+          const row = parseCSVLine(lines[i]);
+          const name = row[iName] || '';
+          const gameDate = row[iDate] || '';
+          const pitcherId = row[iPitcherId] || '';
+          if(!name || !gameDate) continue;
+          
+          // Normalize name (Last, First -> First Last)
+          const normalized = name.includes(',')
+            ? name.split(',').map(s=>s.trim()).reverse().join(' ')
+            : name;
+          // Apply same normalization as dashboard
+          const key = stripAccents(normName(normalized));
+          
+          // Track most recent game date
+          if(!pitchers[key] || gameDate > pitchers[key].lastDate) {
+            pitchers[key] = { 
+              name: normalized, 
+              lastDate: gameDate,
+              mlbId: pitcherId
+            };
+          }
+        }
+
+        // Calculate days rest for each pitcher
+        const todayStr = fmt(today);
+        const result = {};
+        Object.entries(pitchers).forEach(([key, p]) => {
+          const lastGame = new Date(p.lastDate + 'T12:00:00');
+          const todayNoon = new Date(todayStr + 'T12:00:00');
+          const daysRest = Math.floor((todayNoon - lastGame) / (24 * 60 * 60 * 1000));
+          result[key] = {
+            name: p.name,
+            lastDate: p.lastDate,
+            daysRest: daysRest,
+            mlbId: p.mlbId
+          };
+        });
+
+        console.log(`[proxy] pitcher-rest: found ${Object.keys(result).length} pitchers`);
+        setCORS(res, reqOrigin);
+        res.writeHead(200, {'Content-Type':'application/json'});
+        res.end(JSON.stringify(result));
+      });
+    });
+    pr.on('error', e => { res.writeHead(502); res.end('{}'); });
+    pr.end();
+    return;
+  }
+
   // /savant-debuts -> detect pitchers appearing in current year Statcast for first time
   if (path === '/savant-debuts') {
     const currentYear = new Date().getFullYear();

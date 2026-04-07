@@ -295,6 +295,7 @@
   .bp-fa  { font-size:10px; padding:1px 5px; border-radius:3px; background:#e1f5ee; color:#0F6E56; font-weight:600; margin-left:3px; }
   .bp-inj { font-size:10px; padding:1px 5px; border-radius:3px; background:#fcebeb; color:#A32D2D; font-weight:600; margin-left:3px; }
   .bp-role { font-size:10px; padding:1px 5px; border-radius:3px; background:#faeeda; color:#854F0B; font-weight:600; margin-left:3px; }
+  .bp-lrp { font-size:10px; padding:1px 5px; border-radius:3px; background:#fef3c7; color:#92400e; font-weight:600; margin-left:3px; }
   .bp-stats { font-size:11px; color:var(--text2); white-space:nowrap; }
   .bp-stat-val { font-weight:600; color:var(--text); }
   .bp-stat-bs { font-weight:600; color:#dc2626; } /* Red text for blown saves */
@@ -791,6 +792,7 @@ async function loadLeague(){
         renderBPTransitions();
         renderBPWaiting();
         renderBPEliteArms();
+        renderBPLongRelief();
         const bpUpd = document.getElementById('bpUpdated');
         if(bpUpd) bpUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
       }
@@ -936,7 +938,7 @@ function showBPSkeleton() {
           <div class="skeleton-cell" style="width:70px;height:11px;border-radius:4px"></div>
         </div>`).join('')}
     </div>`).join('');
-  ['bpTransitions','bpWaiting','bpEliteArms'].forEach(id => {
+  ['bpTransitions','bpWaiting','bpEliteArms','bpLongRelief'].forEach(id => {
     const e = document.getElementById(id);
     if(e) e.innerHTML = Array.from({length:4}, () => `
       <div class="role-card">
@@ -1210,19 +1212,22 @@ async function fetchSavantData(year){
 
     // Fetch aggregated K%, BB%, Whiff% from proxy statcast aggregation
     try {
-      const [r2, r3, r4, r5] = await Promise.all([
+      const [r2, r3, r4, r5, r6] = await Promise.all([
         fetch(`${PROXY}/savant-stats?year=${G.dataYear||CURRENT_YEAR}`),
         fetch(`${PROXY}/savant-recent`),
         fetch(`${PROXY}/mlb-stats?year=${G.dataYear||CURRENT_YEAR}`),
         fetch(`${PROXY}/savant-contact?year=${G.dataYear||CURRENT_YEAR}`),
+        fetch(`${PROXY}/pitcher-rest`),
       ]);
       const statsJson  = await r2.json();
       const recentJson = await r3.json();
       const mlbJson    = await r4.json();
       const contactJson = await r5.json();
+      const restJson   = await r6.json();
       G.recentStats = recentJson;
       G.mlbStats = mlbJson;
       G.contactStats = contactJson; // Store contact quality data globally
+      G.pitcherRest = restJson;     // Store pitcher rest data globally
       
       // Merge MLB traditional stats (IP, WHIP, K9, BB9, GB%) into liveData
       Object.entries(mlbJson).forEach(([lname, m]) => {
@@ -1512,6 +1517,7 @@ function tryRenderBPFASections() {
   renderBPTransitions();
   renderBPWaiting();
   renderBPEliteArms();
+  renderBPLongRelief();
   const bpUpd = document.getElementById('bpUpdated');
   if(bpUpd) bpUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
 }
@@ -1831,15 +1837,8 @@ function renderBPTeams() {
       // Long reliever indicator (from allRanked data - includes all pitchers, not just those with roles)
       const isLongReliever = allRanked?.isLongReliever || allRanked?.ipPerGame > 1.4 || candidate?.isLongReliever;
       const longRPTag = isLongReliever 
-        ? `<span class="bp-flag-warning" title="Long relief role (${(allRanked?.ipPerGame||0).toFixed(1)} IP/G)">LRP</span>` 
+        ? `<span class="bp-lrp" title="Long relief role (${(allRanked?.ipPerGame||0).toFixed(1)} IP/G)">LRP</span>` 
         : '';
-      
-      // Statcast data for warnings
-      const savantData = findSavant(p.name);
-      const contactData = G.contactStats ? G.contactStats[p.name?.toLowerCase()] : null;
-      const hardHit = contactData?.hardHit ?? savantData?.hardHit;
-      const barrel = contactData?.barrel ?? savantData?.barrel;
-      const xera = savantData?.xera;
       
       // Emerging signals (positive indicators for non-closers)
       const emergingSignals = candidate?.emergingSignals || [];
@@ -1854,25 +1853,10 @@ function renderBPTeams() {
         ? `<span style="margin:0 3px">·</span><span class="bp-stat-bs">${blownSaves}</span>BS` 
         : '';
       
-      // Warning line below name (xERA, hard hit, etc.)
-      // Only show warnings if pitcher has 2+ IP (enough sample for Statcast data)
-      const pitcherIpNum = ipToDecimal(p.ip || '0');
-      let warningLine = '';
-      if(pitcherIpNum >= 2.0) {
-        if(xera && xera > 5.0) {
-          warningLine = `<div class="bp-warning-line">⚠️ ${xera.toFixed(2)} xERA</div>`;
-        } else if(hardHit && hardHit > 45) {
-          warningLine = `<div class="bp-warning-line">⚠️ ${hardHit.toFixed(0)}% Hard Hit</div>`;
-        } else if(barrel && barrel > 12) {
-          warningLine = `<div class="bp-warning-line">⚠️ ${barrel.toFixed(0)}% Barrel</div>`;
-        }
-      }
-      
       return `<div class="bp-pitcher">
         <img class="bp-avatar" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
         <div class="bp-info">
-          <span class="bp-name">${p.name}${roleTag}${faTag}${injTag}${longRPTag}${emergingTag}</span>
-          ${warningLine}
+          <span class="bp-name">${p.name}${roleTag}${longRPTag}${faTag}${injTag}${emergingTag}</span>
         </div>
         <span class="bp-stats">
           <span class="bp-stat-val">${p.saves}</span>SV${bsStatDisplay}
@@ -2171,6 +2155,132 @@ function renderBPEliteArms() {
   }).join('');
 }
 
+function renderBPLongRelief() {
+  const el = document.getElementById('bpLongRelief');
+  if(!G.mlbStats && G.yearCache[CURRENT_YEAR]) G.mlbStats = G.yearCache[CURRENT_YEAR].mlbStats;
+  if(!el || !G.mlbStats || !G.savantLoaded || !G_bpData) {
+    return;
+  }
+  const svMap = getSavantDataMap();
+  const restData = G.pitcherRest || {};
+
+  // Build Set of pitchers confirmed active in MLB bullpens this year
+  const activeBullpenNames = new Set();
+  (G_bpData||[]).forEach(team => {
+    (team.pitchers||[]).forEach(p => {
+      activeBullpenNames.add(stripAccents(normName(p.name.toLowerCase())));
+    });
+  });
+
+  // Find long relievers: IP/game >= 1.4, must be FA, must have elite stats
+  const longRelievers = Object.entries(G.mlbStats)
+    .filter(([name, m]) => {
+      if(!isFAInLeague(name)) return false;
+      if(!activeBullpenNames.has(stripAccents(normName(name)))) return false;
+      
+      // Must have enough usage
+      const ipNum = m.ipNum || 0;
+      const gp = m.gamesPlayed || 0;
+      if(ipNum < 3.0 || gp < 2) return false;
+      
+      // Must be long relief profile (>=1.4 IP/game)
+      const ipPerGame = gp > 0 ? ipNum / gp : 0;
+      if(ipPerGame < 1.4) return false;
+      
+      // Must have ELITE stuff: K-BB% >= 15% AND (Whiff% >= 22% OR xERA <= 5.0)
+      const sv = svMap.get(stripAccents(normName(name)));
+      const kbb = sv?.kbb ?? (m.k9 && m.bb9 ? ((m.k9-m.bb9)/9*100) : 0);
+      const whiff = sv?.whiff || 0;
+      const xera = sv?.xera || 99;
+      
+      if(kbb < 15) return false;
+      if(whiff < 22 && xera > 5.0) return false;
+      
+      return true;
+    })
+    .map(([name, m]) => {
+      const sv = svMap.get(stripAccents(normName(name)));
+      const nn = stripAccents(normName((m.name||name).toLowerCase()));
+      const bpTeam = G_bpData?.find(t => t.pitchers.some(r =>
+        stripAccents(normName(r.name.toLowerCase())) === nn
+      ));
+      const bpP = bpTeam?.pitchers.find(r => stripAccents(normName(r.name.toLowerCase())) === nn);
+      
+      // Get days rest - use same key format as server (stripAccents + normName)
+      const restKey = stripAccents(normName(m.name || name));
+      const restInfo = restData[restKey];
+      const daysRest = restInfo?.daysRest ?? null;
+      
+      const ipNum = m.ipNum || 0;
+      const gp = m.gamesPlayed || 0;
+      const ipPerGame = gp > 0 ? (ipNum / gp).toFixed(1) : '—';
+      
+      return {
+        name: m.name||name,
+        gp: gp,
+        ip: m.ip||'—',
+        ipPerGame: ipPerGame,
+        era: m.era || null,
+        xera: sv?.xera || null,
+        kbb: sv?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
+        whiff: sv?.whiff || null,
+        mlbId: sv?.mlbId || bpP?.mlbId || null,
+        teamName: bpTeam?.name || '',
+        daysRest: daysRest,
+        lastDate: restInfo?.lastDate || null
+      };
+    })
+    // Sort by days rest (most rest first = most likely to pitch), then by stuff
+    .sort((a,b) => {
+      // Pitchers with rest data come first, sorted by most days rest
+      if(a.daysRest !== null && b.daysRest !== null) {
+        if(b.daysRest !== a.daysRest) return b.daysRest - a.daysRest;
+      }
+      if(a.daysRest !== null && b.daysRest === null) return -1;
+      if(a.daysRest === null && b.daysRest !== null) return 1;
+      // Then by stuff
+      return ((b.kbb||0)+(b.whiff||0)) - ((a.kbb||0)+(a.whiff||0));
+    });
+
+  if(!longRelievers.length) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No long relievers found matching filters.</span>';
+    return;
+  }
+
+  el.innerHTML = longRelievers.map(p => {
+    // Days rest badge - color coded
+    let restBadge = '';
+    if(p.daysRest !== null) {
+      let restColor = '#6b7280'; // gray - recent
+      let restLabel = `${p.daysRest}d rest`;
+      if(p.daysRest >= 4) {
+        restColor = '#059669'; // green - very likely to pitch
+        restLabel = `${p.daysRest}d rest 🔥`;
+      } else if(p.daysRest >= 3) {
+        restColor = '#d97706'; // amber - likely
+        restLabel = `${p.daysRest}d rest`;
+      } else if(p.daysRest >= 2) {
+        restColor = '#6b7280'; // gray - maybe
+        restLabel = `${p.daysRest}d rest`;
+      } else {
+        restLabel = 'Pitched recently';
+      }
+      restBadge = `<span style="font-size:10px;font-weight:600;color:${restColor}">${restLabel}</span>`;
+    }
+    
+    return `<div class="role-card">
+      <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
+      <div class="role-info">
+        <div class="role-name">${p.name}</div>
+        <div class="role-name-sub">${teamNickname(p.teamName)} ${restBadge}</div>
+        <div class="role-team">${p.ipPerGame} IP/G · ${p.ip}IP · ERA ${p.era?.toFixed(2)||'—'}</div>
+        <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb.toFixed(1)+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
+      </div>
+      <span class="role-badge" style="background:#fef3c7;color:#92400e">LRP</span>
+    </div>`;
+  }).join('');
+}
+
 // fetchBullpenWatch is called from the tab onclick directly
 
 </script>
@@ -2192,6 +2302,11 @@ function renderBPEliteArms() {
       <div id="bpEliteArms" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">
+      <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">Long Relief Streamers</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with bulk innings (≥1.4 IP/G) and elite stuff (K-BB% ≥15%, Whiff% ≥22% or xERA ≤5.0). Sorted by rest.</div>
+      <div id="bpLongRelief" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
+    </div>
+    <div style="margin-bottom:20px">
       <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:6px">MLB Bullpens</div>
       <div style="font-size:10px;color:var(--text2);margin-bottom:12px;line-height:1.6">
         <div style="margin-bottom:4px">
@@ -2199,7 +2314,7 @@ function renderBPEliteArms() {
           <span style="margin-left:12px"><span class="bp-role" style="font-size:9px;padding:1px 4px">1st</span> <span class="bp-role" style="font-size:9px;padding:1px 4px">2nd</span> Next in line (non-LRP with highest scores)</span>
         </div>
         <div style="margin-bottom:4px">
-          <span class="bp-flag-warning" style="font-size:9px;padding:1px 4px">LRP</span> Long Relief (≥1.4 IP/game — mop-up role, not closer candidate)
+          <span class="bp-lrp" style="font-size:9px;padding:1px 4px">LRP</span> Long Relief (≥1.4 IP/game — mop-up role, not closer candidate)
           <span style="margin-left:12px"><span class="bp-stat-bs">2</span>BS Blown saves</span>
           <span style="margin-left:12px"><span class="bp-fa" style="font-size:9px;padding:1px 4px">FA</span> Free agent in your league</span>
           <span style="margin-left:12px"><span class="bp-inj" style="font-size:9px;padding:1px 4px">IL</span> Injured list</span>
