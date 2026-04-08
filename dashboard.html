@@ -2305,9 +2305,9 @@ function renderBPEliteArms() {
       if((m.ipNum||0) < 2.0) return false;
       // Use savant data for filtering
       const sv = svMap.get(stripAccents(normName(name)));
-      // Age filter: must be 30 or younger (Rising Young Arms)
+      // Age filter: must be 28 or younger (Rising Young Arms)
       const age = sv?.age || null;
-      if(age && age > 30) return false;
+      if(age && age > 28) return false;
       if(sv) {
         if((sv.kbb||0) < 18) return false;   // K-BB% >= 18%
         if((sv.whiff||0) < 22) return false;  // Whiff% >= 22%
@@ -2326,18 +2326,32 @@ function renderBPEliteArms() {
         stripAccents(normName(r.name.toLowerCase())) === nn
       ));
       const bpP = bpTeam?.pitchers.find(r => stripAccents(normName(r.name.toLowerCase())) === nn);
+      
+      const age = sv?.age || null;
+      const whiff = sv?.whiff || 0;
+      const kbb = sv?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : 0);
+      const xera = sv?.xera || m.era || 4.5;
+      
+      // Composite score: Whiff 30% + K-BB 25% + xERA 25% + Age 20%
+      const whiffPts = Math.max(0, (whiff - 15) * 4);           // 22% whiff = 28 pts
+      const kbbPts = Math.max(0, (kbb - 10) * 4);               // 20% K-BB = 40 pts
+      const xeraPts = Math.max(0, (5.0 - xera) * 25);           // 3.00 xERA = 50 pts
+      const agePts = age ? Math.max(0, (29 - age) * 10) : 25;   // 24 yo = 50 pts, unknown = 25 pts
+      const compositeScore = (whiffPts * 0.30) + (kbbPts * 0.25) + (xeraPts * 0.25) + (agePts * 0.20);
+      
       return {
         name: m.name||name,
-        age: sv?.age || null,
+        age,
         gp: m.gamesPlayed||0,
         ip: m.ip||'—', xera: sv?.xera||null,
-        kbb: sv?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
+        kbb,
         whiff: sv?.whiff||null,
         mlbId: sv?.mlbId || bpP?.mlbId || null,
-        teamName: bpTeam?.name||''
+        teamName: bpTeam?.name||'',
+        compositeScore
       };
     })
-    .sort((a,b) => ((b.kbb||0)+(b.whiff||0)) - ((a.kbb||0)+(a.whiff||0)));
+    .sort((a,b) => b.compositeScore - a.compositeScore);
   
   // Hide entire section if no results
   const section = el.parentElement;
@@ -2349,15 +2363,16 @@ function renderBPEliteArms() {
   
   el.innerHTML = eliteArms.map(p => {
     const ageDisplay = p.age ? `, ${p.age}` : '';
+    const scoreDisplay = p.compositeScore ? p.compositeScore.toFixed(0) : '—';
     return `<div class="role-card">
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
         <div class="role-name">${p.name}${ageDisplay}</div>
         <div class="role-name-sub">${teamNickname(p.teamName)}</div>
         <div class="role-team">${p.gp}GP · ${p.ip}IP · xERA ${p.xera?.toFixed(2)||'—'}</div>
-        <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
+        <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb.toFixed?p.kbb.toFixed(1)+'%':p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
       </div>
-      <span class="role-badge waiting">Rising Arm</span>
+      <span class="role-badge waiting" title="Composite score: Whiff 30% + K-BB 25% + xERA 25% + Age 20%">${scoreDisplay}</span>
     </div>`;
   }).join('');
 }
@@ -2750,7 +2765,7 @@ function setupExpandButton(containerId) {
     </div>
     <div style="margin-bottom:20px">
       <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">🌟 Rising Young Arms</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs age 30 or younger with elite stuff (K-BB% ≥18%, Whiff% ≥22%, xERA ≤4.00) not yet in high-leverage roles</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs age 28 or younger with elite stuff (K-BB% ≥18%, Whiff% ≥22%, xERA ≤4.00). Sorted by composite score.</div>
       <div id="bpEliteArms" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">

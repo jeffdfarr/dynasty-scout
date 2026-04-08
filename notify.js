@@ -129,45 +129,85 @@ async function fetchXERA(year, timeoutMs=60000) {
 }
 
 const FORTY_MAN_CACHE = path.join(__dirname, '.forty-man-cache.json');
+const FORTY_MAN_SEEN_CACHE = path.join(__dirname, '.forty-man-seen.json');
 const PITCHER_POS_40 = new Set(['P','SP','RP','CL']);
+const FORTY_MAN_HIDE_DAYS = 14; // Hide notified players for 14 days
 
-async function checkFortyManAdditions(stats25, stats26) {
+async function checkFortyManAdditions(stats25, stats26, mlbStats26) {
   try {
     const current = await fetchJSON(`${CONFIG.proxyBase}/forty-man`);
 
-    // Filter to pitchers only AND prospects (age ≤ 26 or minimal 2025 MLB experience)
+    // Helper to find stats with flexible name matching
+    const findStats = (statsObj, name) => {
+      if(!statsObj) return null;
+      const nn = normName(name);
+      return statsObj[nn] || statsObj[name.toLowerCase()] || 
+             Object.entries(statsObj).find(([k]) => normName(k) === nn)?.[1] || null;
+    };
+
+    // Filter to pitchers only AND prospects (minimal MLB experience)
     const currentPitchers = {};
     Object.entries(current).forEach(([key, p]) => {
       if(!PITCHER_POS_40.has(p.pos)) return;
-      const s25 = stats25[key] || Object.entries(stats25).find(([k])=>normName(k)===normName(key))?.[1];
-      const s26 = stats26 && (stats26[key] || Object.entries(stats26).find(([k])=>normName(k)===normName(key))?.[1]);
+      
+      // Check MLB experience from multiple sources
+      const s25 = findStats(stats25, p.name);
+      const s26 = findStats(stats26, p.name);
+      const mlb = findStats(mlbStats26, p.name);
+      
+      // Use BF from Savant + games from MLB Stats API
       const totalBF = (s25?.bf || 0) + (s26?.bf || 0);
-      if(totalBF >= 15) return;
-      currentPitchers[key] = p;
+      const mlbGames = mlb?.gamesPlayed || 0;
+      
+      // Skip if significant MLB experience (15+ BF or 5+ games this year)
+      if(totalBF >= 15 || mlbGames >= 5) {
+        return;
+      }
+      
+      currentPitchers[normName(p.name)] = p;
     });
 
-    // Load previous snapshot
+    // Load "seen" cache — players we've already notified about
+    let seenCache = {};
+    const now = Date.now();
+    const HIDE_MS = FORTY_MAN_HIDE_DAYS * 24 * 60 * 60 * 1000;
+    try { 
+      seenCache = JSON.parse(fs.readFileSync(FORTY_MAN_SEEN_CACHE, 'utf8')); 
+      // Clean up expired entries
+      Object.keys(seenCache).forEach(k => { 
+        if(now - seenCache[k] > HIDE_MS) delete seenCache[k]; 
+      });
+    } catch(e) { seenCache = {}; }
+
+    // Load previous roster snapshot
     let previous = {};
     if(fs.existsSync(FORTY_MAN_CACHE)) {
       try { previous = JSON.parse(fs.readFileSync(FORTY_MAN_CACHE, 'utf8')); }
       catch(e) { previous = {}; }
     }
 
-    // Find new additions
+    // Find new additions: in current, not in previous, not recently seen
     const newAdditions = [];
-    Object.entries(currentPitchers).forEach(([key, p]) => {
-      if(!previous[key]) {
-        newAdditions.push(p);
-      }
+    Object.entries(currentPitchers).forEach(([nn, p]) => {
+      // Skip if in previous snapshot
+      if(previous[nn]) return;
+      // Skip if already notified recently
+      if(seenCache[nn]) return;
+      
+      newAdditions.push(p);
+      // Mark as seen
+      seenCache[nn] = now;
     });
 
-    // Save current as new cache
+    // Save current roster as new snapshot
     fs.writeFileSync(FORTY_MAN_CACHE, JSON.stringify(currentPitchers, null, 2));
+    // Save updated seen cache
+    fs.writeFileSync(FORTY_MAN_SEEN_CACHE, JSON.stringify(seenCache, null, 2));
 
     if(newAdditions.length > 0) {
       console.log(`40-man additions: ${newAdditions.map(p=>p.name).join(', ')}`);
     } else {
-      console.log('No new 40-man pitcher additions since last check');
+      console.log(`No new 40-man pitcher additions (${Object.keys(currentPitchers).length} prospects tracked, ${Object.keys(seenCache).length} recently notified)`);
     }
 
     return newAdditions;
@@ -218,7 +258,9 @@ async function run() {
     const st = p.status || '';
     if(st === 'FA' || st === 'W') {
       const name = idToName[pid] || '';
-      if(name) faNames.add(normName(name));
+      const nn = normName(name);
+      // CRITICAL: Double-check they're not actually rostered
+      if(name && !rosteredNames.has(nn)) faNames.add(nn);
     }
   });
   // Fallback: ADP minus rostered
@@ -231,7 +273,7 @@ async function run() {
       if(!rosteredNames.has(nn)) faNames.add(nn);
     });
   }
-  console.log(`Found ${faNames.size} FA pitchers in pool`);
+  console.log(`Found ${faNames.size} FA pitchers in pool (excluded ${rosteredNames.size} rostered)`);
 
   // 2. Fetch Statcast data (both years in parallel)
   console.log('Fetching Statcast data...');
@@ -248,7 +290,7 @@ async function run() {
 
   // Check for new 40-man pitcher additions
   console.log('Checking 40-man roster additions...');
-  const fortyManAdditions = await checkFortyManAdditions(stats25, stats26);
+  const fortyManAdditions = await checkFortyManAdditions(stats25, stats26, mlbStats26);
 
   // 3. Merge all stats per pitcher and find FA candidates
   const candidates = [];
@@ -321,6 +363,19 @@ async function run() {
     candidates.push({ name, pos, label, statStr: statParts.join(' '), kbb26, whiff, bf26, nn });
   });
 
+  // Load first-saves cache — skip pitchers we've already notified about
+  const FIRST_SAVE_CACHE = path.join(__dirname, '.first-save-cache.json');
+  let firstSaveSeen = {};
+  const FIRST_SAVE_HIDE_DAYS = 14;
+  const FIRST_SAVE_HIDE_MS = FIRST_SAVE_HIDE_DAYS * 24 * 60 * 60 * 1000;
+  try { 
+    firstSaveSeen = JSON.parse(fs.readFileSync(FIRST_SAVE_CACHE, 'utf8')); 
+    // Clean up expired entries
+    Object.keys(firstSaveSeen).forEach(k => { 
+      if(now - firstSaveSeen[k] > FIRST_SAVE_HIDE_MS) delete firstSaveSeen[k]; 
+    });
+  } catch(e) { firstSaveSeen = {}; }
+
   // Check for first saves among FA pitchers
   const firstSaveCandidates = [];
   faNames.forEach(nn => {
@@ -330,9 +385,13 @@ async function run() {
     const mlb = mlbStats26[nn] || Object.entries(mlbStats26).find(([k])=>normName(k)===normName(nn))?.[1];
     if(!mlb) return;
     if(mlb.saves >= 1 && mlb.saves <= 3) {
+      // Skip if already notified recently
+      if(firstSaveSeen[nn]) return;
+      
       const s26 = stats26[nn] || Object.entries(stats26).find(([k])=>normName(k)===nn)?.[1];
       firstSaveCandidates.push({
         name: mlb.name,
+        nn,
         saves: mlb.saves,
         ip: mlb.ip,
         kbb:   s26?.kbb       || null,
@@ -340,6 +399,10 @@ async function run() {
       });
     }
   });
+
+  // Save first-saves seen cache
+  firstSaveCandidates.forEach(c => { firstSaveSeen[c.nn] = now; });
+  try { fs.writeFileSync(FIRST_SAVE_CACHE, JSON.stringify(firstSaveSeen, null, 2)); } catch(e) {}
 
   // Sort by label priority then K-BB%
   const labelOrder = {'🔥':0,'🆕':1,'📈':2,'✅':3,'💤':4};
