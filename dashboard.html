@@ -317,6 +317,20 @@
   .bp-contact-bad { font-size:9px; color:#dc2626; margin-left:4px; }
   .bp-contact-good { font-size:9px; color:#16a34a; margin-left:4px; }
   
+  /* Closer fatigue badge */
+  .bp-fatigue { font-size:9px; padding:1px 4px; border-radius:3px; font-weight:600; margin-left:3px; }
+  .bp-fatigue.fresh { background:#dcfce7; color:#16a34a; }  /* 3+ days rest */
+  .bp-fatigue.recent { background:#fef3c7; color:#92400e; } /* 1-2 days */
+  .bp-fatigue.tired { background:#fee2e2; color:#dc2626; }  /* 0 days (pitched today) */
+  
+  /* Multi-inning upside tag */
+  .bp-multi { font-size:9px; padding:1px 4px; border-radius:3px; background:#dbeafe; color:#1d4ed8; font-weight:600; margin-left:3px; }
+  
+  /* Vulnerability indicator for closers */
+  .bp-vuln { font-size:9px; padding:1px 4px; border-radius:3px; font-weight:600; margin-left:3px; }
+  .bp-vuln.high { background:#fee2e2; color:#dc2626; }
+  .bp-vuln.med { background:#fef3c7; color:#92400e; }
+
   /* Collapsible legend */
   .bp-key-arrow { transition: transform 0.2s; font-size:8px; }
   .bp-key-open + .bp-key-arrow, .bp-key-open .bp-key-arrow { transform: rotate(180deg); }
@@ -352,6 +366,75 @@
   .role-badge { font-size:10px; padding:2px 7px; border-radius:20px; font-weight:600; white-space:nowrap; }
   .role-badge.transition { background:#faeeda; color:#854F0B; }
   .role-badge.waiting    { background:#e6f1fb; color:#185FA5; }
+  .role-badge.hot        { background:#fee2e2; color:#dc2626; }
+  .role-badge.warm       { background:#fef3c7; color:#d97706; }
+
+  /* 3-column top row layout */
+  .bp-top-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 1024px) {
+    .bp-top-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 680px) {
+    .bp-top-row { grid-template-columns: 1fr; }
+  }
+  .bp-col {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+  }
+  .bp-col-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.2px;
+    margin-bottom: 4px;
+  }
+  .bp-col-desc {
+    font-size: 10px;
+    color: var(--text2);
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+  .bp-col-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+  }
+  .bp-col-cards .role-card {
+    padding: 10px 12px;
+  }
+  .bp-col-cards .role-card.hidden {
+    display: none;
+  }
+  .bp-col-cards.expanded .role-card.hidden {
+    display: flex;
+  }
+  .bp-expand-btn {
+    margin-top: 10px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text2);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    align-self: center;
+  }
+  .bp-expand-btn:hover {
+    background: var(--surface2);
+    color: var(--text);
+  }
 
   @keyframes shimmer {
     0% { background-position: -600px 0; }
@@ -417,8 +500,10 @@
 
   <div id="credBar" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
     <div>
-      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">Fantrax Secret ID</label>
-      <input type="password" id="secretIdBar" placeholder="e.g. 24pscnquxwekzngy" style="width:220px;padding:6px 9px;font-size:13px;font-family:inherit;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text)" />
+      <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">Fantrax Secret ID <a href="https://www.fantrax.com/user/profile" target="_blank" style="color:var(--blue);text-decoration:none;font-size:10px">(find yours here)</a></label>
+      <input type="text" id="secretIdBar" placeholder="e.g. 24pscnquxwekzngy" autocomplete="off" spellcheck="false" 
+        onkeydown="if(event.key==='Enter'){event.preventDefault();saveCredentials();}"
+        style="width:220px;padding:6px 9px;font-size:13px;font-family:inherit;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text)" />
     </div>
     <button onclick="saveCredentials()" style="padding:6px 16px;border-radius:var(--radius);border:1px solid var(--blue);background:var(--blue);color:#fff;font-size:13px;font-family:inherit;cursor:pointer">Save &amp; load</button>
     <button onclick="document.getElementById('credBar').style.display='none'" style="padding:6px 10px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg);color:var(--text2);font-size:13px;font-family:inherit;cursor:pointer">Hide</button>
@@ -618,9 +703,20 @@ async function testProxy(){
 
 async function fx(path, params={}){
   const qs = Object.entries(params).map(([k,v])=>`${k}=${encodeURIComponent(v)}`).join('&');
-  const r = await fetch(`${PROXY}/fxea/general/${path}${qs?'?'+qs:''}`);
-  if(!r.ok) throw new Error(`HTTP ${r.status} on ${path}`);
-  return r.json();
+  const url = `${PROXY}/fxea/general/${path}${qs?'?'+qs:''}`;
+  console.log('[fantrax] calling:', url);
+  const r = await fetch(url);
+  if(!r.ok) {
+    const errText = await r.text().catch(() => '');
+    console.error('[fantrax] HTTP error:', r.status, errText);
+    throw new Error(`Fantrax API error: ${r.status}`);
+  }
+  const data = await r.json();
+  if(data.error) {
+    console.error('[fantrax] API error:', data.error);
+    throw new Error(data.error);
+  }
+  return data;
 }
 
 async function fetchLeagues(){
@@ -638,9 +734,21 @@ async function loadLeague(){
   // Fetch leagues if not already loaded
   document.getElementById('leagueHeader').textContent = 'Connecting to Fantrax...';
   if(!G.leagues.length){
-    const data = await fx('getLeagues', {userSecretId: sid});
-    G.leagues = data.leagues || [];
-    if(!G.leagues.length){ document.getElementById('leagueHeader').textContent = 'No leagues found — check your Secret ID'; return; }
+    try {
+      const data = await fx('getLeagues', {userSecretId: sid});
+      console.log('[fantrax] getLeagues response:', data);
+      G.leagues = data.leagues || [];
+      if(!G.leagues.length){ 
+        document.getElementById('leagueHeader').textContent = 'No leagues found — check your Secret ID'; 
+        showCredentialPrompt();
+        return; 
+      }
+    } catch(e) {
+      console.error('[fantrax] getLeagues error:', e);
+      document.getElementById('leagueHeader').textContent = 'Failed to connect — check your Secret ID';
+      showCredentialPrompt();
+      return;
+    }
   }
   document.getElementById('leagueHeader').textContent = 'Loading rosters and stats...';
   // Use first league (or stored leagueId)
@@ -817,6 +925,7 @@ async function loadLeague(){
         renderBPTeams();  // Re-render with Savant whiff% data for bullpen order
         renderBPTransitions();
         renderBPWaiting();
+        renderBPVultures();
         renderBPEliteArms();
         renderBPLongRelief();
         const bpUpd = document.getElementById('bpUpdated');
@@ -964,7 +1073,7 @@ function showBPSkeleton() {
           <div class="skeleton-cell" style="width:70px;height:11px;border-radius:4px"></div>
         </div>`).join('')}
     </div>`).join('');
-  ['bpTransitions','bpWaiting','bpEliteArms','bpLongRelief'].forEach(id => {
+  ['bpTransitions','bpWaiting','bpVultures','bpEliteArms','bpLongRelief'].forEach(id => {
     const e = document.getElementById(id);
     if(e) e.innerHTML = Array.from({length:4}, () => `
       <div class="role-card">
@@ -1466,8 +1575,19 @@ function restoreCredentials(){
 }
 
 function saveCredentials(){
-  const sid = document.getElementById('secretIdBar').value.trim();
+  const raw = document.getElementById('secretIdBar').value;
+  const sid = raw.trim().toLowerCase(); // Fantrax IDs are lowercase alphanumeric
   if(!sid){ alert('Please enter your Fantrax Secret ID'); return; }
+  if(!/^[a-z0-9]+$/.test(sid)){ 
+    alert('Secret ID should only contain letters and numbers (no spaces or special characters)'); 
+    return; 
+  }
+  // Clear cached leagues if ID changed (different user)
+  const prevSid = localStorage.getItem('fantrax_secret_id');
+  if(prevSid && prevSid !== sid) {
+    G.leagues = []; // Force re-fetch of leagues for new user
+    localStorage.removeItem('fantrax_league_id'); // Clear league selection
+  }
   localStorage.setItem('fantrax_secret_id', sid);
   document.getElementById('credBar').style.display = 'none';
   refreshLeague();
@@ -1548,6 +1668,7 @@ function tryRenderBPFASections() {
   if(!G.mlbStats || !G.savantLoaded || !G_bpData || G.preFetching) return;
   renderBPTransitions();
   renderBPWaiting();
+  renderBPVultures();
   renderBPEliteArms();
   renderBPLongRelief();
   const bpUpd = document.getElementById('bpUpdated');
@@ -1775,7 +1896,14 @@ function renderBPTeams() {
       // Track if this is a long reliever for display
       const isLongReliever = ipPerGame > 1.4;
       
-      return { ...p, whiff, kbb, k9, bb9, hardHit, barrel, xera, blownSaves, nextUpScore, isRelieverProfile, hasActivity, penalty, ipPerGame, isLongReliever };
+      // Multi-inning upside: IP/game >= 2.0 suggests former starter capability (bulk innings potential)
+      const hasMultiInningUpside = ipPerGame >= 2.0;
+      
+      // Closer vulnerability score: BS + (ERA > 5 ? 1 : 0) + (injured ? 1 : 0)
+      const isInjuredPitcher = p.injured || isILPlayer(p.name);
+      const vulnScore = blownSaves + (p.era > 5 ? 1 : 0) + (isInjuredPitcher ? 1 : 0);
+      
+      return { ...p, whiff, kbb, k9, bb9, hardHit, barrel, xera, blownSaves, nextUpScore, isRelieverProfile, hasActivity, penalty, ipPerGame, isLongReliever, hasMultiInningUpside, vulnScore };
     })
     .filter(p => p.isRelieverProfile && p.hasActivity)
     .sort((a, b) => b.nextUpScore - a.nextUpScore);
@@ -1872,6 +2000,20 @@ function renderBPTeams() {
         ? `<span class="bp-lrp" title="Long relief role (${(allRanked?.ipPerGame||0).toFixed(1)} IP/G)">LRP</span>` 
         : '';
       
+      // Multi-inning upside indicator (IP/G >= 2.0 = former starter, can pitch bulk innings)
+      const hasMultiInning = allRanked?.hasMultiInningUpside || (allRanked?.ipPerGame >= 2.0);
+      const multiTag = hasMultiInning && !isLongReliever
+        ? `<span class="bp-multi" title="Multi-inning upside (${(allRanked?.ipPerGame||0).toFixed(1)} IP/G)">2+IP</span>`
+        : '';
+      
+      // Vulnerability badge for closers with high vulnerability score
+      let vulnTag = '';
+      if(isDeFactoCloser && allRanked?.vulnScore >= 2) {
+        const score = allRanked.vulnScore;
+        const vulnClass = score >= 3 ? 'high' : 'med';
+        vulnTag = `<span class="bp-vuln ${vulnClass}" title="Vulnerability: ${score} (BS + ERA>5 + IL)">⚠</span>`;
+      }
+      
       // Emerging signals (positive indicators for non-closers)
       const emergingSignals = candidate?.emergingSignals || [];
       let emergingTag = '';
@@ -1888,7 +2030,7 @@ function renderBPTeams() {
       return `<div class="bp-pitcher">
         <img class="bp-avatar" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
         <div class="bp-info">
-          <span class="bp-name">${p.name}${roleTag}${longRPTag}${faTag}${injTag}${emergingTag}</span>
+          <span class="bp-name">${p.name}${roleTag}${longRPTag}${multiTag}${faTag}${injTag}${vulnTag}${emergingTag}</span>
         </div>
         <span class="bp-stats">
           <span class="bp-stat-val">${p.saves}</span>SV${bsStatDisplay}
@@ -2015,6 +2157,7 @@ function renderBPTransitions() {
       <span class="role-badge transition">${p.roleLabel}</span>
     </div>`;
   }).join('');
+  setupExpandButton('bpTransitions');
 }
 
 function renderBPWaiting() {
@@ -2074,10 +2217,15 @@ function renderBPWaiting() {
       };
     })
     .sort((a,b) => ((b.kbb||0)+(b.whiff||0)) - ((a.kbb||0)+(a.whiff||0)));
+  
+  // Hide entire section if no results
+  const section = el.parentElement;
   if(!waiting.length) {
-    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No elite setup arms found matching filters.</span>';
+    if(section) section.style.display = 'none';
     return;
   }
+  if(section) section.style.display = '';
+  
   el.innerHTML = waiting.map(p => {
     const sit = p.teamSit ? `<span class="bp-sit ${p.teamSit}" style="font-size:10px">${p.teamSit}</span>` : '';
     return `<div class="role-card">
@@ -2140,6 +2288,9 @@ function renderBPEliteArms() {
       if((m.ipNum||0) < 2.0) return false;
       // Use savant data for filtering
       const sv = svMap.get(stripAccents(normName(name)));
+      // Age filter: must be 30 or younger (Rising Young Arms)
+      const age = sv?.age || null;
+      if(age && age > 30) return false;
       if(sv) {
         if((sv.kbb||0) < 18) return false;   // K-BB% >= 18%
         if((sv.whiff||0) < 22) return false;  // Whiff% >= 22%
@@ -2160,6 +2311,7 @@ function renderBPEliteArms() {
       const bpP = bpTeam?.pitchers.find(r => stripAccents(normName(r.name.toLowerCase())) === nn);
       return {
         name: m.name||name,
+        age: sv?.age || null,
         gp: m.gamesPlayed||0,
         ip: m.ip||'—', xera: sv?.xera||null,
         kbb: sv?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
@@ -2169,15 +2321,21 @@ function renderBPEliteArms() {
       };
     })
     .sort((a,b) => ((b.kbb||0)+(b.whiff||0)) - ((a.kbb||0)+(a.whiff||0)));
+  
+  // Hide entire section if no results
+  const section = el.parentElement;
   if(!eliteArms.length) {
-    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No elite arms found matching filters.</span>';
+    if(section) section.style.display = 'none';
     return;
   }
+  if(section) section.style.display = '';
+  
   el.innerHTML = eliteArms.map(p => {
+    const ageDisplay = p.age ? `, ${p.age}` : '';
     return `<div class="role-card">
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
-        <div class="role-name">${p.name}</div>
+        <div class="role-name">${p.name}${ageDisplay}</div>
         <div class="role-name-sub">${teamNickname(p.teamName)}</div>
         <div class="role-team">${p.gp}GP · ${p.ip}IP · xERA ${p.xera?.toFixed(2)||'—'}</div>
         <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
@@ -2185,6 +2343,127 @@ function renderBPEliteArms() {
       <span class="role-badge waiting">Rising Arm</span>
     </div>`;
   }).join('');
+}
+
+function renderBPVultures() {
+  const el = document.getElementById('bpVultures');
+  if(!G.mlbStats && G.yearCache[CURRENT_YEAR]) G.mlbStats = G.yearCache[CURRENT_YEAR].mlbStats;
+  if(!el || !G.mlbStats || !G.savantLoaded || !G_bpData) {
+    return;
+  }
+  const svMap = getSavantDataMap();
+  const restData = G.pitcherRest || {};
+
+  // Find FA pitchers in 1st/2nd position behind fatigued or vulnerable closers
+  const vultures = [];
+  
+  (G_bpData || []).forEach(team => {
+    // Skip locked teams with healthy closers
+    if(team.situation === 'LOCKED') return;
+    
+    // Find closer and check their fatigue/vulnerability
+    const closer = team.pitchers.find(p => !p.injured && ((p.saves||0) > 0 || team.closerName === p.name));
+    if(!closer) return;
+    
+    // Get closer rest data
+    const closerRestKey = stripAccents(normName(closer.name));
+    const closerRest = restData[closerRestKey];
+    const closerFatigue = closerRest?.daysRest ?? 99;
+    
+    // Calculate closer vulnerability: BS + recent usage
+    const closerBS = closer.blownSaves || 0;
+    const closerVuln = closerBS + (closerFatigue <= 1 ? 1 : 0);
+    
+    // Only show vulture opportunities when closer is fatigued or vulnerable
+    if(closerFatigue > 2 && closerVuln < 1 && team.situation !== 'COMMITTEE' && team.situation !== 'VOLATILE') return;
+    
+    // Calculate vulture score for this team opportunity
+    let teamVultureScore = 0;
+    if(closerFatigue === 0) teamVultureScore += 3;
+    else if(closerFatigue === 1) teamVultureScore += 2;
+    else if(closerFatigue === 2) teamVultureScore += 1;
+    teamVultureScore += closerBS * 2;
+    if(team.situation === 'COMMITTEE') teamVultureScore += 2;
+    if(team.situation === 'VOLATILE' || team.volatile) teamVultureScore += 3;
+    
+    // Determine reason text for this team
+    let reason = [];
+    if(closerFatigue <= 1) reason.push(`${closer.name.split(' ').pop()} ${closerFatigue === 0 ? 'pitched today' : '1d rest'}`);
+    if(closerBS > 0) reason.push(`${closerBS} BS`);
+    if(team.situation === 'COMMITTEE') reason.push('Committee');
+    if(team.volatile) reason.push('Volatile');
+    
+    // Find the BEST FA candidate on this team (only one per team)
+    const faCandidates = team.pitchers
+      .filter(p => {
+        if(p.name === closer.name) return false;
+        if(p.injured) return false;
+        if(!isFAInLeague(p.name)) return false;
+        // Must have some late-inning usage
+        if((p.holds||0) + (p.saves||0) + (p.gf||0) < 2) return false;
+        return true;
+      })
+      .map(p => {
+        const sv = svMap.get(stripAccents(normName(p.name)));
+        const mlbKey = Object.keys(G.mlbStats || {}).find(k => 
+          stripAccents(normName(k)) === stripAccents(normName(p.name))
+        );
+        const m = mlbKey ? G.mlbStats[mlbKey] : null;
+        // Score candidates by holds + saves + GF (late-inning experience)
+        const candidateScore = (p.holds||0)*2 + (p.saves||0)*3 + (p.gf||0);
+        return { ...p, sv, m, candidateScore };
+      })
+      .sort((a, b) => b.candidateScore - a.candidateScore);
+    
+    // Only take the top candidate from this team
+    const bestCandidate = faCandidates[0];
+    if(!bestCandidate) return;
+    
+    vultures.push({
+      name: bestCandidate.name,
+      teamName: team.name,
+      holds: bestCandidate.holds || 0,
+      saves: bestCandidate.saves || 0,
+      gf: bestCandidate.gf || 0,
+      ip: bestCandidate.m?.ip || '—',
+      era: bestCandidate.m?.era || null,
+      kbb: bestCandidate.sv?.kbb || null,
+      whiff: bestCandidate.sv?.whiff || null,
+      mlbId: bestCandidate.sv?.mlbId || bestCandidate.mlbId || null,
+      vultureScore: teamVultureScore,
+      reason: reason.join(' · ') || 'Setup role',
+      closerName: closer.name,
+      closerFatigue
+    });
+  });
+  
+  // Sort by vulture score (highest = best opportunity)
+  vultures.sort((a, b) => b.vultureScore - a.vultureScore);
+  
+  if(!vultures.length) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No vulture opportunities today. Closers are rested.</span>';
+    return;
+  }
+  
+  el.innerHTML = vultures.map(p => {
+    // Badge color based on score
+    let badgeClass = 'waiting';
+    let badgeText = 'Watch';
+    if(p.vultureScore >= 4) { badgeClass = 'hot'; badgeText = '🔥 Hot'; }
+    else if(p.vultureScore >= 2) { badgeClass = 'warm'; badgeText = 'Warm'; }
+    
+    return `<div class="role-card">
+      <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
+      <div class="role-info">
+        <div class="role-name">${p.name}</div>
+        <div class="role-name-sub">${teamNickname(p.teamName)}</div>
+        <div class="role-team">${p.holds}HLD · ${p.saves}SV · ${p.ip}IP</div>
+        <div class="role-stats" style="font-size:10px;color:#dc2626">${p.reason}</div>
+      </div>
+      <span class="role-badge ${badgeClass}">${badgeText}</span>
+    </div>`;
+  }).join('');
+  setupExpandButton('bpVultures');
 }
 
 function renderBPLongRelief() {
@@ -2391,32 +2670,71 @@ function renderBPLongRelief() {
       </div>
     </div>`;
   }).join('');
+  setupExpandButton('bpLongRelief');
 }
 
 // fetchBullpenWatch is called from the tab onclick directly
 
+// Toggle expand/collapse for 3-column sections
+function toggleExpand(btn) {
+  const container = btn.previousElementSibling;
+  const isExpanded = container.classList.toggle('expanded');
+  btn.textContent = isExpanded ? 'Show less ▲' : 'Show more ▼';
+}
+
+// Helper to setup expand button visibility after rendering
+function setupExpandButton(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const cards = container.querySelectorAll('.role-card');
+  const btn = container.nextElementSibling;
+  if (cards.length > 4 && btn) {
+    btn.style.display = 'block';
+    // Mark cards beyond first 4 as hidden
+    cards.forEach((card, i) => {
+      if (i >= 4) card.classList.add('hidden');
+      else card.classList.remove('hidden');
+    });
+  } else if (btn) {
+    btn.style.display = 'none';
+  }
+}
+
 </script>
   <div id="pane-bullpen" class="pane active">
     <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Bullpen situations · <span id="bpUpdated">—</span></div>
-    <div style="margin-bottom:20px">
-      <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">Save Leaders Available</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">Leading or tied in saves on teams without a locked closer.</div>
-      <div id="bpTransitions" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
+    
+    <!-- 3-column top row: Save Leaders | Save Vultures | Long Relief -->
+    <div class="bp-top-row">
+      <div class="bp-col">
+        <div class="bp-col-title">Save Leaders Available</div>
+        <div class="bp-col-desc">Leading or tied in saves on teams without a locked closer.</div>
+        <div id="bpTransitions" class="bp-col-cards"></div>
+        <button class="bp-expand-btn" onclick="toggleExpand(this)" style="display:none">Show more ▼</button>
+      </div>
+      <div class="bp-col">
+        <div class="bp-col-title">🔥 Save Vulture Watch</div>
+        <div class="bp-col-desc">FAs in 1st/2nd behind fatigued or vulnerable closers.</div>
+        <div id="bpVultures" class="bp-col-cards"></div>
+        <button class="bp-expand-btn" onclick="toggleExpand(this)" style="display:none">Show more ▼</button>
+      </div>
+      <div class="bp-col">
+        <div class="bp-col-title">Long Relief Streamers</div>
+        <div class="bp-col-desc">Bulk innings (≥1.4 IP/G) + elite stuff. Sorted by matchup & rest.</div>
+        <div id="bpLongRelief" class="bp-col-cards"></div>
+        <button class="bp-expand-btn" onclick="toggleExpand(this)" style="display:none">Show more ▼</button>
+      </div>
     </div>
+    
     <div style="margin-bottom:20px">
       <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">Elite Setup Arms Available</div>
       <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with late-inning usage (2+ HLD/GF) and elite stuff (K-BB% ≥18% and Whiff% ≥27%)</div>
       <div id="bpWaiting" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">
-      <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">Elite Arms Available</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with elite stuff (K-BB% ≥18%, Whiff% ≥22%, xERA ≤4.00) not yet in high-leverage roles</div>
+      <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">🌟 Rising Young Arms</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs age 30 or younger with elite stuff (K-BB% ≥18%, Whiff% ≥22%, xERA ≤4.00) not yet in high-leverage roles</div>
       <div id="bpEliteArms" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
-    </div>
-    <div style="margin-bottom:20px">
-      <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">Long Relief Streamers</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with bulk innings (≥1.4 IP/G) and elite stuff (K-BB% ≥15%, Whiff% ≥22% or xERA ≤5.0). Sorted by matchup quality then rest.</div>
-      <div id="bpLongRelief" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
@@ -2433,12 +2751,14 @@ function renderBPLongRelief() {
             <div class="bp-key-item"><span class="bp-closer" style="font-size:9px;padding:1px 4px">CL</span> Closer (GF×2 + SV×3 − HLD×0.5)</div>
             <div class="bp-key-item"><span class="bp-role" style="font-size:9px;padding:1px 4px">1st</span> <span class="bp-role" style="font-size:9px;padding:1px 4px">2nd</span> Next in line</div>
             <div class="bp-key-item"><span class="bp-lrp" style="font-size:9px;padding:1px 4px">LRP</span> Long Relief (≥1.4 IP/G)</div>
+            <div class="bp-key-item"><span class="bp-multi" style="font-size:9px;padding:1px 4px">2+IP</span> Multi-inning upside (≥2 IP/G)</div>
           </div>
           <div class="bp-key-section">
             <div class="bp-key-title">Status</div>
             <div class="bp-key-item"><span class="bp-fa" style="font-size:9px;padding:1px 4px">FA</span> Free agent in league</div>
             <div class="bp-key-item"><span class="bp-inj" style="font-size:9px;padding:1px 4px">IL</span> Injured list</div>
             <div class="bp-key-item"><span class="bp-stat-bs">2</span>BS Blown saves</div>
+            <div class="bp-key-item"><span class="bp-vuln high" style="font-size:9px;padding:1px 4px">⚠</span> Vulnerable closer</div>
           </div>
           <div class="bp-key-section">
             <div class="bp-key-title">Team Situation</div>

@@ -196,6 +196,7 @@ const server = http.createServer(async (req, res) => {
 
         // Compute rates
         const result = {};
+        const mlbIds = [];
         Object.entries(pitchers).forEach(([name, p]) => {
           if(p.bf < 1) return;
           // Normalize name: "Last, First" -> "First Last"
@@ -213,6 +214,8 @@ const server = http.createServer(async (req, res) => {
           const ipStr   = `${ipWhole}.${ipRem}`;
           const ipDec   = ipWhole + ipRem / 3;
 
+          if(p.mlbId) mlbIds.push(p.mlbId);
+          
           result[normalized.toLowerCase()] = {
             name: normalized,
             mlbId: p.mlbId || '',
@@ -228,9 +231,46 @@ const server = http.createServer(async (req, res) => {
           };
         });
 
-        setCORS(res, reqOrigin);
-        res.writeHead(200, {'Content-Type':'application/json'});
-        res.end(JSON.stringify(result));
+        // Fetch ages in bulk from MLB API
+        if(mlbIds.length > 0) {
+          const idsStr = mlbIds.slice(0, 500).join(','); // Limit to 500
+          const peopleUrl = `/api/v1/people?personIds=${idsStr}`;
+          const ageOpts = {
+            hostname: 'statsapi.mlb.com', port: 443, path: peopleUrl, method: 'GET',
+            headers: {'User-Agent':'Mozilla/5.0','Accept':'application/json'}
+          };
+          const ageReq = https.request(ageOpts, ageRes => {
+            let ageBody = '';
+            ageRes.on('data', c => ageBody += c);
+            ageRes.on('end', () => {
+              try {
+                const ageData = JSON.parse(ageBody);
+                const ageMap = {};
+                (ageData.people || []).forEach(p => {
+                  if(p.id && p.currentAge) ageMap[String(p.id)] = p.currentAge;
+                });
+                // Add age to each pitcher
+                Object.values(result).forEach(p => {
+                  if(p.mlbId && ageMap[p.mlbId]) p.age = ageMap[p.mlbId];
+                });
+              } catch(e) { console.error('[proxy] age lookup error:', e.message); }
+              
+              setCORS(res, reqOrigin);
+              res.writeHead(200, {'Content-Type':'application/json'});
+              res.end(JSON.stringify(result));
+            });
+          });
+          ageReq.on('error', () => {
+            setCORS(res, reqOrigin);
+            res.writeHead(200, {'Content-Type':'application/json'});
+            res.end(JSON.stringify(result));
+          });
+          ageReq.end();
+        } else {
+          setCORS(res, reqOrigin);
+          res.writeHead(200, {'Content-Type':'application/json'});
+          res.end(JSON.stringify(result));
+        }
       });
     });
     pr.on('error', e => {
@@ -1471,7 +1511,9 @@ const server = http.createServer(async (req, res) => {
 
     const headers = {
       'Content-Type': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (compatible; FantraxProxy/1.0)',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/json, text/plain, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
       ...(req.headers.cookie ? { Cookie: req.headers.cookie } : {}),
     };
 
