@@ -1375,13 +1375,28 @@ async function fetchSavantData(year){
         const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
         const key = match || lname;
         if(liveData[key]) {
-          // Don't overwrite IP — Savant pitch-by-pitch IP is more accurate for current year
+          // Use MLB Stats API IP — it's official and more accurate than Savant pitch-by-pitch
+          if(m.ip != null)    liveData[key].ip    = m.ip;
+          if(m.ipNum != null) liveData[key].ipNum = m.ipNum;
           if(m.whip  != null) liveData[key].whip  = m.whip;
           if(m.k9    != null) liveData[key].k9    = m.k9;
           if(m.bb9   != null) liveData[key].bb9   = m.bb9;
           if(m.gbPct != null) liveData[key].gbPct = m.gbPct;
           if(m.saves != null) liveData[key].saves  = m.saves;
           if(m.holds != null) liveData[key].holds  = m.holds;
+          if(m.gamesPlayed != null) liveData[key].gamesPlayed = m.gamesPlayed;
+          if(m.gamesFinished != null) liveData[key].gamesFinished = m.gamesFinished;
+          if(m.era != null && !liveData[key].era) liveData[key].era = m.era;
+        } else {
+          // Player not in Savant data — add from MLB Stats
+          liveData[lname] = {
+            name: m.name,
+            ip: m.ip, ipNum: m.ipNum,
+            era: m.era, whip: m.whip,
+            k9: m.k9, bb9: m.bb9, gbPct: m.gbPct,
+            saves: m.saves, holds: m.holds,
+            gamesPlayed: m.gamesPlayed, gamesFinished: m.gamesFinished,
+          };
         }
       });
 
@@ -1429,10 +1444,12 @@ async function fetchSavantData(year){
           liveData[key].whiff    = s.whiff_pct;
           liveData[key].pitchMix = s.pitchMix || {};
           liveData[key].pa       = s.bf || liveData[key].pa || 0;
-          if(s.ip)    liveData[key].ip    = s.ip;
-          if(s.ipNum) liveData[key].ipNum = s.ipNum;
+          // Only use Savant IP if MLB Stats IP isn't already set
+          if(!liveData[key].ip && s.ip)       liveData[key].ip    = s.ip;
+          if(!liveData[key].ipNum && s.ipNum) liveData[key].ipNum = s.ipNum;
           if(s.team && !liveData[key].mlbTeam) liveData[key].mlbTeam = s.team;
           if(s.mlbId && !liveData[key].mlbId) liveData[key].mlbId = s.mlbId;
+          if(s.age && !liveData[key].age) liveData[key].age = s.age;
         } else {
           liveData[key] = {
             name: s.name, mlbTeam: s.team||'',
