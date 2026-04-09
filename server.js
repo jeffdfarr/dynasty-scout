@@ -494,6 +494,8 @@ const server = http.createServer(async (req, res) => {
         }
         
         const result = {};
+        const debugPlayers = ['little', 'lange', 'silseth', 'yates', 'burke', 'mayza'];
+        
         for(let i = 1; i < lines.length; i++){
           if(!lines[i].trim()) continue;
           const row = parseCSVLine(lines[i]);
@@ -512,8 +514,14 @@ const server = http.createServer(async (req, res) => {
           if(isNaN(whiff)) continue;
           
           const playerId = iPlayerId >= 0 ? row[iPlayerId] : null;
+          const key = name.toLowerCase();
           
-          result[name.toLowerCase()] = {
+          // Debug logging for specific players
+          if(debugPlayers.some(d => key.includes(d))) {
+            console.log(`[proxy] DEBUG: ${rawName} -> ${name} -> key="${key}", whiff=${whiff}`);
+          }
+          
+          result[key] = {
             name,
             mlbId: playerId,
             whiff,
@@ -521,11 +529,12 @@ const server = http.createServer(async (req, res) => {
         }
 
         // Log samples for verification
-        const samples = ['brock burke', 'tim mayza', 'luis castillo'].map(n => {
+        const samples = ['brock burke', 'tim mayza', 'brendon little', 'alex lange', 'chase silseth', 'kirby yates'].map(n => {
           const p = result[n];
           return p ? `${p.name}: ${p.whiff}%` : `${n}: NOT FOUND`;
         });
-        console.log(`[proxy] savant-whiff: ${Object.keys(result).length} pitchers. Samples: ${samples.join(', ')}`);
+        console.log(`[proxy] savant-whiff: ${Object.keys(result).length} pitchers`);
+        console.log(`[proxy] savant-whiff samples: ${samples.join(', ')}`);
         
         setCORS(res, reqOrigin);
         res.writeHead(200, {'Content-Type':'application/json'});

@@ -601,7 +601,7 @@
   // Dynamic year constants — always current year and previous year
   const CURRENT_YEAR = String(new Date().getFullYear());
   const PREV_YEAR    = String(new Date().getFullYear() - 1);
-  const CACHE_VERSION = '2'; // bump when data schema changes to force cache invalidation
+  const CACHE_VERSION = '3'; // bump when data schema changes to force cache invalidation
 
   // Auto-detect proxy URL — localhost in dev, same origin in cloud
   // Use localhost proxy when running locally (file:// or localhost), cloud origin when deployed
@@ -1382,13 +1382,31 @@ async function fetchSavantData(year){
       
       // Merge official Whiff% from Savant percentile rankings (most authoritative)
       console.log('[scout] savant-whiff pitchers:', Object.keys(whiffJson).length);
+      
+      // Debug: log specific players we're tracking
+      const debugPlayers = ['brendon little', 'alex lange', 'chase silseth', 'kirby yates', 'brock burke', 'tim mayza'];
+      debugPlayers.forEach(name => {
+        const w = whiffJson[name];
+        const inLiveData = Object.keys(liveData).find(k => normName(k) === normName(name));
+        console.log(`[DEBUG] ${name}: in whiffJson=${w ? w.whiff + '%' : 'NO'}, in liveData=${inLiveData || 'NO'}, liveData whiff=${inLiveData ? liveData[inLiveData]?.whiff : 'N/A'}`);
+      });
+      
       Object.entries(whiffJson).forEach(([lname, w]) => {
         const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
         const key = match || lname;
         if(liveData[key]) {
-          if(w.whiff != null) liveData[key].whiff = w.whiff;
+          if(w.whiff != null) {
+            const oldWhiff = liveData[key].whiff;
+            liveData[key].whiff = w.whiff;
+            if(debugPlayers.includes(lname)) {
+              console.log(`[DEBUG] Updated ${lname} whiff: ${oldWhiff} → ${w.whiff}`);
+            }
+          }
         } else if(w.whiff != null) {
           liveData[lname] = { name: w.name, whiff: w.whiff, mlbId: w.mlbId };
+          if(debugPlayers.includes(lname)) {
+            console.log(`[DEBUG] Created ${lname} with whiff: ${w.whiff}`);
+          }
         }
       });
       
@@ -1485,10 +1503,22 @@ async function fetchSavantData(year){
       });
     } catch(e){ console.log('[scout] savant-stats failed:', e.message); }
 
+    // Debug: log final whiff values before savant array merge
+    const debugPlayers3 = ['brendon little', 'alex lange', 'chase silseth', 'kirby yates'];
+    debugPlayers3.forEach(name => {
+      const key = Object.keys(liveData).find(k => normName(k) === normName(name));
+      if(key) {
+        console.log(`[DEBUG FINAL] liveData["${key}"].whiff = ${liveData[key].whiff}, xera = ${liveData[key].xera}`);
+      } else {
+        console.log(`[DEBUG FINAL] ${name} NOT in liveData`);
+      }
+    });
 
     // Merge into global savant array — update existing entries and add new ones
     const existingNames = new Set(savant.map(p=>p.name.toLowerCase()));
     const PITCHER_POSITIONS = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
+    const debugPlayers2 = ['brendon little', 'alex lange', 'chase silseth', 'kirby yates', 'brock burke', 'tim mayza'];
+    
     Object.entries(liveData).forEach(([lname, d]) => {
       if(!d.name || !d.xera) return;
       // Only process pitchers — check ADP position map
@@ -1499,6 +1529,12 @@ async function fetchSavantData(year){
 
       const existing = findSavant(d.name);
       const adpTeam = (G.nameToTeam || {})[lname] || d.mlbTeam || '';
+      
+      // Debug logging
+      if(debugPlayers2.includes(lname)) {
+        console.log(`[DEBUG] Processing ${lname}: liveData.whiff=${d.whiff}, existing=${existing ? 'found' : 'not found'}, existing.whiff=${existing?.whiff}`);
+      }
+      
       if(existing){
         if(d.xera)   existing.xera   = d.xera;
         if(d.xba)    existing.xba    = d.xba;
@@ -1518,6 +1554,10 @@ async function fetchSavantData(year){
         if(d.gbPct != null)  existing.gbPct = d.gbPct;
         existing.pa = d.pa || existing.pa || 0;
         existing.score = calcScore(existing);
+        
+        if(debugPlayers2.includes(lname)) {
+          console.log(`[DEBUG] After update ${lname}: existing.whiff=${existing.whiff}`);
+        }
       } else {
         // Only add if confirmed pitcher
         if(!adpPos || !adpPos.split(',').some(p => PITCHER_POSITIONS.has(p.trim()))) return;
