@@ -365,6 +365,83 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // /savant-whiff -> fetch official Whiff% from Savant (try multiple sources)
+  if (path.startsWith('/savant-whiff')) {
+    const whiffYear = req.url.includes('year=') 
+      ? req.url.match(/year=(\d{4})/)?.[1] || String(new Date().getFullYear())
+      : String(new Date().getFullYear());
+    
+    // Try swing-take leaderboard first (most reliable for whiff%)
+    const whiffUrl = `/leaderboard/swing-take?year=${whiffYear}&type=pit&min=1&csv=true`;
+    console.log(`[proxy] fetching Savant whiff% for ${whiffYear} from swing-take (min=1)...`);
+
+    const opts = {
+      hostname: 'baseballsavant.mlb.com', port: 443, path: whiffUrl, method: 'GET',
+      headers: {'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36','Accept':'text/csv,*/*'}
+    };
+    const pr = https.request(opts, sr => {
+      let body = '';
+      sr.on('data', c => body += c);
+      sr.on('end', () => {
+        const lines = body.trim().split('\n');
+        if(lines.length < 2){ 
+          console.log('[proxy] savant-whiff: no data returned');
+          res.writeHead(200); res.end('{}'); return; 
+        }
+
+        const headers = parseCSVLine(lines[0]).map(h => h.replace(/^\uFEFF/,'').trim().toLowerCase());
+        console.log('[proxy] savant-whiff headers:', headers.join(', '));
+        
+        // Find column indices - try multiple possible names
+        const iName = headers.findIndex(h => h === 'player_name' || h === 'name' || h === 'player');
+        const iPlayerId = headers.findIndex(h => h === 'player_id' || h === 'pitcher' || h === 'batter');
+        // Whiff% column names vary by leaderboard
+        const iWhiff = headers.findIndex(h => 
+          h === 'whiff_percent' || h === 'whiff_rate' || h === 'whiff' || 
+          h === 'wh_percent' || h === 'sw_str_percent' || h === 'swstr_percent');
+        
+        console.log(`[proxy] savant-whiff: name col=${iName}, whiff col=${iWhiff}`);
+        
+        if(iName < 0 || iWhiff < 0) {
+          console.log('[proxy] savant-whiff: missing required columns');
+          res.writeHead(200); res.end('{}'); return;
+        }
+        
+        const result = {};
+        for(let i = 1; i < lines.length; i++){
+          if(!lines[i].trim()) continue;
+          const row = parseCSVLine(lines[i]);
+          let name = row[iName] || '';
+          if(!name) continue;
+          // Normalize "Last, First" to "First Last"
+          if(name.includes(',')) {
+            name = name.split(',').map(s=>s.trim()).reverse().join(' ');
+          }
+          const whiff = parseFloat(row[iWhiff]);
+          if(isNaN(whiff)) continue;
+          const playerId = iPlayerId >= 0 ? row[iPlayerId] : null;
+          
+          result[name.toLowerCase()] = {
+            name,
+            mlbId: playerId,
+            whiff,
+          };
+        }
+
+        console.log(`[proxy] savant-whiff: ${Object.keys(result).length} pitchers with whiff data`);
+        setCORS(res, reqOrigin);
+        res.writeHead(200, {'Content-Type':'application/json'});
+        res.end(JSON.stringify(result));
+      });
+    });
+    pr.on('error', e => {
+      console.error('[proxy] savant-whiff error:', e.message);
+      res.writeHead(502); res.end('{}');
+    });
+    pr.end();
+    return;
+  }
+
   // FIX #2: /savant-recent -> fetch & aggregate last 7 days pitcher stats (dynamic year)
   if (path.startsWith('/savant-recent')) {
     const today = new Date();

@@ -1306,15 +1306,21 @@ async function fetchSavantData(year){
       xba: headers.indexOf('est_ba') >= 0 ? headers.indexOf('est_ba') : headers.indexOf('xba'),
       xwoba: headers.indexOf('est_woba'),
       woba: headers.indexOf('woba'),
-      whiff: headers.indexOf('whiff_percent'),
+      // Try multiple column names for whiff
+      whiff: headers.indexOf('whiff_percent') >= 0 ? headers.indexOf('whiff_percent')
+           : headers.indexOf('whiff') >= 0 ? headers.indexOf('whiff')
+           : headers.indexOf('wh_percent') >= 0 ? headers.indexOf('wh_percent')
+           : -1,
       k_pct: headers.indexOf('k_percent'),
       bb_pct: headers.indexOf('bb_percent'),
       team: headers.indexOf('team_name_alt') >= 0 ? headers.indexOf('team_name_alt')
           : headers.indexOf('team_name') >= 0 ? headers.indexOf('team_name')
           : headers.indexOf('team') >= 0 ? headers.indexOf('team') : -1,
     };
+    
+    console.log('[scout] expected_statistics whiff column index:', idx.whiff, '| Available headers:', headers.slice(0,20));
 
-    // Also fetch whiff/chase/k-bb from pitch arsenal leaderboard
+    // Build liveData from expected_statistics CSV
     const liveData = {};
     for(let i = 1; i < lines.length; i++){
       const cols = lines[i].split(',').map(c => c.trim().replace(/"/g,''));
@@ -1338,7 +1344,8 @@ async function fetchSavantData(year){
         k_pct: kpct,
         bb_pct: bbpct,
         kbb: (kpct && bbpct) ? parseFloat((kpct - bbpct).toFixed(1)) : null,
-        whiff: idx.whiff >= 0 ? parseFloat(cols[idx.whiff]) : null,
+        // Don't set whiff here - we'll get it from savant-whiff endpoint
+        whiff: null,
       };
     }
 
@@ -1347,7 +1354,7 @@ async function fetchSavantData(year){
 
     // Fetch aggregated K%, BB%, Whiff% from proxy statcast aggregation
     try {
-      const [r2, r3, r4, r5, r6, r7, r8] = await Promise.all([
+      const [r2, r3, r4, r5, r6, r7, r8, r9] = await Promise.all([
         fetch(`${PROXY}/savant-stats?year=${G.dataYear||CURRENT_YEAR}`),
         fetch(`${PROXY}/savant-recent`),
         fetch(`${PROXY}/mlb-stats?year=${G.dataYear||CURRENT_YEAR}`),
@@ -1355,6 +1362,7 @@ async function fetchSavantData(year){
         fetch(`${PROXY}/pitcher-rest`),
         fetch(`${PROXY}/team-schedules`),
         fetch(`${PROXY}/team-offense`),
+        fetch(`${PROXY}/savant-whiff?year=${G.dataYear||CURRENT_YEAR}`),
       ]);
       const statsJson  = await r2.json();
       const recentJson = await r3.json();
@@ -1363,12 +1371,26 @@ async function fetchSavantData(year){
       const restJson   = await r6.json();
       const schedulesJson = await r7.json();
       const offenseJson = await r8.json();
+      const whiffJson = await r9.json();
       G.recentStats = recentJson;
       G.mlbStats = mlbJson;
       G.contactStats = contactJson; // Store contact quality data globally
       G.pitcherRest = restJson;     // Store pitcher rest data globally
       G.teamSchedules = schedulesJson; // Store team schedules
       G.teamOffense = offenseJson;     // Store team offensive rankings
+      G.whiffStats = whiffJson;     // Store official whiff% data
+      
+      // Merge official Whiff% from Savant percentile rankings (most authoritative)
+      console.log('[scout] savant-whiff pitchers:', Object.keys(whiffJson).length);
+      Object.entries(whiffJson).forEach(([lname, w]) => {
+        const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
+        const key = match || lname;
+        if(liveData[key]) {
+          if(w.whiff != null) liveData[key].whiff = w.whiff;
+        } else if(w.whiff != null) {
+          liveData[lname] = { name: w.name, whiff: w.whiff, mlbId: w.mlbId };
+        }
+      });
       
       // Merge MLB traditional stats (IP, WHIP, K9, BB9, GB%) into liveData
       Object.entries(mlbJson).forEach(([lname, m]) => {
@@ -1441,8 +1463,7 @@ async function fetchSavantData(year){
           liveData[key].k_pct    = s.k_pct;
           liveData[key].bb_pct   = s.bb_pct;
           liveData[key].kbb      = s.kbb;
-          // Only use calculated whiff if official Savant whiff isn't already set
-          if(!liveData[key].whiff && s.whiff_pct) liveData[key].whiff = s.whiff_pct;
+          // Don't use calculated whiff - only trust official savant-whiff data
           liveData[key].pitchMix = s.pitchMix || {};
           liveData[key].pa       = s.bf || liveData[key].pa || 0;
           // Only use Savant IP if MLB Stats IP isn't already set
@@ -1457,7 +1478,7 @@ async function fetchSavantData(year){
             mlbId: s.mlbId || '',
             ip: s.ip || null, ipNum: s.ipNum || null,
             k_pct: s.k_pct, bb_pct: s.bb_pct, kbb: s.kbb,
-            whiff: s.whiff_pct, xera: null, xba: null, pa: s.bf || 0,
+            whiff: null, xera: null, xba: null, pa: s.bf || 0,
             pitchMix: s.pitchMix || {},
           };
         }
