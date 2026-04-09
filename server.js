@@ -167,7 +167,7 @@ const server = http.createServer(async (req, res) => {
           const row = parseCSVLine(lines[i]);
           const name = row[iName] || '';
           if(!name) continue;
-          if(!pitchers[name]) pitchers[name] = {pitches:0, swstr:0, bf:0, k:0, bb:0, outs:0, teams:{}, pitchTypes:{}, mlbId:''};
+          if(!pitchers[name]) pitchers[name] = {pitches:0, swstr:0, swings:0, bf:0, k:0, bb:0, outs:0, teams:{}, pitchTypes:{}, mlbId:''};
           if(iPitcherId >= 0 && row[iPitcherId] && !pitchers[name].mlbId) pitchers[name].mlbId = row[iPitcherId].trim();
           const p = pitchers[name];
           p.pitches++;
@@ -177,7 +177,14 @@ const server = http.createServer(async (req, res) => {
           }
           const desc = row[iDesc] || '';
           const ev   = row[iEvents] || '';
+          // Track swinging strikes
           if(desc === 'swinging_strike' || desc === 'swinging_strike_blocked') p.swstr++;
+          // Track all swings (for whiff% calculation: swstr / swings)
+          if(desc === 'swinging_strike' || desc === 'swinging_strike_blocked' || 
+             desc === 'foul' || desc === 'foul_tip' || desc === 'foul_bunt' ||
+             desc === 'hit_into_play' || desc === 'hit_into_play_score' || desc === 'hit_into_play_no_out') {
+            p.swings++;
+          }
           if(ev && ev !== 'null') {
             p.bf++;
             if(ev === 'strikeout' || ev === 'strikeout_double_play') { p.k++; p.outs++; }
@@ -224,7 +231,8 @@ const server = http.createServer(async (req, res) => {
             k_pct: p.bf > 0 ? parseFloat((p.k / p.bf * 100).toFixed(1)) : 0,
             bb_pct: p.bf > 0 ? parseFloat((p.bb / p.bf * 100).toFixed(1)) : 0,
             kbb: p.bf > 0 ? parseFloat(((p.k - p.bb) / p.bf * 100).toFixed(1)) : 0,
-            whiff_pct: p.pitches > 0 ? parseFloat((p.swstr / p.pitches * 100).toFixed(1)) : 0,
+            whiff_pct: p.swings > 0 ? parseFloat((p.swstr / p.swings * 100).toFixed(1)) : 0,
+            swstr_pct: p.pitches > 0 ? parseFloat((p.swstr / p.pitches * 100).toFixed(1)) : 0,
             bf: p.bf,
             team: p.teams ? Object.entries(p.teams).sort((a,b)=>b[1]-a[1])[0]?.[0] || '' : '',
             pitchMix,
@@ -393,12 +401,19 @@ const server = http.createServer(async (req, res) => {
           const row = parseCSVLine(lines[i]);
           const name = row[iName] || '';
           if(!name) continue;
-          if(!pitchers[name]) pitchers[name] = {pitches:0, swstr:0, bf:0, k:0, bb:0, teams:{}};
+          if(!pitchers[name]) pitchers[name] = {pitches:0, swstr:0, swings:0, bf:0, k:0, bb:0, teams:{}};
           const p = pitchers[name];
           p.pitches++;
           const desc = row[iDesc] || '';
           const ev   = row[iEvents] || '';
+          // Track swinging strikes
           if(desc === 'swinging_strike' || desc === 'swinging_strike_blocked') p.swstr++;
+          // Track all swings (for whiff% calculation: swstr / swings)
+          if(desc === 'swinging_strike' || desc === 'swinging_strike_blocked' || 
+             desc === 'foul' || desc === 'foul_tip' || desc === 'foul_bunt' ||
+             desc === 'hit_into_play' || desc === 'hit_into_play_score' || desc === 'hit_into_play_no_out') {
+            p.swings++;
+          }
           if(ev && ev !== 'null'){
             p.bf++;
             if(ev === 'strikeout' || ev === 'strikeout_double_play') p.k++;
@@ -421,7 +436,7 @@ const server = http.createServer(async (req, res) => {
             k_pct:    p.bf > 0 ? parseFloat((p.k/p.bf*100).toFixed(1)) : 0,
             bb_pct:   p.bf > 0 ? parseFloat((p.bb/p.bf*100).toFixed(1)) : 0,
             kbb:      p.bf > 0 ? parseFloat(((p.k-p.bb)/p.bf*100).toFixed(1)) : 0,
-            whiff_pct:p.pitches>0?parseFloat((p.swstr/p.pitches*100).toFixed(1)):0,
+            whiff_pct: p.swings > 0 ? parseFloat((p.swstr/p.swings*100).toFixed(1)) : 0,
             bf: p.bf,
             team,
             dateRange: `${startDate} to ${endDate}`,
