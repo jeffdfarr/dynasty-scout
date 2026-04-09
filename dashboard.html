@@ -1441,7 +1441,8 @@ async function fetchSavantData(year){
           liveData[key].k_pct    = s.k_pct;
           liveData[key].bb_pct   = s.bb_pct;
           liveData[key].kbb      = s.kbb;
-          liveData[key].whiff    = s.whiff_pct;
+          // Only use calculated whiff if official Savant whiff isn't already set
+          if(!liveData[key].whiff && s.whiff_pct) liveData[key].whiff = s.whiff_pct;
           liveData[key].pitchMix = s.pitchMix || {};
           liveData[key].pa       = s.bf || liveData[key].pa || 0;
           // Only use Savant IP if MLB Stats IP isn't already set

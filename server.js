@@ -178,11 +178,13 @@ const server = http.createServer(async (req, res) => {
           const desc = row[iDesc] || '';
           const ev   = row[iEvents] || '';
           // Track swinging strikes
-          if(desc === 'swinging_strike' || desc === 'swinging_strike_blocked') p.swstr++;
+          if(desc === 'swinging_strike' || desc === 'swinging_strike_blocked' || desc === 'missed_bunt') p.swstr++;
           // Track all swings (for whiff% calculation: swstr / swings)
+          // Swings include: swinging strikes, fouls, balls in play, missed bunts
           if(desc === 'swinging_strike' || desc === 'swinging_strike_blocked' || 
              desc === 'foul' || desc === 'foul_tip' || desc === 'foul_bunt' ||
-             desc === 'hit_into_play' || desc === 'hit_into_play_score' || desc === 'hit_into_play_no_out') {
+             desc === 'hit_into_play' || desc === 'missed_bunt' ||
+             desc === 'bunt_foul_tip' || desc === 'swinging_pitchout') {
             p.swings++;
           }
           if(ev && ev !== 'null') {
@@ -407,11 +409,12 @@ const server = http.createServer(async (req, res) => {
           const desc = row[iDesc] || '';
           const ev   = row[iEvents] || '';
           // Track swinging strikes
-          if(desc === 'swinging_strike' || desc === 'swinging_strike_blocked') p.swstr++;
+          if(desc === 'swinging_strike' || desc === 'swinging_strike_blocked' || desc === 'missed_bunt') p.swstr++;
           // Track all swings (for whiff% calculation: swstr / swings)
           if(desc === 'swinging_strike' || desc === 'swinging_strike_blocked' || 
              desc === 'foul' || desc === 'foul_tip' || desc === 'foul_bunt' ||
-             desc === 'hit_into_play' || desc === 'hit_into_play_score' || desc === 'hit_into_play_no_out') {
+             desc === 'hit_into_play' || desc === 'missed_bunt' ||
+             desc === 'bunt_foul_tip' || desc === 'swinging_pitchout') {
             p.swings++;
           }
           if(ev && ev !== 'null'){
