@@ -450,126 +450,93 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // /savant-whiff -> fetch official Whiff% from Savant Statcast Pitching leaderboard
+  // /savant-whiff -> fetch official Whiff% from Savant custom leaderboard
   if (path.startsWith('/savant-whiff')) {
     const whiffYear = req.url.includes('year=') 
       ? req.url.match(/year=(\d{4})/)?.[1] || String(new Date().getFullYear())
       : String(new Date().getFullYear());
     
-    // Try multiple endpoints in order of preference
-    const endpoints = [
-      // 1. Custom leaderboard with explicit whiff_percent selection
-      `/leaderboard/custom?year=${whiffYear}&type=pitcher&filter=&min=1&selections=whiff_percent,k_percent,bb_percent&chart=false&csv=true`,
-      // 2. Statcast pitching leaderboard
-      `/leaderboard/statcast?type=pitcher&year=${whiffYear}&position=&team=&min=1&csv=true`,
-      // 3. Pitch arsenal stats
-      `/leaderboard/pitch-arsenal-stats?type=pitcher&pitchType=&year=${whiffYear}&team=&min=1&csv=true`,
-    ];
-    
-    async function tryEndpoint(urlPath) {
-      return new Promise((resolve) => {
-        console.log(`[proxy] trying Savant endpoint: ${urlPath.split('?')[0]}`);
-        const opts = {
-          hostname: 'baseballsavant.mlb.com', port: 443, path: urlPath, method: 'GET',
-          headers: {'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36','Accept':'text/csv,*/*'}
-        };
-        const pr = https.request(opts, sr => {
-          let body = '';
-          sr.on('data', c => body += c);
-          sr.on('end', () => {
-            const lines = body.trim().split('\n');
-            if(lines.length < 2) { 
-              console.log('[proxy] endpoint returned no data');
-              resolve(null); 
-              return; 
-            }
+    // Custom leaderboard returns: "last_name, first_name", player_id, year, whiff_percent
+    const whiffUrl = `/leaderboard/custom?year=${whiffYear}&type=pitcher&filter=&min=1&selections=whiff_percent&chart=false&csv=true`;
+    console.log(`[proxy] fetching Savant whiff% for ${whiffYear} from custom leaderboard...`);
 
-            const headers = parseCSVLine(lines[0]).map(h => h.replace(/^\uFEFF/,'').trim().toLowerCase());
-            console.log('[proxy] headers found:', headers.join(' | '));
-            
-            // Find whiff column
-            let iWhiff = headers.indexOf('whiff_percent');
-            if(iWhiff < 0) iWhiff = headers.indexOf('whiff');
-            if(iWhiff < 0) iWhiff = headers.indexOf('wh_percent');
-            
-            if(iWhiff < 0) {
-              console.log('[proxy] no whiff column found in this endpoint');
-              resolve(null);
-              return;
-            }
-            
-            // Find name columns
-            const iFirst = headers.findIndex(h => h === 'first_name' || h === 'player_first_name');
-            const iLast = headers.findIndex(h => h === 'last_name' || h === 'player_last_name');
-            const iName = headers.findIndex(h => h === 'player_name' || h === 'name' || h === 'player');
-            const iPlayerId = headers.findIndex(h => h === 'player_id' || h === 'pitcher' || h === 'pitcher_id');
-            
-            const hasName = iName >= 0 || (iFirst >= 0 && iLast >= 0);
-            if(!hasName) {
-              console.log('[proxy] no name column found');
-              resolve(null);
-              return;
-            }
-            
-            console.log(`[proxy] found whiff at col ${iWhiff}, name at col ${iName >= 0 ? iName : 'first+last'}`);
-            
-            const result = {};
-            for(let i = 1; i < lines.length; i++){
-              if(!lines[i].trim()) continue;
-              const row = parseCSVLine(lines[i]);
-              
-              let name = '';
-              if(iName >= 0) {
-                name = row[iName] || '';
-              } else if(iFirst >= 0 && iLast >= 0) {
-                name = `${row[iFirst] || ''} ${row[iLast] || ''}`.trim();
-              }
-              if(!name) continue;
-              
-              if(name.includes(',')) {
-                name = name.split(',').map(s=>s.trim()).reverse().join(' ');
-              }
-              
-              const whiff = parseFloat(row[iWhiff]);
-              if(isNaN(whiff)) continue;
-              const playerId = iPlayerId >= 0 ? row[iPlayerId] : null;
-              
-              result[name.toLowerCase()] = { name, mlbId: playerId, whiff };
-            }
-            
-            if(Object.keys(result).length > 0) {
-              // Log samples to verify values are correct
-              const samples = Object.entries(result).slice(0, 5).map(([k, v]) => `${v.name}: ${v.whiff}%`);
-              console.log(`[proxy] SUCCESS: ${Object.keys(result).length} pitchers. Samples: ${samples.join(', ')}`);
-              resolve(result);
-            } else {
-              resolve(null);
-            }
-          });
-        });
-        pr.on('error', () => resolve(null));
-        pr.setTimeout(10000, () => { pr.destroy(); resolve(null); });
-        pr.end();
-      });
-    }
-    
-    // Try endpoints in sequence
-    (async () => {
-      for(const ep of endpoints) {
-        const result = await tryEndpoint(ep);
-        if(result && Object.keys(result).length > 0) {
-          setCORS(res, reqOrigin);
-          res.writeHead(200, {'Content-Type':'application/json'});
-          res.end(JSON.stringify(result));
-          return;
+    const opts = {
+      hostname: 'baseballsavant.mlb.com', port: 443, path: whiffUrl, method: 'GET',
+      headers: {'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36','Accept':'text/csv,*/*'}
+    };
+    const pr = https.request(opts, sr => {
+      let body = '';
+      sr.on('data', c => body += c);
+      sr.on('end', () => {
+        const lines = body.trim().split('\n');
+        if(lines.length < 2){ 
+          console.log('[proxy] savant-whiff: no data returned');
+          res.writeHead(200); res.end('{}'); return; 
         }
-      }
-      // All failed
-      console.log('[proxy] savant-whiff: all endpoints failed');
-      setCORS(res, reqOrigin);
-      res.writeHead(200, {'Content-Type':'application/json'});
-      res.end('{}');
-    })();
+
+        const headers = parseCSVLine(lines[0]).map(h => h.replace(/^\uFEFF/,'').trim().toLowerCase());
+        console.log('[proxy] savant-whiff headers:', headers.join(' | '));
+        
+        // Find columns - custom leaderboard format:
+        // [0] "last_name, first_name" (combined name as "Last, First")
+        // [1] player_id
+        // [2] year  
+        // [3] whiff_percent
+        const iName = headers.findIndex(h => h.includes('name'));
+        const iPlayerId = headers.findIndex(h => h === 'player_id');
+        const iWhiff = headers.findIndex(h => h.includes('whiff'));
+        
+        console.log(`[proxy] savant-whiff: name=${iName}, playerId=${iPlayerId}, whiff=${iWhiff}`);
+        
+        if(iName < 0 || iWhiff < 0) {
+          console.log('[proxy] savant-whiff: missing required columns');
+          res.writeHead(200); res.end('{}'); return;
+        }
+        
+        const result = {};
+        for(let i = 1; i < lines.length; i++){
+          if(!lines[i].trim()) continue;
+          const row = parseCSVLine(lines[i]);
+          
+          // Name is in "Last, First" format - convert to "First Last"
+          let rawName = row[iName] || '';
+          if(!rawName) continue;
+          
+          let name = rawName;
+          if(rawName.includes(',')) {
+            const parts = rawName.split(',').map(s => s.trim());
+            name = `${parts[1]} ${parts[0]}`; // "First Last"
+          }
+          
+          const whiff = parseFloat(row[iWhiff]);
+          if(isNaN(whiff)) continue;
+          
+          const playerId = iPlayerId >= 0 ? row[iPlayerId] : null;
+          
+          result[name.toLowerCase()] = {
+            name,
+            mlbId: playerId,
+            whiff,
+          };
+        }
+
+        // Log samples for verification
+        const samples = ['brock burke', 'tim mayza', 'luis castillo'].map(n => {
+          const p = result[n];
+          return p ? `${p.name}: ${p.whiff}%` : `${n}: NOT FOUND`;
+        });
+        console.log(`[proxy] savant-whiff: ${Object.keys(result).length} pitchers. Samples: ${samples.join(', ')}`);
+        
+        setCORS(res, reqOrigin);
+        res.writeHead(200, {'Content-Type':'application/json'});
+        res.end(JSON.stringify(result));
+      });
+    });
+    pr.on('error', e => {
+      console.error('[proxy] savant-whiff error:', e.message);
+      res.writeHead(502); res.end('{}');
+    });
+    pr.end();
     return;
   }
 
