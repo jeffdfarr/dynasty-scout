@@ -1349,7 +1349,7 @@ async function fetchSavantData(year){
       };
     }
 
-    console.log('[scout] liveData size:', Object.keys(liveData).length, '| sample kbb:', Object.values(liveData).slice(0,3).map(d=>({name:d.name,kbb:d.kbb,k_pct:d.k_pct,bb_pct:d.bb_pct})));
+    console.log('[scout] liveData size:', Object.keys(liveData).length);
     console.log('[scout] all Savant headers:', headers);
 
     // Fetch aggregated K%, BB%, Whiff% from proxy statcast aggregation
@@ -1380,33 +1380,16 @@ async function fetchSavantData(year){
       G.teamOffense = offenseJson;     // Store team offensive rankings
       G.whiffStats = whiffJson;     // Store official whiff% data
       
-      // Merge official Whiff% from Savant percentile rankings (most authoritative)
+      // Merge official Whiff% from Savant (most authoritative)
       console.log('[scout] savant-whiff pitchers:', Object.keys(whiffJson).length);
-      
-      // Debug: log specific players we're tracking
-      const debugPlayers = ['brendon little', 'alex lange', 'chase silseth', 'kirby yates', 'brock burke', 'tim mayza'];
-      debugPlayers.forEach(name => {
-        const w = whiffJson[name];
-        const inLiveData = Object.keys(liveData).find(k => normName(k) === normName(name));
-        console.log(`[DEBUG] ${name}: in whiffJson=${w ? w.whiff + '%' : 'NO'}, in liveData=${inLiveData || 'NO'}, liveData whiff=${inLiveData ? liveData[inLiveData]?.whiff : 'N/A'}`);
-      });
       
       Object.entries(whiffJson).forEach(([lname, w]) => {
         const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
         const key = match || lname;
         if(liveData[key]) {
-          if(w.whiff != null) {
-            const oldWhiff = liveData[key].whiff;
-            liveData[key].whiff = w.whiff;
-            if(debugPlayers.includes(lname)) {
-              console.log(`[DEBUG] Updated ${lname} whiff: ${oldWhiff} → ${w.whiff}`);
-            }
-          }
+          if(w.whiff != null) liveData[key].whiff = w.whiff;
         } else if(w.whiff != null) {
           liveData[lname] = { name: w.name, whiff: w.whiff, mlbId: w.mlbId };
-          if(debugPlayers.includes(lname)) {
-            console.log(`[DEBUG] Created ${lname} with whiff: ${w.whiff}`);
-          }
         }
       });
       
@@ -1503,21 +1486,51 @@ async function fetchSavantData(year){
       });
     } catch(e){ console.log('[scout] savant-stats failed:', e.message); }
 
-    // Debug: log final whiff values before savant array merge
-    const debugPlayers3 = ['brendon little', 'alex lange', 'chase silseth', 'kirby yates'];
-    debugPlayers3.forEach(name => {
-      const key = Object.keys(liveData).find(k => normName(k) === normName(name));
-      if(key) {
-        console.log(`[DEBUG FINAL] liveData["${key}"].whiff = ${liveData[key].whiff}, xera = ${liveData[key].xera}`);
-      } else {
-        console.log(`[DEBUG FINAL] ${name} NOT in liveData`);
-      }
-    });
+    // Skip savant array merge during pre-fetch — we only want to cache the data, not modify current display
+    if(G.preFetching) {
+      console.log(`[scout] Pre-fetch mode: building separate savant array for ${year}`);
+      
+      // Build a new savant array for this year without modifying the current one
+      const prefetchSavant = [];
+      const PITCHER_POSITIONS = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
+      
+      Object.entries(liveData).forEach(([lname, d]) => {
+        if(!d.name || !d.xera) return;
+        const adpPos = (G.adpPosMap || {})[lname] || '';
+        const isPitcher = adpPos.split(',').some(p => PITCHER_POSITIONS.has(p.trim()));
+        if(!isPitcher && adpPos) return;
+        if(!adpPos || !adpPos.split(',').some(p => PITCHER_POSITIONS.has(p.trim()))) return;
+        
+        const role = adpPos.includes('SP') ? 'SP' : 'RP';
+        const adpTeam = (G.nameToTeam || {})[lname] || d.mlbTeam || '';
+        const newP = {
+          name: d.name, mlb: adpTeam || '—', role,
+          mlbId: d.mlbId || null,
+          pitchMix: d.pitchMix || {},
+          ip: d.ip || null,
+          pa: d.pa || 0,
+          kbb: d.kbb||0, xera: d.xera||4.50, xba: d.xba||.260,
+          whiff: d.whiff||20, chase: d.chase||26, stuff: 95,
+          fxStatus: 'unknown', fxTeam: '',
+        };
+        newP.score = calcScore(newP);
+        prefetchSavant.push(newP);
+      });
+      
+      // Save to yearCache
+      G.yearCache[year] = {
+        _v: CACHE_VERSION,
+        savant: prefetchSavant,
+        recentStats: G.recentStats ? {...G.recentStats} : {},
+        mlbStats: G.mlbStats ? {...G.mlbStats} : {},
+      };
+      console.log(`[scout] Pre-fetch cached ${prefetchSavant.length} pitchers for ${year}`);
+      return;
+    }
 
     // Merge into global savant array — update existing entries and add new ones
     const existingNames = new Set(savant.map(p=>p.name.toLowerCase()));
     const PITCHER_POSITIONS = new Set(['SP','RP','P','CL','MR','LRP','SRP','CP']);
-    const debugPlayers2 = ['brendon little', 'alex lange', 'chase silseth', 'kirby yates', 'brock burke', 'tim mayza'];
     
     Object.entries(liveData).forEach(([lname, d]) => {
       if(!d.name || !d.xera) return;
@@ -1529,11 +1542,6 @@ async function fetchSavantData(year){
 
       const existing = findSavant(d.name);
       const adpTeam = (G.nameToTeam || {})[lname] || d.mlbTeam || '';
-      
-      // Debug logging
-      if(debugPlayers2.includes(lname)) {
-        console.log(`[DEBUG] Processing ${lname}: liveData.whiff=${d.whiff}, existing=${existing ? 'found' : 'not found'}, existing.whiff=${existing?.whiff}`);
-      }
       
       if(existing){
         if(d.xera)   existing.xera   = d.xera;
@@ -1554,10 +1562,6 @@ async function fetchSavantData(year){
         if(d.gbPct != null)  existing.gbPct = d.gbPct;
         existing.pa = d.pa || existing.pa || 0;
         existing.score = calcScore(existing);
-        
-        if(debugPlayers2.includes(lname)) {
-          console.log(`[DEBUG] After update ${lname}: existing.whiff=${existing.whiff}`);
-        }
       } else {
         // Only add if confirmed pitcher
         if(!adpPos || !adpPos.split(',').some(p => PITCHER_POSITIONS.has(p.trim()))) return;
