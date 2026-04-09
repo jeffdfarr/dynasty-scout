@@ -2367,10 +2367,10 @@ function renderBPEliteArms() {
       // Skip if already in Elite Setup Arms section
       if(setupArmNames.has(stripAccents(normName(name)))) return false;
       // NO late-inning requirement — this is the difference from Elite Setup Arms
-      // Must have actually pitched — minimum 2 IP
-      if((m.ipNum||0) < 2.0) return false;
-      // Use savant data for filtering
+      // Sample size filters: minimum 5 IP and 15 batters faced
+      if((m.ipNum||0) < 5.0) return false;
       const sv = svMap.get(stripAccents(normName(name)));
+      if((sv?.pa||0) < 15) return false;
       // Age filter: must be 28 or younger (Rising Young Arms)
       const age = sv?.age || null;
       if(age && age > 28) return false;
@@ -2417,7 +2417,8 @@ function renderBPEliteArms() {
         compositeScore
       };
     })
-    .sort((a,b) => b.compositeScore - a.compositeScore);
+    .sort((a,b) => b.compositeScore - a.compositeScore)
+    .slice(0, 10);  // Cap at top 10 results
   
   // Hide entire section if no results
   const section = el.parentElement;
@@ -2831,7 +2832,7 @@ function setupExpandButton(containerId) {
     </div>
     <div style="margin-bottom:20px">
       <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">🌟 Rising Young Arms</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs age 28 or younger with elite stuff (K-BB% ≥18%, Whiff% ≥22%, xERA ≤4.00). Sorted by composite score.</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">Top 10 FAs age ≤28 with 5+ IP, elite stuff (K-BB% ≥18%, Whiff% ≥22%, xERA ≤4.00). Sorted by composite score.</div>
       <div id="bpEliteArms" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">
