@@ -370,7 +370,6 @@ const server = http.createServer(async (req, res) => {
     const year = String(new Date().getFullYear());
     const testUrls = [
       { name: 'custom', url: `/leaderboard/custom?year=${year}&type=pitcher&filter=&min=1&selections=whiff_percent&chart=false&csv=true` },
-      { name: 'statcast', url: `/leaderboard/statcast?type=pitcher&year=${year}&position=&team=&min=1&csv=true` },
     ];
     
     let output = `DEBUG: Savant Whiff% Sources (${year})\n${'='.repeat(50)}\n\n`;
@@ -392,38 +391,49 @@ const server = http.createServer(async (req, res) => {
             }
             const headers = parseCSVLine(lines[0]).map(h => h.replace(/^\uFEFF/,'').trim());
             let result = `${urlObj.name.toUpperCase()}:\n`;
-            result += `Headers: ${headers.join(' | ')}\n\n`;
+            result += `Raw header line: ${lines[0].slice(0, 200)}\n`;
+            result += `Parsed headers (${headers.length}): ${headers.map((h,i) => `[${i}]${h}`).join(' | ')}\n\n`;
             
-            // Find specific pitchers
+            // Find name column - could be combined "last_name, first_name" or separate
+            let iName = headers.findIndex(h => h.toLowerCase().includes('name') && !h.toLowerCase().includes('team'));
             const iFirst = headers.findIndex(h => h.toLowerCase() === 'first_name');
             const iLast = headers.findIndex(h => h.toLowerCase() === 'last_name');
-            const iName = headers.findIndex(h => h.toLowerCase().includes('player_name') || h.toLowerCase() === 'name');
             const iWhiff = headers.findIndex(h => h.toLowerCase().includes('whiff'));
             const iK = headers.findIndex(h => h.toLowerCase() === 'k_percent');
             
-            result += `Column indices: name=${iName >= 0 ? iName : `first(${iFirst})+last(${iLast})`}, whiff=${iWhiff}, k_pct=${iK}\n\n`;
+            result += `Column indices: iName=${iName}, iFirst=${iFirst}, iLast=${iLast}, iWhiff=${iWhiff}, iK=${iK}\n\n`;
+            
+            // Show first 5 data rows
+            result += `First 5 rows:\n`;
+            for(let i = 1; i < Math.min(lines.length, 6); i++) {
+              const row = parseCSVLine(lines[i]);
+              result += `  Row ${i}: ${row.map((v,j) => `[${j}]${v}`).join(' | ')}\n`;
+            }
+            result += '\n';
             
             // Find Brock Burke, Tim Mayza, Antonio Senzatela
-            const targets = ['brock burke', 'tim mayza', 'antonio senzatela'];
-            for(let i = 1; i < Math.min(lines.length, 500); i++) {
+            const targets = ['burke', 'mayza', 'senzatela'];
+            result += `Searching for: ${targets.join(', ')}\n`;
+            for(let i = 1; i < lines.length; i++) {
               const row = parseCSVLine(lines[i]);
+              // Try to get name from various positions
               let name = '';
               if(iName >= 0) name = (row[iName] || '').toLowerCase();
-              else if(iFirst >= 0 && iLast >= 0) name = `${row[iFirst]} ${row[iLast]}`.toLowerCase();
-              
-              if(targets.some(t => name.includes(t.split(' ')[1]))) {
-                result += `FOUND: ${name}\n`;
-                result += `  Full row: ${row.slice(0, 15).join(' | ')}\n`;
-                if(iWhiff >= 0) result += `  whiff col value: ${row[iWhiff]}\n`;
-                if(iK >= 0) result += `  k_pct col value: ${row[iK]}\n`;
-                result += '\n';
+              // Also check first column in case it has the name
+              if(!name && row[0]) name = row[0].toLowerCase();
+              // Check if name contains any target
+              const foundTarget = targets.find(t => name.includes(t));
+              if(foundTarget) {
+                result += `\nFOUND "${foundTarget}" at row ${i}:\n`;
+                result += `  Full row: ${row.map((v,j) => `[${j}]${v}`).join(' | ')}\n`;
+                if(iWhiff >= 0) result += `  Whiff value at [${iWhiff}]: ${row[iWhiff]}\n`;
               }
             }
             result += '\n';
             resolve(result);
           });
         });
-        pr.on('error', () => resolve(`${urlObj.name}: ERROR\n\n`));
+        pr.on('error', (e) => resolve(`${urlObj.name}: ERROR - ${e.message}\n\n`));
         pr.setTimeout(15000, () => { pr.destroy(); resolve(`${urlObj.name}: TIMEOUT\n\n`); });
         pr.end();
       });
