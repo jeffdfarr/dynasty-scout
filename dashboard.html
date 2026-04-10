@@ -1319,6 +1319,7 @@ async function fetchSavantData(year){
     };
     
     console.log('[scout] expected_statistics whiff column index:', idx.whiff, '| Available headers:', headers.slice(0,20));
+    console.log('[scout] xwoba column index:', idx.xwoba);
 
     // Build liveData from expected_statistics CSV
     const liveData = {};
@@ -1332,13 +1333,20 @@ async function fetchSavantData(year){
       const kpct = idx.k_pct >= 0 ? parseFloat(cols[idx.k_pct]) : null;
       const bbpct = idx.bb_pct >= 0 ? parseFloat(cols[idx.bb_pct]) : null;
       const teamVal = idx.team >= 0 ? (cols[idx.team]||'').trim() : '';
+      const xwobaVal = idx.xwoba >= 0 ? parseFloat(cols[idx.xwoba]) : null;
+      
+      // Debug: log xwoba for specific players
+      if(fullName.includes('laweryson') || fullName.includes('urquidy')) {
+        console.log(`[DEBUG xwoba] ${fullName}: idx.xwoba=${idx.xwoba}, raw=${cols[idx.xwoba]}, parsed=${xwobaVal}`);
+      }
+      
       liveData[fullName] = {
         name: `${first} ${last}`.trim(),
         mlbId: idx.pid >= 0 ? cols[idx.pid] : null,
         mlbTeam: teamVal,
         xera: xeraVal || null,
         xba: idx.xba >= 0 ? parseFloat(cols[idx.xba]) : null,
-        xwoba: idx.xwoba >= 0 ? parseFloat(cols[idx.xwoba]) : null,
+        xwoba: xwobaVal,
         era: idx.era >= 0 ? parseFloat(cols[idx.era]) : null,
         pa: parseInt(cols[idx.pa]) || 0,
         k_pct: kpct,
@@ -1351,6 +1359,10 @@ async function fetchSavantData(year){
 
     console.log('[scout] liveData size:', Object.keys(liveData).length);
     console.log('[scout] all Savant headers:', headers);
+    
+    // Debug: check xwoba values in liveData
+    const sampleWithXwoba = Object.entries(liveData).filter(([k,v]) => v.xwoba != null).slice(0,3);
+    console.log('[scout] sample liveData with xwoba:', sampleWithXwoba.map(([k,v]) => `${k}: ${v.xwoba}`));
 
     // Fetch aggregated K%, BB%, Whiff% from proxy statcast aggregation
     try {
@@ -1485,6 +1497,9 @@ async function fetchSavantData(year){
         }
       });
     } catch(e){ console.log('[scout] savant-stats failed:', e.message); }
+
+    // Store liveData globally for use in filter functions
+    G.liveData = liveData;
 
     // Skip savant array merge during pre-fetch — we only want to cache the data, not modify current display
     if(G.preFetching) {
@@ -2275,13 +2290,23 @@ function renderBPWaiting() {
       if((m.holds||0) < 2 && (m.gamesFinished||0) < 3) return false;
       // Must have actually pitched — minimum 3 IP per mlbStats
       if((m.ipNum||0) < 2.0) return false;
-      // Use savant data if available, fall back to mlbStats K9/BB9
+      // Use savant data if available, fall back to liveData, then mlbStats K9/BB9
       const sv = svMap.get(stripAccents(normName(name)));
+      const ld = G.liveData?.[name.toLowerCase()];
+      
+      // Get xwoba from savant array or liveData
+      const xwoba = sv?.xwoba ?? ld?.xwoba ?? null;
+      
       if(sv) {
         if((sv.kbb||0) < 18) return false;   // K-BB% >= 18%
         if((sv.whiff||0) < 27) return false;  // Whiff% >= 27%
         // Only apply xWOBA filter if data exists
-        if(sv.xwoba != null && sv.xwoba > 0.280) return false;  // xWOBA <= .280
+        if(xwoba != null && xwoba > 0.280) return false;  // xWOBA <= .280
+      } else if(ld) {
+        // Use liveData stats
+        if((ld.kbb||0) < 18) return false;
+        if((ld.whiff||0) < 27) return false;
+        if(xwoba != null && xwoba > 0.280) return false;
       } else {
         if((m.k9||0) < 10.0) return false;   // K/9 >= 10.0
         if((m.bb9||99) > 3.0) return false;  // BB/9 <= 3.0
@@ -2290,6 +2315,7 @@ function renderBPWaiting() {
     })
     .map(([name, m]) => {
       const sv = svMap.get(stripAccents(normName(name)));
+      const ld = G.liveData?.[name.toLowerCase()];
       const nn = stripAccents(normName((m.name||name).toLowerCase()));
       const bpTeam = G_bpData?.find(t => t.pitchers.some(r =>
         stripAccents(normName(r.name.toLowerCase())) === nn
@@ -2299,10 +2325,10 @@ function renderBPWaiting() {
         name: m.name||name, holds: m.holds||0, gf: m.gamesFinished||0,
         ip: m.ip||'—', era: m.era||null,
         whip: m.whip||null,
-        xwoba: sv?.xwoba||null,
-        kbb: sv?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
-        whiff: sv?.whiff||null,
-        mlbId: sv?.mlbId || bpP?.mlbId || null,
+        xwoba: sv?.xwoba ?? ld?.xwoba ?? null,
+        kbb: sv?.kbb ?? ld?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
+        whiff: sv?.whiff ?? ld?.whiff ?? null,
+        mlbId: sv?.mlbId || ld?.mlbId || bpP?.mlbId || null,
         teamSit: bpTeam?.situation||'', teamName: bpTeam?.name||''
       };
     })
@@ -2665,19 +2691,22 @@ function renderBPLongRelief() {
       
       // Must have ELITE stuff: K-BB% >= 15% AND (Whiff% >= 22% OR xERA <= 5.0)
       const sv = svMap.get(stripAccents(normName(name)));
-      const kbb = sv?.kbb ?? (m.k9 && m.bb9 ? ((m.k9-m.bb9)/9*100) : 0);
-      const whiff = sv?.whiff || 0;
-      const xera = sv?.xera || 99;
+      const ld = G.liveData?.[name.toLowerCase()];
+      const kbb = sv?.kbb ?? ld?.kbb ?? (m.k9 && m.bb9 ? ((m.k9-m.bb9)/9*100) : 0);
+      const whiff = sv?.whiff ?? ld?.whiff ?? 0;
+      const xera = sv?.xera ?? ld?.xera ?? 99;
+      const xwoba = sv?.xwoba ?? ld?.xwoba ?? null;
       
       if(kbb < 15) return false;
       if(whiff < 22 && xera > 5.0) return false;
       // Only apply xWOBA filter if data exists
-      if(sv?.xwoba != null && sv.xwoba > 0.320) return false;  // xWOBA <= .320
+      if(xwoba != null && xwoba > 0.320) return false;  // xWOBA <= .320
       
       return true;
     })
     .map(([name, m]) => {
       const sv = svMap.get(stripAccents(normName(name)));
+      const ld = G.liveData?.[name.toLowerCase()];
       const nn = stripAccents(normName((m.name||name).toLowerCase()));
       const bpTeam = G_bpData?.find(t => t.pitchers.some(r =>
         stripAccents(normName(r.name.toLowerCase())) === nn
@@ -2704,10 +2733,10 @@ function renderBPLongRelief() {
         ipPerGame: ipPerGame,
         era: m.era || null,
         whip: m.whip || null,
-        xera: sv?.xera || null,
-        kbb: sv?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
-        whiff: sv?.whiff || null,
-        mlbId: sv?.mlbId || bpP?.mlbId || null,
+        xera: sv?.xera ?? ld?.xera ?? null,
+        kbb: sv?.kbb ?? ld?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
+        whiff: sv?.whiff ?? ld?.whiff ?? null,
+        mlbId: sv?.mlbId || ld?.mlbId || bpP?.mlbId || null,
         teamName: bpTeam?.name || '',
         teamAbbr: teamAbbr,
         daysRest: daysRest,
