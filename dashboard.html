@@ -880,7 +880,7 @@ async function loadLeague(){
         renderBPWaiting();
         renderBPVultures();
         renderBPEliteArms();
-        renderBPLongRelief();
+        renderBPMultiInning();
         const bpUpd = document.getElementById('bpUpdated');
         if(bpUpd) bpUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
       }
@@ -996,7 +996,7 @@ function showBPSkeleton() {
           <div class="skeleton-cell" style="width:70px;height:11px;border-radius:4px"></div>
         </div>`).join('')}
     </div>`).join('');
-  ['bpWaiting','bpVultures','bpEliteArms','bpLongRelief'].forEach(id => {
+  ['bpWaiting','bpVultures','bpEliteArms','bpMultiInning'].forEach(id => {
     const e = document.getElementById(id);
     if(e) e.innerHTML = Array.from({length:4}, () => `
       <div class="role-card">
@@ -1700,7 +1700,7 @@ function tryRenderBPFASections() {
   renderBPWaiting();
   renderBPVultures();
   renderBPEliteArms();
-  renderBPLongRelief();
+  renderBPMultiInning();
   const bpUpd = document.getElementById('bpUpdated');
   if(bpUpd) bpUpd.textContent = 'Updated ' + new Date().toLocaleTimeString();
 }
@@ -2526,8 +2526,8 @@ function renderBPVultures() {
   setupExpandButton('bpVultures');
 }
 
-function renderBPLongRelief() {
-  const el = document.getElementById('bpLongRelief');
+function renderBPMultiInning() {
+  const el = document.getElementById('bpMultiInning');
   if(!G.mlbStats && G.yearCache[CURRENT_YEAR]) G.mlbStats = G.yearCache[CURRENT_YEAR].mlbStats;
   if(!el || !G.mlbStats || !G.savantLoaded || !G_bpData) {
     return;
@@ -2552,49 +2552,60 @@ function renderBPLongRelief() {
   // Helper: get team abbr from team name
   const getTeamAbbr = (teamName) => {
     if(!teamName) return null;
-    // Try direct match first
     for(const [name, abbr] of Object.entries(teamNameToAbbr)) {
       if(teamName.includes(name)) return abbr;
     }
     return null;
   };
 
-  // Helper: calculate matchup quality for next N games
-  const getMatchupInfo = (teamAbbr, numGames = 5) => {
-    if(!teamAbbr || !schedules[teamAbbr]) return null;
-    
-    const upcoming = schedules[teamAbbr].slice(0, numGames);
-    if(upcoming.length === 0) return null;
-    
-    // Get opponent ranks (lower rank = better offense = harder matchup)
-    const oppRanks = upcoming.map(g => offense[g.opponent]?.offenseRank || 15);
-    const avgRank = oppRanks.reduce((a,b) => a + b, 0) / oppRanks.length;
-    
-    // Grade: 1-10 = tough (top offenses), 21-30 = easy (weak offenses)
-    let grade, gradeColor, gradeBg;
-    if(avgRank >= 21) {
-      grade = 'Easy Schedule';
-      gradeColor = '#059669';
-      gradeBg = '#d1fae5';
-    } else if(avgRank >= 11) {
-      grade = 'Mixed Schedule';
-      gradeColor = '#d97706';
-      gradeBg = '#fef3c7';
-    } else {
-      grade = 'Tough Schedule';
-      gradeColor = '#dc2626';
-      gradeBg = '#fee2e2';
-    }
-    
-    // Format opponents list (first 4)
-    const oppList = upcoming.slice(0, 4).map(g => 
-      (g.home ? 'vs' : '@') + g.opponent
-    ).join(', ');
-    
-    return { grade, gradeColor, gradeBg, avgRank, oppList, numGames: upcoming.length };
+  // Helper: check if team plays today
+  const teamPlaysToday = (teamAbbr) => {
+    if(!teamAbbr || !schedules[teamAbbr]) return false;
+    const today = new Date().toISOString().split('T')[0];
+    return schedules[teamAbbr].some(g => g.date === today);
   };
 
-  // Build Set of pitchers confirmed active in MLB bullpens this year
+  // Helper: get today's opponent
+  const getTodayOpponent = (teamAbbr) => {
+    if(!teamAbbr || !schedules[teamAbbr]) return null;
+    const today = new Date().toISOString().split('T')[0];
+    const game = schedules[teamAbbr].find(g => g.date === today);
+    return game ? { opponent: game.opponent, home: game.home } : null;
+  };
+
+  // Helper: calculate streaming score
+  const calcStreamScore = (p, oppRank, daysRest, ipPerGame) => {
+    let score = 0;
+    
+    // Opponent offense rank bonus (weak offense = high rank = good)
+    if(oppRank >= 25) score += 4;
+    else if(oppRank >= 20) score += 3;
+    else if(oppRank >= 15) score += 2;
+    else if(oppRank >= 10) score += 1;
+    
+    // K-BB% bonus
+    const kbb = p.kbb || 0;
+    if(kbb >= 25) score += 3;
+    else if(kbb >= 20) score += 2;
+    else if(kbb >= 15) score += 1;
+    
+    // xwOBA bonus
+    const xwoba = p.xwoba;
+    if(xwoba != null && xwoba <= 0.260) score += 2;
+    else if(xwoba != null && xwoba <= 0.280) score += 1;
+    
+    // Rest bonus
+    if(daysRest >= 5) score += 1.5;
+    else if(daysRest >= 4) score += 1;
+    else if(daysRest >= 3) score += 0.5;
+    
+    // IP upside bonus
+    if(ipPerGame >= 2.5) score += 1;
+    
+    return parseFloat(score.toFixed(1));
+  };
+
+  // Build Set of pitchers confirmed active in MLB bullpens
   const activeBullpenNames = new Set();
   (G_bpData||[]).forEach(team => {
     (team.pitchers||[]).forEach(p => {
@@ -2602,22 +2613,19 @@ function renderBPLongRelief() {
     });
   });
 
-  // Find long relievers: IP/game >= 1.4, must be FA, must have elite stats
-  const longRelievers = Object.entries(G.mlbStats)
+  // Find all multi-inning relievers
+  const multiInning = Object.entries(G.mlbStats)
     .filter(([name, m]) => {
       if(!isFAInLeague(name)) return false;
       if(!activeBullpenNames.has(stripAccents(normName(name)))) return false;
       
-      // Must have enough usage
       const ipNum = m.ipNum || 0;
       const gp = m.gamesPlayed || 0;
       if(ipNum < 3.0 || gp < 2) return false;
       
-      // Must be long relief profile (>=1.4 IP/game)
       const ipPerGame = gp > 0 ? ipNum / gp : 0;
       if(ipPerGame < 1.4) return false;
       
-      // Must have ELITE stuff: K-BB% >= 15% AND (Whiff% >= 22% OR xERA <= 5.0)
       const sv = svMap.get(stripAccents(normName(name)));
       const ld = G.liveData?.[name.toLowerCase()];
       const kbb = sv?.kbb ?? ld?.kbb ?? (m.k9 && m.bb9 ? ((m.k9-m.bb9)/9*100) : 0);
@@ -2627,7 +2635,6 @@ function renderBPLongRelief() {
       
       if(kbb < 15) return false;
       if(whiff < 22 && xera > 5.0) return false;
-      // Only apply xWOBA filter if data exists
       if(xwoba != null && xwoba > 0.320) return false;
       
       return true;
@@ -2641,102 +2648,132 @@ function renderBPLongRelief() {
       ));
       const bpP = bpTeam?.pitchers.find(r => stripAccents(normName(r.name.toLowerCase())) === nn);
       
-      // Get days rest - use same key format as server (stripAccents + normName)
       const restKey = stripAccents(normName(m.name || name));
       const restInfo = restData[restKey];
       const daysRest = restInfo?.daysRest ?? null;
       
-      // Get team abbr and matchup info
       const teamAbbr = getTeamAbbr(bpTeam?.name);
-      const matchup = getMatchupInfo(teamAbbr);
+      const playsToday = teamPlaysToday(teamAbbr);
+      const todayGame = getTodayOpponent(teamAbbr);
+      const oppRank = todayGame ? (offense[todayGame.opponent]?.offenseRank || 15) : 15;
       
       const ipNum = m.ipNum || 0;
       const gp = m.gamesPlayed || 0;
-      const ipPerGame = gp > 0 ? (ipNum / gp).toFixed(1) : '—';
+      const ipPerGameNum = gp > 0 ? ipNum / gp : 0;
+      const ipPerGame = ipPerGameNum.toFixed(1);
+      
+      // Probable: bulk arm (>=2.0 IP/G) + on rest cycle (4-6 days) + plays today
+      const isProbable = ipPerGameNum >= 2.0 && 
+                         daysRest !== null && daysRest >= 4 && daysRest <= 6 && 
+                         playsToday;
+      
+      const streamScore = playsToday ? calcStreamScore(
+        { kbb: sv?.kbb ?? ld?.kbb, xwoba: sv?.xwoba ?? ld?.xwoba },
+        oppRank,
+        daysRest || 0,
+        ipPerGameNum
+      ) : 0;
       
       return {
         name: m.name||name,
         gp: gp,
         ip: m.ip||'—',
         ipPerGame: ipPerGame,
+        ipPerGameNum: ipPerGameNum,
         era: m.era || null,
         whip: m.whip || null,
         xera: sv?.xera ?? ld?.xera ?? null,
+        xwoba: sv?.xwoba ?? ld?.xwoba ?? null,
         kbb: sv?.kbb ?? ld?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
         whiff: sv?.whiff ?? ld?.whiff ?? null,
         mlbId: sv?.mlbId || ld?.mlbId || bpP?.mlbId || null,
         teamName: bpTeam?.name || '',
         teamAbbr: teamAbbr,
         daysRest: daysRest,
-        lastDate: restInfo?.lastDate || null,
-        matchup: matchup
+        playsToday: playsToday,
+        todayGame: todayGame,
+        oppRank: oppRank,
+        isProbable: isProbable,
+        streamScore: streamScore,
+        is3IPCapable: ipPerGameNum >= 2.5
       };
     })
-    // Sort by: 1) matchup grade (easy first), 2) days rest (more rest first), 3) stuff
-    .sort((a,b) => {
-      // Easy matchups first
-      const aMatchupScore = a.matchup?.avgRank || 15;
-      const bMatchupScore = b.matchup?.avgRank || 15;
-      if(Math.abs(aMatchupScore - bMatchupScore) >= 5) {
-        return bMatchupScore - aMatchupScore; // Higher rank = easier = better
-      }
-      // Then by days rest
-      if(a.daysRest !== null && b.daysRest !== null) {
-        if(b.daysRest !== a.daysRest) return b.daysRest - a.daysRest;
-      }
-      if(a.daysRest !== null && b.daysRest === null) return -1;
-      if(a.daysRest === null && b.daysRest !== null) return 1;
-      // Then by stuff
-      return ((b.kbb||0)+(b.whiff||0)) - ((a.kbb||0)+(a.whiff||0));
-    });
+    // Filter: must play today AND have 2+ days rest
+    .filter(p => p.playsToday && p.daysRest !== null && p.daysRest >= 2)
+    // Sort by streaming score (highest first)
+    .sort((a, b) => b.streamScore - a.streamScore);
 
-  if(!longRelievers.length) {
-    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No long relievers found matching filters.</span>';
-    return;
-  }
-
-  el.innerHTML = longRelievers.map(p => {
-    // Days rest badge - color coded, goes in the badge position
-    let restBadgeStyle = 'background:#e5e7eb;color:#6b7280'; // gray default
-    let restLabel = '—';
+  // Render card helper
+  const renderCard = (p) => {
+    // ++ flag for 3+ IP capable
+    const plusPlus = p.is3IPCapable ? '<span style="color:#059669;font-weight:700;margin-right:2px">++</span>' : '';
     
+    // ✓ Probable badge
+    const probableBadge = p.isProbable 
+      ? '<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;background:#dbeafe;color:#1d4ed8;margin-left:6px">✓ Probable</span>' 
+      : '';
+    
+    // Rest badge
+    let restBadgeStyle = 'background:#e5e7eb;color:#6b7280';
+    let restLabel = '—';
     if(p.daysRest !== null) {
       if(p.daysRest >= 4) {
-        restBadgeStyle = 'background:#d1fae5;color:#059669'; // green
-        restLabel = `${p.daysRest}d rest 🔥`;
-      } else if(p.daysRest >= 3) {
-        restBadgeStyle = 'background:#fef3c7;color:#d97706'; // amber
+        restBadgeStyle = 'background:#d1fae5;color:#059669';
         restLabel = `${p.daysRest}d rest`;
-      } else if(p.daysRest >= 2) {
-        restBadgeStyle = 'background:#e5e7eb;color:#6b7280'; // gray
+      } else if(p.daysRest >= 3) {
+        restBadgeStyle = 'background:#fef3c7;color:#d97706';
         restLabel = `${p.daysRest}d rest`;
       } else {
-        restBadgeStyle = 'background:#fee2e2;color:#dc2626'; // red - recently pitched
+        restBadgeStyle = 'background:#e5e7eb;color:#6b7280';
         restLabel = `${p.daysRest}d rest`;
       }
     }
     
-    // Matchup info
-    const matchupBadge = p.matchup 
-      ? `<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;background:${p.matchup.gradeBg};color:${p.matchup.gradeColor}">${p.matchup.grade}</span>`
+    // Opponent info
+    const oppInfo = p.todayGame 
+      ? `${p.todayGame.home ? 'vs' : '@'} ${p.todayGame.opponent}` 
       : '';
-    const oppList = p.matchup?.oppList || '';
+    
+    // Opponent rank badge
+    let oppBadge = '';
+    if(p.todayGame && p.oppRank) {
+      if(p.oppRank >= 21) {
+        oppBadge = `<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;background:#d1fae5;color:#059669">Easy</span>`;
+      } else if(p.oppRank >= 11) {
+        oppBadge = `<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;background:#fef3c7;color:#d97706">Mixed</span>`;
+      } else {
+        oppBadge = `<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;background:#fee2e2;color:#dc2626">Tough</span>`;
+      }
+    }
+    
+    // Score badge
+    const scoreBadge = p.streamScore > 0
+      ? `<span style="font-size:11px;font-weight:700;color:var(--text)">${p.streamScore.toFixed(1)}</span>`
+      : '';
     
     return `<div class="role-card">
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
-        <div class="role-name">${p.name}</div>
-        <div class="role-name-sub">${teamNickname(p.teamName)}${oppList ? ` · <span style="color:var(--text3)">${oppList}</span>` : ''}</div>
+        <div class="role-name">${plusPlus}${p.name}${probableBadge}</div>
+        <div class="role-name-sub">${teamNickname(p.teamName)}${oppInfo ? ` · <span style="color:var(--text3)">${oppInfo}</span>` : ''}</div>
         <div class="role-team">${p.ipPerGame} IP/G · ${p.ip}IP · WHIP ${p.whip?.toFixed(2)||'—'}</div>
         <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb.toFixed(1)+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-        ${matchupBadge}
+        ${scoreBadge}
+        ${oppBadge}
         <span class="role-badge" style="${restBadgeStyle};font-size:9px;padding:2px 6px">${restLabel}</span>
       </div>
     </div>`;
-  }).join('');
-  setupExpandButton('bpLongRelief');
+  };
+
+  // Render single combined list
+  if(multiInning.length === 0) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No multi-inning streamers available today.</span>';
+  } else {
+    el.innerHTML = multiInning.map(p => renderCard(p)).join('');
+  }
+  setupExpandButton('bpMultiInning');
 }
 
 // fetchBullpenWatch is called from the tab onclick directly
@@ -2770,7 +2807,7 @@ function setupExpandButton(containerId) {
   <div id="pane-bullpen" class="pane active">
     <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Bullpen situations · <span id="bpUpdated">—</span></div>
     
-    <!-- 2-column top row: Save Vultures | Long Relief -->
+    <!-- 2-column top row: Save Vultures | Multi-Inning Streamers -->
     <div class="bp-top-row">
       <div class="bp-col">
         <div class="bp-col-title">🔥 Save Vulture Watch</div>
@@ -2779,9 +2816,9 @@ function setupExpandButton(containerId) {
         <button class="bp-expand-btn" onclick="toggleExpand(this)" style="display:none">Show more ▼</button>
       </div>
       <div class="bp-col">
-        <div class="bp-col-title">Long Relief Streamers</div>
-        <div class="bp-col-desc">Bulk innings (≥1.4 IP/G), elite stuff, xWOBA ≤.320. Sorted by matchup & rest.</div>
-        <div id="bpLongRelief" class="bp-col-cards"></div>
+        <div class="bp-col-title">📊 Multi-Inning Streamers</div>
+        <div class="bp-col-desc">Bulk relievers sorted by streaming value. <b>++</b> = 3+ IP ceiling. <b>✓</b> = Probable bulk outing.</div>
+        <div id="bpMultiInning" class="bp-col-cards"></div>
         <button class="bp-expand-btn" onclick="toggleExpand(this)" style="display:none">Show more ▼</button>
       </div>
     </div>
