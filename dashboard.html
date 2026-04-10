@@ -923,7 +923,6 @@ async function loadLeague(){
       if(G.mlbStats && G.savantLoaded && G_bpData && !G.preFetching) {
         clearInterval(bpPoller);
         renderBPTeams();  // Re-render with Savant whiff% data for bullpen order
-        renderBPTransitions();
         renderBPWaiting();
         renderBPVultures();
         renderBPEliteArms();
@@ -1073,7 +1072,7 @@ function showBPSkeleton() {
           <div class="skeleton-cell" style="width:70px;height:11px;border-radius:4px"></div>
         </div>`).join('')}
     </div>`).join('');
-  ['bpTransitions','bpWaiting','bpVultures','bpEliteArms','bpLongRelief'].forEach(id => {
+  ['bpWaiting','bpVultures','bpEliteArms','bpLongRelief'].forEach(id => {
     const e = document.getElementById(id);
     if(e) e.innerHTML = Array.from({length:4}, () => `
       <div class="role-card">
@@ -1767,7 +1766,6 @@ let G_bpPendingRender = false;
 function tryRenderBPFASections() {
   // Only render when ALL three are ready
   if(!G.mlbStats || !G.savantLoaded || !G_bpData || G.preFetching) return;
-  renderBPTransitions();
   renderBPWaiting();
   renderBPVultures();
   renderBPEliteArms();
@@ -1849,9 +1847,7 @@ async function fetchBullpenWatch() {
     // Savant not ready yet — render team cards now, mark FA sections as pending
     G_bpPendingRender = true;
     renderBPTeams();
-    const bpT = document.getElementById('bpTransitions');
     const bpW = document.getElementById('bpWaiting');
-    // Keep skeleton showing for transitions
     // Keep skeleton showing for waiting
     if(updEl) updEl.textContent = 'Team cards loaded · FA sections loading...';
     return;
@@ -2192,75 +2188,6 @@ function renderBPTeams() {
   }).join('');
 }
 
-function renderBPTransitions() {
-  const el = document.getElementById('bpTransitions');
-  if(!G.mlbStats && G.yearCache[CURRENT_YEAR]) G.mlbStats = G.yearCache[CURRENT_YEAR].mlbStats;
-  if(!el || !G.mlbStats || !G.savantLoaded || !G_bpData) {
-    // Keep skeleton showing until all data is ready
-    return;
-  }
-
-  const svMap2 = getSavantDataMap();
-  const transitions = Object.entries(G.mlbStats)
-    .filter(([name, m]) => {
-      if(!isFAInLeague(name)) return false;
-      if((m.saves||0) === 0) return false; // must have at least 1 save
-
-      // Find this pitcher on their bullpen team card
-      const bpTeam = G_bpData?.find(t => t.pitchers.some(r => r.name === (m.name||name)));
-      if(!bpTeam) return false;
-
-      // Exclude LOCKED teams — if locked, someone else is the closer
-      if(bpTeam.situation === 'LOCKED') return false;
-
-      // Pitcher must be the top or tied-for-top save getter on their team
-      const teamPitcher = bpTeam.pitchers.find(r => r.name === (m.name||name));
-      const maxSaves = Math.max(...bpTeam.pitchers.map(r => r.saves||0));
-      if((teamPitcher?.saves||0) < maxSaves) return false;
-
-      return true;
-    })
-    .map(([name, m]) => {
-      const sv = svMap2.get(stripAccents(normName(name)));
-      const bpTeam = G_bpData?.find(t => t.pitchers.some(r => r.name === (m.name||name)));
-      const sit = bpTeam?.situation;
-      // Badge label describes the team situation, not a role prediction
-      const roleLabel = {
-        COMMITTEE: 'Committee',
-        EMERGING:  'Save Leader',
-        NO_SAVES:  'First Save',
-      }[sit] || 'Emerging';
-      return {
-        name: m.name||name, saves: m.saves||0, holds: m.holds||0,
-        ip: m.ip||'—', era: m.era||null,
-        kbb: sv?.kbb||null, whiff: sv?.whiff||null, mlbId: sv?.mlbId||null,
-        sit, roleLabel, teamName: bpTeam?.name || '',
-        injured: bpTeam?.pitchers.find(r => r.name === (m.name||name))?.injured || false,
-      };
-    })
-    .sort((a,b) => (b.saves - a.saves) || ((b.kbb||0) - (a.kbb||0)));
-
-  if(!transitions.length) {
-    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No available save leaders found. Check back as the season progresses.</span>';
-    return;
-  }
-  el.innerHTML = transitions.map(p => {
-    const sitClass = p.sit || 'EMERGING';
-    const injTag = p.injured ? '<span class="bp-inj" style="margin-left:4px">IL</span>' : '';
-    return `<div class="role-card">
-      <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
-      <div class="role-info">
-        <div class="role-name">${p.name}${injTag}</div>
-        <div class="role-name-sub">${teamNickname(p.teamName)}</div>
-        <div class="role-team">${p.saves}SV · ${p.holds}HLD · ${p.ip}IP · ERA ${p.era!=null?p.era.toFixed(2):'—'}</div>
-        <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
-      </div>
-      <span class="role-badge transition">${p.roleLabel}</span>
-    </div>`;
-  }).join('');
-  setupExpandButton('bpTransitions');
-}
-
 function renderBPWaiting() {
   const el = document.getElementById('bpWaiting');
   if(!G.mlbStats && G.yearCache[CURRENT_YEAR]) G.mlbStats = G.yearCache[CURRENT_YEAR].mlbStats;
@@ -2486,90 +2413,124 @@ function renderBPVultures() {
   const svMap = getSavantDataMap();
   const restData = G.pitcherRest || {};
 
-  // Find FA pitchers in 1st/2nd position behind fatigued or vulnerable closers
+  // NEW SIMPLIFIED LOGIC:
+  // Trigger: Closer pitched B2B (2+ consecutive days with daysRest <= 1)
+  // Show: Setup men (1st/2nd in line) who are FA
+  
   const vultures = [];
+  const DEBUG_TEAMS = ['SD', 'Padres', 'San Diego']; // Debug specific teams
   
   (G_bpData || []).forEach(team => {
-    // Skip locked teams with healthy closers
-    if(team.situation === 'LOCKED') return;
+    const isDebugTeam = DEBUG_TEAMS.some(t => team.name?.includes(t));
     
-    // Find closer and check their fatigue/vulnerability
+    // Step 1: Find the closer
     const closer = team.pitchers.find(p => !p.injured && ((p.saves||0) > 0 || team.closerName === p.name));
-    if(!closer) return;
+    if(!closer) {
+      if(isDebugTeam) console.log(`[VULTURE] ${team.name}: No closer found`);
+      return;
+    }
     
-    // Get closer rest data
+    // Step 2: Check if closer is fatigued (B2B)
     const closerRestKey = stripAccents(normName(closer.name));
     const closerRest = restData[closerRestKey];
-    const closerFatigue = closerRest?.daysRest ?? 99;
+    const daysRest = closerRest?.daysRest ?? 99;
+    const consecutive = closerRest?.consecutiveGames ?? 1;
     
-    // Calculate closer vulnerability: BS + recent usage
-    const closerBS = closer.blownSaves || 0;
-    const closerVuln = closerBS + (closerFatigue <= 1 ? 1 : 0);
+    const isB2B = consecutive >= 2 && daysRest <= 1;
+    const is3Straight = consecutive >= 3 && daysRest <= 1;
     
-    // Only show vulture opportunities when closer is fatigued or vulnerable
-    if(closerFatigue > 2 && closerVuln < 1 && team.situation !== 'COMMITTEE' && team.situation !== 'VOLATILE') return;
+    if(isDebugTeam) {
+      console.log(`[VULTURE] ${team.name}: closer=${closer.name}, daysRest=${daysRest}, consecutive=${consecutive}, isB2B=${isB2B}`);
+    }
     
-    // Calculate vulture score for this team opportunity
-    let teamVultureScore = 0;
-    if(closerFatigue === 0) teamVultureScore += 3;
-    else if(closerFatigue === 1) teamVultureScore += 2;
-    else if(closerFatigue === 2) teamVultureScore += 1;
-    teamVultureScore += closerBS * 2;
-    if(team.situation === 'COMMITTEE') teamVultureScore += 2;
-    if(team.situation === 'VOLATILE' || team.volatile) teamVultureScore += 3;
+    // Only proceed if closer is fatigued (B2B)
+    if(!isB2B) {
+      if(isDebugTeam) console.log(`[VULTURE] ${team.name}: SKIP - closer not B2B`);
+      return;
+    }
     
-    // Determine reason text for this team
-    let reason = [];
-    if(closerFatigue <= 1) reason.push(`${closer.name.split(' ').pop()} ${closerFatigue === 0 ? 'pitched today' : '1d rest'}`);
-    if(closerBS > 0) reason.push(`${closerBS} BS`);
-    if(team.situation === 'COMMITTEE') reason.push('Committee');
-    if(team.volatile) reason.push('Volatile');
+    // Step 3: Find setup men (non-closers, non-long-relievers, sorted by closerScore)
+    // Calculate closerScore for each pitcher (same formula as team rankings)
     
-    // Find the BEST FA candidate on this team (only one per team)
-    const faCandidates = team.pitchers
+    // DEBUG: Log first pitcher's full object to see available fields
+    if(isDebugTeam && team.pitchers[0]) {
+      console.log(`[VULTURE] ${team.name}: Sample pitcher object keys:`, Object.keys(team.pitchers[0]));
+      console.log(`[VULTURE] ${team.name}: Sample pitcher:`, JSON.stringify(team.pitchers[0]).slice(0, 500));
+    }
+    
+    const setupCandidates = team.pitchers
       .filter(p => {
         if(p.name === closer.name) return false;
-        if(p.injured) return false;
-        if(!isFAInLeague(p.name)) return false;
-        // Must have some late-inning usage
-        if((p.holds||0) + (p.saves||0) + (p.gf||0) < 2) return false;
+        if(p.injured || isILPlayer(p.name)) return false;
         return true;
       })
       .map(p => {
-        const sv = svMap.get(stripAccents(normName(p.name)));
-        const mlbKey = Object.keys(G.mlbStats || {}).find(k => 
-          stripAccents(normName(k)) === stripAccents(normName(p.name))
-        );
-        const m = mlbKey ? G.mlbStats[mlbKey] : null;
-        // Score candidates by holds + saves + GF (late-inning experience)
-        const candidateScore = (p.holds||0)*2 + (p.saves||0)*3 + (p.gf||0);
-        return { ...p, sv, m, candidateScore };
+        // Calculate IP per game to identify long relievers
+        const ip = parseFloat(p.ip) || 0;
+        const g = parseInt(p.gp) || 1;  // gp = games played
+        const ipPerGame = g > 0 ? ip / g : 0;
+        const isLongReliever = ipPerGame > 1.3;
+        
+        if(isDebugTeam) {
+          console.log(`[VULTURE] ${team.name}: ${p.name} - ip=${p.ip}, gp=${p.gp}, ipPerGame=${ipPerGame.toFixed(2)}, isLRP=${isLongReliever}`);
+        }
+        
+        // closerScore: saves*10 + holds*3 + (gf - saves)*2 - blown saves*5
+        const sv = parseInt(p.saves) || 0;
+        const hld = parseInt(p.holds) || 0;
+        const gf = parseInt(p.gf) || 0;
+        const bs = parseInt(p.blownSaves) || 0;
+        const closerScore = sv*10 + hld*3 + (gf - sv)*2 - bs*5;
+        
+        return { ...p, ipPerGame, isLongReliever, closerScore };
       })
-      .sort((a, b) => b.candidateScore - a.candidateScore);
+      .filter(p => !p.isLongReliever) // Exclude long relievers
+      .sort((a, b) => b.closerScore - a.closerScore); // Best setup men first
     
-    // Only take the top candidate from this team
-    const bestCandidate = faCandidates[0];
-    if(!bestCandidate) return;
+    if(isDebugTeam) {
+      console.log(`[VULTURE] ${team.name}: setup candidates (non-LRP):`, 
+        setupCandidates.slice(0, 5).map(p => `${p.name}(score=${p.closerScore})`).join(', '));
+    }
     
-    vultures.push({
-      name: bestCandidate.name,
-      teamName: team.name,
-      holds: bestCandidate.holds || 0,
-      saves: bestCandidate.saves || 0,
-      gf: bestCandidate.gf || 0,
-      ip: bestCandidate.m?.ip || '—',
-      era: bestCandidate.m?.era || null,
-      kbb: bestCandidate.sv?.kbb || null,
-      whiff: bestCandidate.sv?.whiff || null,
-      mlbId: bestCandidate.sv?.mlbId || bestCandidate.mlbId || null,
-      vultureScore: teamVultureScore,
-      reason: reason.join(' · ') || 'Setup role',
-      closerName: closer.name,
-      closerFatigue
+    // Step 4: Get top 2 setup men who are FA
+    const faSetupMen = setupCandidates
+      .filter(p => isFAInLeague(p.name))
+      .slice(0, 2); // Top 2 only
+    
+    if(isDebugTeam) {
+      console.log(`[VULTURE] ${team.name}: FA setup men:`, 
+        faSetupMen.map(p => p.name).join(', ') || 'NONE');
+    }
+    
+    if(!faSetupMen.length) return;
+    
+    // Step 5: Add each FA setup man to vultures
+    const closerLast = closer.name.split(' ').pop();
+    const reason = is3Straight ? `${closerLast} 3 straight` : `${closerLast} B2B`;
+    const score = is3Straight ? 7 : 5;
+    
+    faSetupMen.forEach((p, idx) => {
+      const sv = svMap.get(stripAccents(normName(p.name)));
+      vultures.push({
+        name: p.name,
+        teamName: team.name,
+        holds: p.holds || 0,
+        saves: p.saves || 0,
+        gf: p.gf || 0,
+        ip: p.ip || '—',
+        era: p.era || null,
+        kbb: sv?.kbb || null,
+        whiff: sv?.whiff || null,
+        mlbId: sv?.mlbId || p.mlbId || null,
+        vultureScore: score - idx, // 1st gets full score, 2nd slightly less
+        reason,
+        closerName: closer.name,
+        position: idx === 0 ? '1st' : '2nd'
+      });
     });
   });
   
-  // Sort by vulture score (highest = best opportunity)
+  // Sort by vulture score
   vultures.sort((a, b) => b.vultureScore - a.vultureScore);
   
   if(!vultures.length) {
@@ -2578,16 +2539,14 @@ function renderBPVultures() {
   }
   
   el.innerHTML = vultures.map(p => {
-    // Badge color based on score
-    let badgeClass = 'waiting';
-    let badgeText = 'Watch';
-    if(p.vultureScore >= 4) { badgeClass = 'hot'; badgeText = '🔥 Hot'; }
-    else if(p.vultureScore >= 2) { badgeClass = 'warm'; badgeText = 'Warm'; }
+    const badgeClass = p.vultureScore >= 5 ? 'hot' : 'warm';
+    const badgeText = p.vultureScore >= 5 ? '🔥 Hot' : 'Warm';
+    const posTag = p.position ? `<span style="font-size:9px;background:#dbeafe;color:#1e40af;padding:1px 4px;border-radius:3px;margin-left:4px">${p.position}</span>` : '';
     
     return `<div class="role-card">
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
-        <div class="role-name">${p.name}</div>
+        <div class="role-name">${p.name}${posTag}</div>
         <div class="role-name-sub">${teamNickname(p.teamName)}</div>
         <div class="role-team">${p.holds}HLD · ${p.saves}SV · ${p.ip}IP</div>
         <div class="role-stats" style="font-size:10px;color:#dc2626">${p.reason}</div>
@@ -2675,19 +2634,34 @@ function renderBPLongRelief() {
   });
 
   // Find long relievers: IP/game >= 1.4, must be FA, must have elite stats
+  const DEBUG_NAMES = ['ryan yarbrough', 'jack perkins', 'ron marinaccio', 'jared shuster'];
   const longRelievers = Object.entries(G.mlbStats)
     .filter(([name, m]) => {
-      if(!isFAInLeague(name)) return false;
-      if(!activeBullpenNames.has(stripAccents(normName(name)))) return false;
+      const isDebug = DEBUG_NAMES.includes(name.toLowerCase());
+      
+      if(!isFAInLeague(name)) {
+        if(isDebug) console.log(`[LR DEBUG] ${name}: FAIL - not FA in league`);
+        return false;
+      }
+      if(!activeBullpenNames.has(stripAccents(normName(name)))) {
+        if(isDebug) console.log(`[LR DEBUG] ${name}: FAIL - not in activeBullpenNames`);
+        return false;
+      }
       
       // Must have enough usage
       const ipNum = m.ipNum || 0;
       const gp = m.gamesPlayed || 0;
-      if(ipNum < 3.0 || gp < 2) return false;
+      if(ipNum < 3.0 || gp < 2) {
+        if(isDebug) console.log(`[LR DEBUG] ${name}: FAIL - usage (ipNum=${ipNum}, gp=${gp})`);
+        return false;
+      }
       
       // Must be long relief profile (>=1.4 IP/game)
       const ipPerGame = gp > 0 ? ipNum / gp : 0;
-      if(ipPerGame < 1.4) return false;
+      if(ipPerGame < 1.4) {
+        if(isDebug) console.log(`[LR DEBUG] ${name}: FAIL - ipPerGame=${ipPerGame.toFixed(2)} < 1.4`);
+        return false;
+      }
       
       // Must have ELITE stuff: K-BB% >= 15% AND (Whiff% >= 22% OR xERA <= 5.0)
       const sv = svMap.get(stripAccents(normName(name)));
@@ -2697,11 +2671,23 @@ function renderBPLongRelief() {
       const xera = sv?.xera ?? ld?.xera ?? 99;
       const xwoba = sv?.xwoba ?? ld?.xwoba ?? null;
       
-      if(kbb < 15) return false;
-      if(whiff < 22 && xera > 5.0) return false;
-      // Only apply xWOBA filter if data exists
-      if(xwoba != null && xwoba > 0.320) return false;  // xWOBA <= .320
+      if(isDebug) console.log(`[LR DEBUG] ${name}: stats - kbb=${kbb?.toFixed(1)}, whiff=${whiff}, xera=${xera?.toFixed(2)}, xwoba=${xwoba}, ipPerGame=${ipPerGame.toFixed(2)}`);
       
+      if(kbb < 15) {
+        if(isDebug) console.log(`[LR DEBUG] ${name}: FAIL - kbb=${kbb?.toFixed(1)} < 15`);
+        return false;
+      }
+      if(whiff < 22 && xera > 5.0) {
+        if(isDebug) console.log(`[LR DEBUG] ${name}: FAIL - whiff=${whiff} < 22 AND xera=${xera?.toFixed(2)} > 5.0`);
+        return false;
+      }
+      // Only apply xWOBA filter if data exists
+      if(xwoba != null && xwoba > 0.320) {
+        if(isDebug) console.log(`[LR DEBUG] ${name}: FAIL - xwoba=${xwoba} > 0.320`);
+        return false;
+      }
+      
+      if(isDebug) console.log(`[LR DEBUG] ${name}: PASS ✓`);
       return true;
     })
     .map(([name, m]) => {
@@ -2842,17 +2828,11 @@ function setupExpandButton(containerId) {
   <div id="pane-bullpen" class="pane active">
     <div style="font-size:11px;color:var(--text2);margin-bottom:12px">Bullpen situations · <span id="bpUpdated">—</span></div>
     
-    <!-- 3-column top row: Save Leaders | Save Vultures | Long Relief -->
+    <!-- 2-column top row: Save Vultures | Long Relief -->
     <div class="bp-top-row">
       <div class="bp-col">
-        <div class="bp-col-title">Save Leaders Available</div>
-        <div class="bp-col-desc">Leading or tied in saves on teams without a locked closer.</div>
-        <div id="bpTransitions" class="bp-col-cards"></div>
-        <button class="bp-expand-btn" onclick="toggleExpand(this)" style="display:none">Show more ▼</button>
-      </div>
-      <div class="bp-col">
         <div class="bp-col-title">🔥 Save Vulture Watch</div>
-        <div class="bp-col-desc">FAs in 1st/2nd behind fatigued or vulnerable closers.</div>
+        <div class="bp-col-desc">Setup men behind closers who pitched back-to-back.</div>
         <div id="bpVultures" class="bp-col-cards"></div>
         <button class="bp-expand-btn" onclick="toggleExpand(this)" style="display:none">Show more ▼</button>
       </div>

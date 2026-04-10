@@ -641,7 +641,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // /pitcher-rest -> get days since each pitcher last appeared (for streaming recommendations)
+  // /pitcher-rest -> get days since each pitcher last appeared + consecutive games
   if (path === '/pitcher-rest') {
     const today = new Date();
     const tenDaysAgo = new Date(today - 10 * 24 * 60 * 60 * 1000);
@@ -683,6 +683,7 @@ const server = http.createServer(async (req, res) => {
           .replace(/ jr$| sr$| ii$| iii$/, '') // remove suffixes
           .trim();
 
+        // Collect ALL game dates for each pitcher (not just most recent)
         const pitchers = {};
         for(let i = 1; i < lines.length; i++){
           if(!lines[i].trim()) continue;
@@ -699,32 +700,87 @@ const server = http.createServer(async (req, res) => {
           // Apply same normalization as dashboard
           const key = stripAccents(normName(normalized));
           
-          // Track most recent game date
-          if(!pitchers[key] || gameDate > pitchers[key].lastDate) {
+          // Initialize pitcher entry if needed
+          if(!pitchers[key]) {
             pitchers[key] = { 
               name: normalized, 
-              lastDate: gameDate,
-              mlbId: pitcherId
+              mlbId: pitcherId,
+              gameDates: new Set()
             };
           }
+          // Add this game date to the set (automatically dedupes)
+          pitchers[key].gameDates.add(gameDate);
         }
 
-        // Calculate days rest for each pitcher
+        // Calculate days rest and consecutive games for each pitcher
         const todayStr = fmt(today);
         const result = {};
+        
         Object.entries(pitchers).forEach(([key, p]) => {
-          const lastGame = new Date(p.lastDate + 'T12:00:00');
+          // Convert Set to sorted array (descending - most recent first)
+          const dates = Array.from(p.gameDates).sort((a, b) => b.localeCompare(a));
+          const lastDate = dates[0];
+          
+          // Calculate days rest
+          const lastGame = new Date(lastDate + 'T12:00:00');
           const todayNoon = new Date(todayStr + 'T12:00:00');
           const daysRest = Math.floor((todayNoon - lastGame) / (24 * 60 * 60 * 1000));
+          
+          // Calculate consecutive games (working backwards from most recent)
+          // Count how many consecutive calendar days with appearances
+          let consecutiveGames = 1; // At least 1 (the most recent game)
+          for(let i = 0; i < dates.length - 1; i++) {
+            const current = new Date(dates[i] + 'T12:00:00');
+            const prev = new Date(dates[i + 1] + 'T12:00:00');
+            const dayDiff = Math.floor((current - prev) / (24 * 60 * 60 * 1000));
+            
+            if(dayDiff === 1) {
+              // Consecutive day - increment count
+              consecutiveGames++;
+            } else {
+              // Gap in appearances - stop counting
+              break;
+            }
+          }
+          
           result[key] = {
             name: p.name,
-            lastDate: p.lastDate,
+            lastDate: lastDate,
             daysRest: daysRest,
+            consecutiveGames: consecutiveGames,
+            recentDates: dates.slice(0, 5), // Last 5 game dates for debugging
             mlbId: p.mlbId
           };
         });
 
         console.log(`[proxy] pitcher-rest: found ${Object.keys(result).length} pitchers`);
+        
+        // Debug: Log a few sample entries to verify data structure
+        const sampleKeys = Object.keys(result).slice(0, 3);
+        sampleKeys.forEach(k => {
+          const p = result[k];
+          console.log(`[proxy] SAMPLE: ${k} -> consecutive=${p.consecutiveGames}, rest=${p.daysRest}, dates=${p.recentDates?.join(',')}`);
+        });
+        
+        // Debug: Log pitchers with consecutive games >= 2 (B2B candidates)
+        const b2bPitchers = Object.entries(result)
+          .filter(([k, v]) => v.consecutiveGames >= 2)
+          .map(([k, v]) => `${v.name}: ${v.consecutiveGames} straight (last: ${v.lastDate}, rest: ${v.daysRest}d)`)
+          .slice(0, 15);
+        console.log(`[proxy] B2B count: ${b2bPitchers.length}`);
+        if(b2bPitchers.length > 0) {
+          console.log(`[proxy] B2B pitchers:`, b2bPitchers.join(' | '));
+        }
+        
+        // Debug: Specifically check Mason Miller (try multiple key formats)
+        const millerKey = Object.keys(result).find(k => k.includes('miller'));
+        if(millerKey) {
+          const m = result[millerKey];
+          console.log(`[proxy] MILLER (${millerKey}): ${m.consecutiveGames} consecutive, ${m.daysRest}d rest, dates: ${m.recentDates?.join(', ')}`);
+        } else {
+          console.log(`[proxy] MILLER: not found in result keys`);
+        }
+        
         setCORS(res, reqOrigin);
         res.writeHead(200, {'Content-Type':'application/json'});
         res.end(JSON.stringify(result));
