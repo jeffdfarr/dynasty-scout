@@ -1887,14 +1887,59 @@ function renderBPTeams() {
   const teamNickname = name => name
     .replace(/^(Arizona|Atlanta|Baltimore|Boston|Chicago|Cincinnati|Cleveland|Colorado|Detroit|Houston|Kansas City|Los Angeles|Miami|Milwaukee|Minnesota|New York|Oakland|Philadelphia|Pittsburgh|San Diego|San Francisco|Seattle|St\. Louis|Tampa Bay|Texas|Toronto|Washington|Athletics)\s+/i, '');
 
+  // Track closer injuries with 1-day expiration
+  const INJURY_CACHE_KEY = 'dynasty-scout-closer-injuries';
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  
+  // Load injury cache from localStorage
+  let injuryCache = {};
+  try {
+    injuryCache = JSON.parse(localStorage.getItem(INJURY_CACHE_KEY) || '{}');
+  } catch(e) { injuryCache = {}; }
+  
+  // Helper: check if team's current closer injury should show (within 1 day of detection)
+  const shouldShowCloserInjury = (team) => {
+    const currentCloser = [...team.pitchers].sort((a, b) => (b.saves||0) - (a.saves||0))[0];
+    if(!currentCloser || (currentCloser.saves||0) === 0) return false;
+    
+    const isOnIL = currentCloser.injured || isILPlayer(currentCloser.name);
+    if(!isOnIL) {
+      // Closer is healthy - remove from cache if present
+      if(injuryCache[team.name]) {
+        delete injuryCache[team.name];
+      }
+      return false;
+    }
+    
+    // Closer is on IL - check if we should show the highlight
+    const now = Date.now();
+    if(!injuryCache[team.name]) {
+      // First time detecting this injury - add to cache
+      injuryCache[team.name] = { closer: currentCloser.name, detectedAt: now };
+    }
+    
+    // Check if within 1 day of first detection
+    const detectedAt = injuryCache[team.name].detectedAt;
+    return (now - detectedAt) < ONE_DAY_MS;
+  };
+  
+  // Process all teams and save updated cache
+  const injuryResults = {};
+  G_bpData.forEach(team => {
+    injuryResults[team.name] = shouldShowCloserInjury(team);
+  });
+  try {
+    localStorage.setItem(INJURY_CACHE_KEY, JSON.stringify(injuryCache));
+  } catch(e) { /* localStorage full or unavailable */ }
+
   const sitOrder = { VOLATILE:-1, EMERGING:0, COMMITTEE:1, LOCKED:2, NO_SAVES:3 };
   const sorted = [...G_bpData].sort((a,b) => {
     // Volatile teams first (highest priority)
     if(a.volatile && !b.volatile) return -1;
     if(!a.volatile && b.volatile) return 1;
-    // Then recently-injured closer cards
-    const aIL = a.recentInjury ? 1 : 0;
-    const bIL = b.recentInjury ? 1 : 0;
+    // Then teams with current closer on IL (within 1 day)
+    const aIL = injuryResults[a.name] ? 1 : 0;
+    const bIL = injuryResults[b.name] ? 1 : 0;
     if(aIL !== bIL) return bIL - aIL;
     return (sitOrder[a.situation]??9) - (sitOrder[b.situation]??9);
   });
@@ -1902,8 +1947,9 @@ function renderBPTeams() {
   el.innerHTML = sorted.map(team => {
     const shortName = teamNickname(team.name);
     const sitClass = team.situation || 'NO_SAVES';
-    const hasRecentIL = team.pitchers.some(p => isILPlayer(p.name) && (p.isPriorCloser || (p.saves||0) + (p.holds||0) > 2));
-    const cardClass = (team.recentInjury || hasRecentIL) ? 'bp-card injured-closer' : 'bp-card';
+    
+    // Only show orange outline if closer injury detected within last 1 day
+    const cardClass = injuryResults[team.name] ? 'bp-card injured-closer' : 'bp-card';
     const injuredBanner = '';
     
     // Split pitchers into active and injured groups
@@ -2465,8 +2511,14 @@ function renderBPVultures() {
     
     // Step 4: Get setup men who are FA AND not fatigued (not B2B themselves)
     // If 1st in line is B2B, skip to 2nd; if 2nd is B2B, skip to 3rd, etc.
-    const faSetupMen = setupCandidates
-      .filter(p => isFAInLeague(p.name))
+    const faSetupCandidates = setupCandidates.filter(p => isFAInLeague(p.name));
+    
+    // Track which FA setup men are B2B (skipped)
+    const skippedB2B = faSetupCandidates
+      .filter(p => p.pIsB2B)
+      .map(p => p.name.split(' ').pop()); // Last names only
+    
+    const faSetupMen = faSetupCandidates
       .filter(p => !p.pIsB2B) // Skip setup men who are also B2B
       .slice(0, 2);
     
@@ -2477,11 +2529,15 @@ function renderBPVultures() {
     const teamTotalSaves = team.pitchers.reduce((sum, p) => sum + (parseInt(p.saves) || 0), 0);
     const teamSaveBonus = Math.floor(teamTotalSaves / 4);
     
-    // Step 6: Add each available FA setup man to vultures
+    // Step 6: Build reason text including skipped B2B setup men
     const closerLast = closer.name.split(' ').pop();
-    const reason = is3Straight ? `${closerLast} 3 straight` : `${closerLast} B2B`;
+    let reason = is3Straight ? `${closerLast} 3 straight` : `${closerLast} B2B`;
+    if(skippedB2B.length > 0) {
+      reason += ` · ${skippedB2B.join(', ')} B2B`;
+    }
     const baseScore = is3Straight ? 7 : 5;
     
+    // Step 7: Add each available FA setup man to vultures
     faSetupMen.forEach((p, idx) => {
       const sv = svMap.get(stripAccents(normName(p.name)));
       vultures.push({
