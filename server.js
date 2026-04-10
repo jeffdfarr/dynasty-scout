@@ -643,6 +643,7 @@ const server = http.createServer(async (req, res) => {
 
   // /pitcher-rest -> get days since each pitcher last appeared + consecutive games
   if (path === '/pitcher-rest') {
+    const restStartTime = Date.now();
     const today = new Date();
     const tenDaysAgo = new Date(today - 10 * 24 * 60 * 60 * 1000);
     const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000); // Include today's games
@@ -664,6 +665,7 @@ const server = http.createServer(async (req, res) => {
       let body = '';
       sr.on('data', c => body += c);
       sr.on('end', () => {
+        console.log(`[proxy] pitcher-rest: CSV fetched in ${Date.now() - restStartTime}ms (${body.length} bytes)`);
         const lines = body.trim().split('\n');
         if(lines.length < 2){ res.writeHead(200); res.end('{}'); return; }
 
@@ -753,7 +755,7 @@ const server = http.createServer(async (req, res) => {
           };
         });
 
-        console.log(`[proxy] pitcher-rest: found ${Object.keys(result).length} pitchers`);
+        console.log(`[proxy] pitcher-rest: found ${Object.keys(result).length} pitchers in ${Date.now() - restStartTime}ms total`);
         
         setCORS(res, reqOrigin);
         res.writeHead(200, {'Content-Type':'application/json'});

@@ -727,6 +727,7 @@ async function fetchLeagues(){
 }
 
 async function loadLeague(){
+  console.time('⏱️ TOTAL loadLeague');
   // Get stored credentials
   const sid = localStorage.getItem('fantrax_secret_id');
   if(!sid){ document.getElementById('leagueHeader').textContent = 'No Secret ID saved — enter it below'; showCredentialPrompt(); return; }
@@ -735,7 +736,9 @@ async function loadLeague(){
   document.getElementById('leagueHeader').textContent = 'Connecting to Fantrax...';
   if(!G.leagues.length){
     try {
+      console.time('⏱️ Fantrax getLeagues');
       const data = await fx('getLeagues', {userSecretId: sid});
+      console.timeEnd('⏱️ Fantrax getLeagues');
       console.log('[fantrax] getLeagues response:', data);
       G.leagues = data.leagues || [];
       if(!G.leagues.length){ 
@@ -758,11 +761,13 @@ async function loadLeague(){
   G.leagueName = league.leagueName || 'My league';
   localStorage.setItem('fantrax_league_id', G.leagueId);
   try {
+    console.time('⏱️ Fantrax parallel (info+rosters+adp)');
     const [info, rosterData, adpData] = await Promise.all([
       fx('getLeagueInfo', {leagueId: G.leagueId}),
       fx('getTeamRosters', {leagueId: G.leagueId}),
       fx('getAdp', {sport: 'MLB'}),
     ]);
+    console.timeEnd('⏱️ Fantrax parallel (info+rosters+adp)');
     const adpSample = (adpData.players||adpData.playerInfo||Object.values(adpData)[0]||[]);
 
     const teams = {};
@@ -914,9 +919,14 @@ async function loadLeague(){
     }).length;
     document.getElementById('leagueHeader').textContent = `${G.leagueName} · ${Object.keys(teams).length} teams · ${faCount} pitcher FAs · Live`;
 
+    console.time('⏱️ fetchBullpenWatch');
     fetchBullpenWatch(); // first tab — fire immediately, don't wait for Savant
+    console.time('⏱️ fetchSavantData');
     try { await fetchSavantData(); } catch(e){ console.warn('Savant fetch skipped:', e.message); }
+    console.timeEnd('⏱️ fetchSavantData');
+    console.time('⏱️ fetchAAA');
     fetchAAA(G.dataYear || CURRENT_YEAR);
+    console.timeEnd('⏱️ fetchAAA (call only)');
 
     // Poll until all data ready then render FA sections — covers any race condition
     const bpPoller = setInterval(() => {
@@ -964,6 +974,7 @@ async function loadLeague(){
           console.log(`[scout] ${PREV_YEAR} AAA pre-cached`);
         } catch(e) { console.warn('Pre-fetch AAA failed:', e.message); }
       }
+      console.timeEnd('⏱️ TOTAL loadLeague');
     }, 5000);
 
   } catch(e) { document.getElementById('leagueHeader').textContent = 'Error: ' + e.message; throw e; }
@@ -1227,6 +1238,7 @@ function svSort(col){
 function renderSavant(){} // removed
 
 async function fetchAAA(year) {
+  console.time('⏱️ fetchAAA total');
   const el = document.getElementById('aaaUpdated');
   // Return from cache if available
   if(G.aaaCache[year]) {
@@ -1237,19 +1249,26 @@ async function fetchAAA(year) {
     const aaaTeamSel = document.getElementById('aaaTeamFilter');
     if(aaaTeamSel) aaaTeamSel.innerHTML = '<option value="all">All</option>' + aaaOrgs.map(t=>`<option value="${t}">${t}</option>`).join('');
     renderAAA();
+    console.timeEnd('⏱️ fetchAAA total');
+    console.log('⏱️ AAA from cache');
     return;
   }
   try {
     if(el) el.textContent = `Loading ${year}...`;
     showSkeleton('aaaBody', 10);
+    console.time('⏱️ /aaa-stats fetch');
     const data = await fetch(`${PROXY}/aaa-stats?year=${year}`).then(r => r.json());
+    console.timeEnd('⏱️ /aaa-stats fetch');
     G.aaaStats = data;
     G.aaaCache[year] = data; // cache it
     if(el) el.textContent = `${year} · Updated ` + new Date().toLocaleTimeString();
     const aaaOrgs = [...new Set(Object.values(data).map(p=>p.mlbOrg).filter(Boolean).sort())];
     const aaaTeamSel = document.getElementById('aaaTeamFilter');
     if(aaaTeamSel) aaaTeamSel.innerHTML = '<option value="all">All</option>' + aaaOrgs.map(t=>`<option value="${t}">${t}</option>`).join('');
+    console.time('⏱️ renderAAA');
     renderAAA();
+    console.timeEnd('⏱️ renderAAA');
+    console.timeEnd('⏱️ fetchAAA total');
   } catch(e) { console.warn('AAA stats failed:', e.message); }
 }
 
@@ -1360,6 +1379,7 @@ async function fetchSavantData(year){
 
     // Fetch aggregated K%, BB%, Whiff% from proxy statcast aggregation
     try {
+      console.time('⏱️ Savant parallel API calls');
       const [r2, r3, r4, r5, r6, r7, r8, r9] = await Promise.all([
         fetch(`${PROXY}/savant-stats?year=${G.dataYear||CURRENT_YEAR}`),
         fetch(`${PROXY}/savant-recent`),
@@ -1370,6 +1390,8 @@ async function fetchSavantData(year){
         fetch(`${PROXY}/team-offense`),
         fetch(`${PROXY}/savant-whiff?year=${G.dataYear||CURRENT_YEAR}`),
       ]);
+      console.timeEnd('⏱️ Savant parallel API calls');
+      console.time('⏱️ Savant JSON parsing');
       const statsJson  = await r2.json();
       const recentJson = await r3.json();
       const mlbJson    = await r4.json();
@@ -1378,6 +1400,7 @@ async function fetchSavantData(year){
       const schedulesJson = await r7.json();
       const offenseJson = await r8.json();
       const whiffJson = await r9.json();
+      console.timeEnd('⏱️ Savant JSON parsing');
       G.recentStats = recentJson;
       G.mlbStats = mlbJson;
       G.contactStats = contactJson; // Store contact quality data globally
@@ -1828,7 +1851,10 @@ async function fetchBullpenWatch() {
     if(updEl) updEl.textContent = 'Loading bullpen data...';
     showBPSkeleton();
     try {
+      console.time('⏱️ /bullpen-watch fetch');
       const data = await fetch(`${PROXY}/bullpen-watch`).then(r => r.json());
+      console.timeEnd('⏱️ /bullpen-watch fetch');
+      console.timeEnd('⏱️ fetchBullpenWatch');
       G_bpData = data;
       console.log('[bp] Fetched bullpen data:', data.length, 'teams');
       tryRenderBPFASections();
