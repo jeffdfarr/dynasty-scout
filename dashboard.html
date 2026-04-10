@@ -6,7 +6,7 @@
 <title>Pitcher Stash</title>
 
 <!-- SEO & Social Meta Tags -->
-<meta name="description" content="Dynasty baseball scouting dashboard. Track bullpen situations, FA pitchers, and AAA prospects with Statcast data." />
+<meta name="description" content="Dynasty baseball scouting dashboard. Track bullpen situations and FA pitchers with Statcast data." />
 <meta name="keywords" content="dynasty baseball, fantasy baseball, pitcher rankings, bullpen, closers, saves, statcast, fantrax" />
 <meta name="author" content="Pitcher Stash" />
 <meta name="theme-color" content="#1a2332" />
@@ -14,7 +14,7 @@
 <!-- Open Graph / Facebook -->
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Pitcher Stash - Dynasty Baseball Scouting" />
-<meta property="og:description" content="Track bullpen situations, FA pitchers, and AAA prospects with real-time Statcast data." />
+<meta property="og:description" content="Track bullpen situations and FA pitchers with real-time Statcast data." />
 <meta property="og:image" content="/og-image.svg" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
@@ -22,7 +22,7 @@
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Pitcher Stash - Dynasty Baseball Scouting" />
-<meta name="twitter:description" content="Track bullpen situations, FA pitchers, and AAA prospects with real-time Statcast data." />
+<meta name="twitter:description" content="Track bullpen situations and FA pitchers with real-time Statcast data." />
 <meta name="twitter:image" content="/og-image.svg" />
 
 <!-- Favicon -->
@@ -512,7 +512,6 @@
   <div class="tabs">
     <button class="tab active" onclick="sw('bullpen');fetchBullpenWatch()">Bullpen Watch</button>
     <button class="tab" onclick="sw('freeagents')">Free Agents</button>
-    <button class="tab" onclick="sw('aaa')">AAA prospects</button>
 
   </div>
 
@@ -556,47 +555,6 @@
     <p id="faEmpty" style="font-size:13px;color:var(--text2);margin-top:14px;display:none">No FA pitchers found — load your league first.</p>
   </div>
 
-  
-  <div id="pane-aaa" class="pane">
-    <div class="filter-row">
-      <label>Role:</label>
-      <select id="aaaRole" onchange="renderAAA()"><option value="all" selected>All</option><option value="SP">SP</option><option value="RP">RP</option></select>
-      <label>Min BF:</label>
-      <select id="aaaMinBF" onchange="renderAAA()">
-        <option value="0" selected>Any</option>
-        <option value="10">10 BF</option>
-        <option value="25">25 BF</option>
-        <option value="50">50 BF</option>
-      </select>
-      <label>MLB Org:</label>
-      <select id="aaaTeamFilter" onchange="renderAAA()"><option value="all">All</option></select>
-      <input id="aaaSearch" type="text" placeholder="Search pitcher..." oninput="renderAAA()" style="padding:4px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);width:140px"/>
-      <div style="margin-left:auto;display:flex;gap:4px;align-items:center">
-        <button class="yr-btn active" id="aaaYrCur" onclick="setYear(CURRENT_YEAR,'aaa')">—</button>
-        <button class="yr-btn" id="aaaYrPrev" onclick="setYear(PREV_YEAR,'aaa')">—</button>
-      </div>
-    </div>
-    <div style="font-size:11px;color:var(--text2);margin-bottom:8px">AAA pitchers · <span id="aaaCount">—</span> total · <span id="aaaUpdated"></span></div>
-    <div class="table-wrap"><table>
-      <thead><tr>
-        <th>#</th>
-        <th onclick="aaaSort('name')" style="cursor:pointer">Pitcher <span id="asn"></span></th>
-        <th>MLB Org</th>
-        <th>Role</th>
-        <th onclick="aaaSort('ip')"   style="cursor:pointer">IP <span id="asi"></span></th>
-        <th onclick="aaaSort('era')"  style="cursor:pointer">ERA <span id="ase"></span></th>
-        <th onclick="aaaSort('whip')" style="cursor:pointer">WHIP <span id="asw"></span></th>
-        <th onclick="aaaSort('k9')"   style="cursor:pointer">K/9 <span id="ask9"></span></th>
-        <th onclick="aaaSort('bb9')"  style="cursor:pointer">BB/9 <span id="asb9"></span></th>
-        <th onclick="aaaSort('kbb')"  style="cursor:pointer">K-BB% <span id="ask"></span></th>
-        <th onclick="aaaSort('gbPct')" style="cursor:pointer">GB% <span id="asgb"></span></th>
-        <th>Status</th>
-      </tr></thead>
-      <tbody id="aaaBody"></tbody>
-    </table></div>
-    <p id="aaaEmpty" style="display:none;color:var(--text2);padding:20px 0">No pitchers found — load league data first.</p>
-  </div>
-
 <script>
   // Dynamic year constants — always current year and previous year
   const CURRENT_YEAR = String(new Date().getFullYear());
@@ -615,18 +573,7 @@ const savant = [];
 
 // Show skeleton loaders immediately
 showSkeleton('faBody', 10);
-showSkeleton('aaaBody', 10);
 showBPSkeleton(); // bullpen is first tab — show skeleton right away
-
-// Init year button labels for all tabs
-['aaaYrCur'].forEach(id => {
-  const el = document.getElementById(id);
-  if(el) el.textContent = CURRENT_YEAR;
-});
-['aaaYrPrev'].forEach(id => {
-  const el = document.getElementById(id);
-  if(el) el.textContent = PREV_YEAR;
-});
 
 savant.forEach(p => {
   p.score = calcScore(p);
@@ -924,9 +871,6 @@ async function loadLeague(){
     console.time('⏱️ fetchSavantData');
     try { await fetchSavantData(); } catch(e){ console.warn('Savant fetch skipped:', e.message); }
     console.timeEnd('⏱️ fetchSavantData');
-    console.time('⏱️ fetchAAA');
-    fetchAAA(G.dataYear || CURRENT_YEAR);
-    console.timeEnd('⏱️ fetchAAA (call only)');
 
     // Poll until all data ready then render FA sections — covers any race condition
     const bpPoller = setInterval(() => {
@@ -944,38 +888,7 @@ async function loadLeague(){
     // Give up after 30 seconds
     setTimeout(() => clearInterval(bpPoller), 30000);
 
-    setTimeout(async () => {
-      // Pre-cache previous year silently — no renders, no UI updates
-      if(!G.yearCache[PREV_YEAR]) {
-        console.log(`[scout] Pre-fetching ${PREV_YEAR} Savant in background...`);
-        const savedYear = G.dataYear;
-        const savedMlbStats = G.mlbStats;
-        const savedSavantLoaded = G.savantLoaded;
-        const savedSavant = savant.map(p => ({...p})); // snapshot current year savant
-        G.dataYear = PREV_YEAR;
-        G.preFetching = true; // block all renders during pre-fetch
-        try { await fetchSavantData(PREV_YEAR); } catch(e) { console.warn('Pre-fetch Savant failed:', e.message); }
-        G.preFetching = false;
-        G.dataYear = savedYear || CURRENT_YEAR;
-        G.mlbStats = savedMlbStats;
-        G.savantLoaded = savedSavantLoaded;
-        // Restore current year savant array — pre-fetch replaced it with 2025 data
-        // Use fresh spread copies to avoid mutation from 2025 re-tag loop
-        savant.length = 0;
-        savedSavant.forEach(p => savant.push({...p}));
-        _savantStatusMap = null; _savantDataMap = null;
-        console.log(`[scout] ${PREV_YEAR} Savant pre-cached`);
-      }
-      if(!G.aaaCache[PREV_YEAR]) {
-        console.log(`[scout] Pre-fetching ${PREV_YEAR} AAA in background...`);
-        try {
-          const data = await fetch(`${PROXY}/aaa-stats?year=${PREV_YEAR}`).then(r => r.json());
-          G.aaaCache[PREV_YEAR] = data; // cache only, no render
-          console.log(`[scout] ${PREV_YEAR} AAA pre-cached`);
-        } catch(e) { console.warn('Pre-fetch AAA failed:', e.message); }
-      }
-      console.timeEnd('⏱️ TOTAL loadLeague');
-    }, 5000);
+    console.timeEnd('⏱️ TOTAL loadLeague');
 
   } catch(e) { document.getElementById('leagueHeader').textContent = 'Error: ' + e.message; throw e; }
 
