@@ -601,7 +601,7 @@
   // Dynamic year constants — always current year and previous year
   const CURRENT_YEAR = String(new Date().getFullYear());
   const PREV_YEAR    = String(new Date().getFullYear() - 1);
-  const CACHE_VERSION = '3'; // bump when data schema changes to force cache invalidation
+  const CACHE_VERSION = '4'; // bump when data schema changes to force cache invalidation
 
   // Auto-detect proxy URL — localhost in dev, same origin in cloud
   // Use localhost proxy when running locally (file:// or localhost), cloud origin when deployed
@@ -1510,6 +1510,7 @@ async function fetchSavantData(year){
           ip: d.ip || null,
           pa: d.pa || 0,
           kbb: d.kbb||0, xera: d.xera||4.50, xba: d.xba||.260,
+          xwoba: d.xwoba||null,
           whiff: d.whiff||20, chase: d.chase||26, stuff: 95,
           fxStatus: 'unknown', fxTeam: '',
         };
@@ -1546,6 +1547,7 @@ async function fetchSavantData(year){
       if(existing){
         if(d.xera)   existing.xera   = d.xera;
         if(d.xba)    existing.xba    = d.xba;
+        if(d.xwoba)  existing.xwoba  = d.xwoba;
         if(d.kbb)    existing.kbb    = d.kbb;
         if(d.whiff)  existing.whiff  = d.whiff;
         if(d.chase)  existing.chase  = d.chase;
@@ -1573,6 +1575,7 @@ async function fetchSavantData(year){
           ip: d.ip || null,
           pa: d.pa || 0,
           kbb: d.kbb||0, xera: d.xera||4.50, xba: d.xba||.260,
+          xwoba: d.xwoba||null,
           whiff: d.whiff||20, chase: d.chase||26, stuff: 95,
           fxStatus: 'unknown', fxTeam: '',
         };
@@ -2277,6 +2280,8 @@ function renderBPWaiting() {
       if(sv) {
         if((sv.kbb||0) < 18) return false;   // K-BB% >= 18%
         if((sv.whiff||0) < 27) return false;  // Whiff% >= 27%
+        // Only apply xWOBA filter if data exists
+        if(sv.xwoba != null && sv.xwoba > 0.280) return false;  // xWOBA <= .280
       } else {
         if((m.k9||0) < 10.0) return false;   // K/9 >= 10.0
         if((m.bb9||99) > 3.0) return false;  // BB/9 <= 3.0
@@ -2293,6 +2298,8 @@ function renderBPWaiting() {
       return {
         name: m.name||name, holds: m.holds||0, gf: m.gamesFinished||0,
         ip: m.ip||'—', era: m.era||null,
+        whip: m.whip||null,
+        xwoba: sv?.xwoba||null,
         kbb: sv?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
         whiff: sv?.whiff||null,
         mlbId: sv?.mlbId || bpP?.mlbId || null,
@@ -2316,8 +2323,8 @@ function renderBPWaiting() {
       <div class="role-info">
         <div class="role-name">${p.name} ${sit}</div>
         <div class="role-name-sub">${teamNickname(p.teamName)}</div>
-        <div class="role-team">${p.holds}HLD · ${p.gf}GF · ${p.ip}IP · ERA ${p.era?.toFixed(2)||'—'}</div>
-        <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
+        <div class="role-team">${p.holds}HLD · ${p.gf}GF · ${p.ip}IP · WHIP ${p.whip?.toFixed(2)||'—'}</div>
+        <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'} · xWOBA ${p.xwoba!=null?'.'+Math.round(p.xwoba*1000):'—'}</div>
       </div>
       <span class="role-badge waiting">Elite Stuff</span>
     </div>`;
@@ -2664,6 +2671,8 @@ function renderBPLongRelief() {
       
       if(kbb < 15) return false;
       if(whiff < 22 && xera > 5.0) return false;
+      // Only apply xWOBA filter if data exists
+      if(sv?.xwoba != null && sv.xwoba > 0.320) return false;  // xWOBA <= .320
       
       return true;
     })
@@ -2694,6 +2703,7 @@ function renderBPLongRelief() {
         ip: m.ip||'—',
         ipPerGame: ipPerGame,
         era: m.era || null,
+        whip: m.whip || null,
         xera: sv?.xera || null,
         kbb: sv?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
         whiff: sv?.whiff || null,
@@ -2760,7 +2770,7 @@ function renderBPLongRelief() {
       <div class="role-info">
         <div class="role-name">${p.name}</div>
         <div class="role-name-sub">${teamNickname(p.teamName)}${oppList ? ` · <span style="color:var(--text3)">${oppList}</span>` : ''}</div>
-        <div class="role-team">${p.ipPerGame} IP/G · ${p.ip}IP · ERA ${p.era?.toFixed(2)||'—'}</div>
+        <div class="role-team">${p.ipPerGame} IP/G · ${p.ip}IP · WHIP ${p.whip?.toFixed(2)||'—'}</div>
         <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb.toFixed(1)+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
@@ -2819,7 +2829,7 @@ function setupExpandButton(containerId) {
       </div>
       <div class="bp-col">
         <div class="bp-col-title">Long Relief Streamers</div>
-        <div class="bp-col-desc">Bulk innings (≥1.4 IP/G) + elite stuff. Sorted by matchup & rest.</div>
+        <div class="bp-col-desc">Bulk innings (≥1.4 IP/G), elite stuff, xWOBA ≤.320. Sorted by matchup & rest.</div>
         <div id="bpLongRelief" class="bp-col-cards"></div>
         <button class="bp-expand-btn" onclick="toggleExpand(this)" style="display:none">Show more ▼</button>
       </div>
@@ -2827,7 +2837,7 @@ function setupExpandButton(containerId) {
     
     <div style="margin-bottom:20px">
       <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">Elite Setup Arms Available</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with late-inning usage (2+ HLD/GF) and elite stuff (K-BB% ≥18% and Whiff% ≥27%)</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with late-inning usage (2+ HLD/GF), elite stuff (K-BB% ≥18%, Whiff% ≥27%, xWOBA ≤.280)</div>
       <div id="bpWaiting" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">
