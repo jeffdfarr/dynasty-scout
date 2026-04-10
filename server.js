@@ -755,32 +755,6 @@ const server = http.createServer(async (req, res) => {
 
         console.log(`[proxy] pitcher-rest: found ${Object.keys(result).length} pitchers`);
         
-        // Debug: Log a few sample entries to verify data structure
-        const sampleKeys = Object.keys(result).slice(0, 3);
-        sampleKeys.forEach(k => {
-          const p = result[k];
-          console.log(`[proxy] SAMPLE: ${k} -> consecutive=${p.consecutiveGames}, rest=${p.daysRest}, dates=${p.recentDates?.join(',')}`);
-        });
-        
-        // Debug: Log pitchers with consecutive games >= 2 (B2B candidates)
-        const b2bPitchers = Object.entries(result)
-          .filter(([k, v]) => v.consecutiveGames >= 2)
-          .map(([k, v]) => `${v.name}: ${v.consecutiveGames} straight (last: ${v.lastDate}, rest: ${v.daysRest}d)`)
-          .slice(0, 15);
-        console.log(`[proxy] B2B count: ${b2bPitchers.length}`);
-        if(b2bPitchers.length > 0) {
-          console.log(`[proxy] B2B pitchers:`, b2bPitchers.join(' | '));
-        }
-        
-        // Debug: Specifically check Mason Miller (try multiple key formats)
-        const millerKey = Object.keys(result).find(k => k.includes('miller'));
-        if(millerKey) {
-          const m = result[millerKey];
-          console.log(`[proxy] MILLER (${millerKey}): ${m.consecutiveGames} consecutive, ${m.daysRest}d rest, dates: ${m.recentDates?.join(', ')}`);
-        } else {
-          console.log(`[proxy] MILLER: not found in result keys`);
-        }
-        
         setCORS(res, reqOrigin);
         res.writeHead(200, {'Content-Type':'application/json'});
         res.end(JSON.stringify(result));

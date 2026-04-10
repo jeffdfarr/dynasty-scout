@@ -1334,11 +1334,6 @@ async function fetchSavantData(year){
       const teamVal = idx.team >= 0 ? (cols[idx.team]||'').trim() : '';
       const xwobaVal = idx.xwoba >= 0 ? parseFloat(cols[idx.xwoba]) : null;
       
-      // Debug: log xwoba for specific players
-      if(fullName.includes('laweryson') || fullName.includes('urquidy')) {
-        console.log(`[DEBUG xwoba] ${fullName}: idx.xwoba=${idx.xwoba}, raw=${cols[idx.xwoba]}, parsed=${xwobaVal}`);
-      }
-      
       liveData[fullName] = {
         name: `${first} ${last}`.trim(),
         mlbId: idx.pid >= 0 ? cols[idx.pid] : null,
@@ -2413,22 +2408,15 @@ function renderBPVultures() {
   const svMap = getSavantDataMap();
   const restData = G.pitcherRest || {};
 
-  // NEW SIMPLIFIED LOGIC:
   // Trigger: Closer pitched B2B (2+ consecutive days with daysRest <= 1)
   // Show: Setup men (1st/2nd in line) who are FA
   
   const vultures = [];
-  const DEBUG_TEAMS = ['SD', 'Padres', 'San Diego']; // Debug specific teams
   
   (G_bpData || []).forEach(team => {
-    const isDebugTeam = DEBUG_TEAMS.some(t => team.name?.includes(t));
-    
     // Step 1: Find the closer
     const closer = team.pitchers.find(p => !p.injured && ((p.saves||0) > 0 || team.closerName === p.name));
-    if(!closer) {
-      if(isDebugTeam) console.log(`[VULTURE] ${team.name}: No closer found`);
-      return;
-    }
+    if(!closer) return;
     
     // Step 2: Check if closer is fatigued (B2B)
     const closerRestKey = stripAccents(normName(closer.name));
@@ -2439,25 +2427,10 @@ function renderBPVultures() {
     const isB2B = consecutive >= 2 && daysRest <= 1;
     const is3Straight = consecutive >= 3 && daysRest <= 1;
     
-    if(isDebugTeam) {
-      console.log(`[VULTURE] ${team.name}: closer=${closer.name}, daysRest=${daysRest}, consecutive=${consecutive}, isB2B=${isB2B}`);
-    }
-    
     // Only proceed if closer is fatigued (B2B)
-    if(!isB2B) {
-      if(isDebugTeam) console.log(`[VULTURE] ${team.name}: SKIP - closer not B2B`);
-      return;
-    }
+    if(!isB2B) return;
     
     // Step 3: Find setup men (non-closers, non-long-relievers, sorted by closerScore)
-    // Calculate closerScore for each pitcher (same formula as team rankings)
-    
-    // DEBUG: Log first pitcher's full object to see available fields
-    if(isDebugTeam && team.pitchers[0]) {
-      console.log(`[VULTURE] ${team.name}: Sample pitcher object keys:`, Object.keys(team.pitchers[0]));
-      console.log(`[VULTURE] ${team.name}: Sample pitcher:`, JSON.stringify(team.pitchers[0]).slice(0, 500));
-    }
-    
     const setupCandidates = team.pitchers
       .filter(p => {
         if(p.name === closer.name) return false;
@@ -2467,47 +2440,47 @@ function renderBPVultures() {
       .map(p => {
         // Calculate IP per game to identify long relievers
         const ip = parseFloat(p.ip) || 0;
-        const g = parseInt(p.gp) || 1;  // gp = games played
+        const g = parseInt(p.gp) || 1;
         const ipPerGame = g > 0 ? ip / g : 0;
         const isLongReliever = ipPerGame > 1.3;
         
-        if(isDebugTeam) {
-          console.log(`[VULTURE] ${team.name}: ${p.name} - ip=${p.ip}, gp=${p.gp}, ipPerGame=${ipPerGame.toFixed(2)}, isLRP=${isLongReliever}`);
-        }
+        // Check this pitcher's fatigue
+        const pRestKey = stripAccents(normName(p.name));
+        const pRest = restData[pRestKey];
+        const pDaysRest = pRest?.daysRest ?? 99;
+        const pConsecutive = pRest?.consecutiveGames ?? 1;
+        const pIsB2B = pConsecutive >= 2 && pDaysRest <= 1;
         
-        // closerScore: saves*10 + holds*3 + (gf - saves)*2 - blown saves*5
+        // closerScore for vultures: saves*10 + holds*3 + (gf - saves)*2
+        // Note: No blown save penalty - we care about role/position, not performance
         const sv = parseInt(p.saves) || 0;
         const hld = parseInt(p.holds) || 0;
         const gf = parseInt(p.gf) || 0;
-        const bs = parseInt(p.blownSaves) || 0;
-        const closerScore = sv*10 + hld*3 + (gf - sv)*2 - bs*5;
+        const closerScore = sv*10 + hld*3 + (gf - sv)*2;
         
-        return { ...p, ipPerGame, isLongReliever, closerScore };
+        return { ...p, ipPerGame, isLongReliever, closerScore, pIsB2B, pDaysRest, pConsecutive };
       })
-      .filter(p => !p.isLongReliever) // Exclude long relievers
-      .sort((a, b) => b.closerScore - a.closerScore); // Best setup men first
+      .filter(p => !p.isLongReliever)
+      .sort((a, b) => b.closerScore - a.closerScore);
     
-    if(isDebugTeam) {
-      console.log(`[VULTURE] ${team.name}: setup candidates (non-LRP):`, 
-        setupCandidates.slice(0, 5).map(p => `${p.name}(score=${p.closerScore})`).join(', '));
-    }
-    
-    // Step 4: Get top 2 setup men who are FA
+    // Step 4: Get setup men who are FA AND not fatigued (not B2B themselves)
+    // If 1st in line is B2B, skip to 2nd; if 2nd is B2B, skip to 3rd, etc.
     const faSetupMen = setupCandidates
       .filter(p => isFAInLeague(p.name))
-      .slice(0, 2); // Top 2 only
-    
-    if(isDebugTeam) {
-      console.log(`[VULTURE] ${team.name}: FA setup men:`, 
-        faSetupMen.map(p => p.name).join(', ') || 'NONE');
-    }
+      .filter(p => !p.pIsB2B) // Skip setup men who are also B2B
+      .slice(0, 2);
     
     if(!faSetupMen.length) return;
     
-    // Step 5: Add each FA setup man to vultures
+    // Step 5: Calculate team save opportunity bonus
+    // More team saves = more frequent save chances = better vulture opportunity
+    const teamTotalSaves = team.pitchers.reduce((sum, p) => sum + (parseInt(p.saves) || 0), 0);
+    const teamSaveBonus = Math.floor(teamTotalSaves / 4);
+    
+    // Step 6: Add each available FA setup man to vultures
     const closerLast = closer.name.split(' ').pop();
     const reason = is3Straight ? `${closerLast} 3 straight` : `${closerLast} B2B`;
-    const score = is3Straight ? 7 : 5;
+    const baseScore = is3Straight ? 7 : 5;
     
     faSetupMen.forEach((p, idx) => {
       const sv = svMap.get(stripAccents(normName(p.name)));
@@ -2522,10 +2495,11 @@ function renderBPVultures() {
         kbb: sv?.kbb || null,
         whiff: sv?.whiff || null,
         mlbId: sv?.mlbId || p.mlbId || null,
-        vultureScore: score - idx, // 1st gets full score, 2nd slightly less
+        vultureScore: baseScore + teamSaveBonus - idx,
         reason,
         closerName: closer.name,
-        position: idx === 0 ? '1st' : '2nd'
+        position: idx === 0 ? '1st' : '2nd',
+        teamSaves: teamTotalSaves
       });
     });
   });
@@ -2634,34 +2608,19 @@ function renderBPLongRelief() {
   });
 
   // Find long relievers: IP/game >= 1.4, must be FA, must have elite stats
-  const DEBUG_NAMES = ['ryan yarbrough', 'jack perkins', 'ron marinaccio', 'jared shuster'];
   const longRelievers = Object.entries(G.mlbStats)
     .filter(([name, m]) => {
-      const isDebug = DEBUG_NAMES.includes(name.toLowerCase());
-      
-      if(!isFAInLeague(name)) {
-        if(isDebug) console.log(`[LR DEBUG] ${name}: FAIL - not FA in league`);
-        return false;
-      }
-      if(!activeBullpenNames.has(stripAccents(normName(name)))) {
-        if(isDebug) console.log(`[LR DEBUG] ${name}: FAIL - not in activeBullpenNames`);
-        return false;
-      }
+      if(!isFAInLeague(name)) return false;
+      if(!activeBullpenNames.has(stripAccents(normName(name)))) return false;
       
       // Must have enough usage
       const ipNum = m.ipNum || 0;
       const gp = m.gamesPlayed || 0;
-      if(ipNum < 3.0 || gp < 2) {
-        if(isDebug) console.log(`[LR DEBUG] ${name}: FAIL - usage (ipNum=${ipNum}, gp=${gp})`);
-        return false;
-      }
+      if(ipNum < 3.0 || gp < 2) return false;
       
       // Must be long relief profile (>=1.4 IP/game)
       const ipPerGame = gp > 0 ? ipNum / gp : 0;
-      if(ipPerGame < 1.4) {
-        if(isDebug) console.log(`[LR DEBUG] ${name}: FAIL - ipPerGame=${ipPerGame.toFixed(2)} < 1.4`);
-        return false;
-      }
+      if(ipPerGame < 1.4) return false;
       
       // Must have ELITE stuff: K-BB% >= 15% AND (Whiff% >= 22% OR xERA <= 5.0)
       const sv = svMap.get(stripAccents(normName(name)));
@@ -2671,23 +2630,11 @@ function renderBPLongRelief() {
       const xera = sv?.xera ?? ld?.xera ?? 99;
       const xwoba = sv?.xwoba ?? ld?.xwoba ?? null;
       
-      if(isDebug) console.log(`[LR DEBUG] ${name}: stats - kbb=${kbb?.toFixed(1)}, whiff=${whiff}, xera=${xera?.toFixed(2)}, xwoba=${xwoba}, ipPerGame=${ipPerGame.toFixed(2)}`);
-      
-      if(kbb < 15) {
-        if(isDebug) console.log(`[LR DEBUG] ${name}: FAIL - kbb=${kbb?.toFixed(1)} < 15`);
-        return false;
-      }
-      if(whiff < 22 && xera > 5.0) {
-        if(isDebug) console.log(`[LR DEBUG] ${name}: FAIL - whiff=${whiff} < 22 AND xera=${xera?.toFixed(2)} > 5.0`);
-        return false;
-      }
+      if(kbb < 15) return false;
+      if(whiff < 22 && xera > 5.0) return false;
       // Only apply xWOBA filter if data exists
-      if(xwoba != null && xwoba > 0.320) {
-        if(isDebug) console.log(`[LR DEBUG] ${name}: FAIL - xwoba=${xwoba} > 0.320`);
-        return false;
-      }
+      if(xwoba != null && xwoba > 0.320) return false;
       
-      if(isDebug) console.log(`[LR DEBUG] ${name}: PASS ✓`);
       return true;
     })
     .map(([name, m]) => {
