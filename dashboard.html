@@ -1322,23 +1322,31 @@ async function fetchSavantData(year){
       G.teamOffense = offenseJson;     // Store team offensive rankings
       G.whiffStats = whiffJson;     // Store official whiff% data
       
+      // Build normalized key lookup map ONCE (avoids O(n²) in merge loops)
+      console.time('⏱️ Data merging');
+      const liveDataKeys = Object.keys(liveData);
+      const normKeyMap = {};
+      liveDataKeys.forEach(k => { normKeyMap[normName(k)] = k; });
+      
+      // Helper for fast lookup
+      const findKey = (name) => normKeyMap[normName(name)] || name;
+      
       // Merge official Whiff% from Savant (most authoritative)
       console.log('[scout] savant-whiff pitchers:', Object.keys(whiffJson).length);
       
       Object.entries(whiffJson).forEach(([lname, w]) => {
-        const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
-        const key = match || lname;
+        const key = findKey(lname);
         if(liveData[key]) {
           if(w.whiff != null) liveData[key].whiff = w.whiff;
         } else if(w.whiff != null) {
           liveData[lname] = { name: w.name, whiff: w.whiff, mlbId: w.mlbId };
+          normKeyMap[normName(lname)] = lname; // Add to map
         }
       });
       
       // Merge MLB traditional stats (IP, WHIP, K9, BB9, GB%) into liveData
       Object.entries(mlbJson).forEach(([lname, m]) => {
-        const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
-        const key = match || lname;
+        const key = findKey(lname);
         if(liveData[key]) {
           // Use MLB Stats API IP — it's official and more accurate than Savant pitch-by-pitch
           if(m.ip != null)    liveData[key].ip    = m.ip;
@@ -1362,36 +1370,37 @@ async function fetchSavantData(year){
             saves: m.saves, holds: m.holds,
             gamesPlayed: m.gamesPlayed, gamesFinished: m.gamesFinished,
           };
+          normKeyMap[normName(lname)] = lname;
         }
       });
 
       // Merge contact quality stats (hardHit%, barrel%, avgEV) into liveData
       Object.entries(contactJson).forEach(([lname, c]) => {
-        const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
-        const key = match || lname;
+        const key = findKey(lname);
         if(liveData[key]) {
           if(c.hardHit != null) liveData[key].hardHit = c.hardHit;
           if(c.barrel  != null) liveData[key].barrel  = c.barrel;
           if(c.avgEV   != null) liveData[key].avgEV   = c.avgEV;
         } else {
-          liveData[key] = {
+          liveData[lname] = {
             name: c.name, mlbId: c.mlbId || '',
             hardHit: c.hardHit, barrel: c.barrel, avgEV: c.avgEV,
           };
+          normKeyMap[normName(lname)] = lname;
         }
       });
       console.log('[scout] savant-contact pitchers:', Object.keys(contactJson).length);
 
       // Merge 7-day recent stats into liveData
       Object.entries(recentJson).forEach(([lname, s]) => {
-        const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
-        const key = match || lname;
+        const key = findKey(lname);
         if(liveData[key]){
           liveData[key].kbb7   = s.kbb;
           liveData[key].whiff7 = s.whiff_pct;
           liveData[key].bf7    = s.bf;
         } else {
-          liveData[key] = { name: s.name, kbb7: s.kbb, whiff7: s.whiff_pct, bf7: s.bf };
+          liveData[lname] = { name: s.name, kbb7: s.kbb, whiff7: s.whiff_pct, bf7: s.bf };
+          normKeyMap[normName(lname)] = lname;
         }
       });
 
@@ -1400,8 +1409,7 @@ async function fetchSavantData(year){
       const isCurrentYear = (G.dataYear || CURRENT_YEAR) === CURRENT_YEAR;
 
       Object.entries(statsJson).forEach(([lname, s]) => {
-        const match = Object.keys(liveData).find(k => normName(k) === normName(lname));
-        const key = match || lname;
+        const key = findKey(lname);
         if(liveData[key]){
           liveData[key].k_pct    = s.k_pct;
           liveData[key].bb_pct   = s.bb_pct;
@@ -1416,7 +1424,7 @@ async function fetchSavantData(year){
           if(s.mlbId && !liveData[key].mlbId) liveData[key].mlbId = s.mlbId;
           if(s.age && !liveData[key].age) liveData[key].age = s.age;
         } else {
-          liveData[key] = {
+          liveData[lname] = {
             name: s.name, mlbTeam: s.team||'',
             mlbId: s.mlbId || '',
             ip: s.ip || null, ipNum: s.ipNum || null,
@@ -1424,8 +1432,10 @@ async function fetchSavantData(year){
             whiff: null, xera: null, xba: null, pa: s.bf || 0,
             pitchMix: s.pitchMix || {},
           };
+          normKeyMap[normName(lname)] = lname;
         }
       });
+      console.timeEnd('⏱️ Data merging');
     } catch(e){ console.log('[scout] savant-stats failed:', e.message); }
 
     // Store liveData globally for use in filter functions
