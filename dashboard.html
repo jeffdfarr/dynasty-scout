@@ -1317,7 +1317,14 @@ async function fetchSavantData(year){
       G.recentStats = recentJson;
       G.mlbStats = mlbJson;
       G.contactStats = contactJson; // Store contact quality data globally
-      G.pitcherRest = restJson;     // Store pitcher rest data globally
+      
+      // Normalize pitcher rest keys for consistent lookup (handles accents like Díaz -> diaz)
+      const normalizedRest = {};
+      Object.entries(restJson).forEach(([k, v]) => {
+        normalizedRest[stripAccents(normName(k))] = v;
+      });
+      G.pitcherRest = normalizedRest;
+      
       G.teamSchedules = schedulesJson; // Store team schedules
       G.teamOffense = offenseJson;     // Store team offensive rankings
       G.whiffStats = whiffJson;     // Store official whiff% data
@@ -2546,6 +2553,11 @@ function renderBPMultiInning() {
   const restData = G.pitcherRest || {};
   const schedules = G.teamSchedules || {};
   const offense = G.teamOffense || {};
+  
+  // Dynamic year for fallback display (e.g. '25 for 2025)
+  const PREV_YEAR = CURRENT_YEAR - 1;
+  const PREV_YEAR_SUFFIX = `'${String(PREV_YEAR).slice(-2)}`;
+  const GP_THRESHOLD = 5; // Switch to current year once they hit this
 
   // Team name to abbreviation mapping
   const teamNameToAbbr = {
@@ -2617,9 +2629,12 @@ function renderBPMultiInning() {
 
   // Build Set of pitchers confirmed active in MLB bullpens
   const activeBullpenNames = new Set();
+  const bpPitcherMap = new Map(); // name -> pitcher object with prev data
   (G_bpData||[]).forEach(team => {
     (team.pitchers||[]).forEach(p => {
-      activeBullpenNames.add(stripAccents(normName(p.name.toLowerCase())));
+      const nn = stripAccents(normName(p.name.toLowerCase()));
+      activeBullpenNames.add(nn);
+      bpPitcherMap.set(nn, p); // Store full pitcher object including prev
     });
   });
 
@@ -2627,16 +2642,30 @@ function renderBPMultiInning() {
   const multiInning = Object.entries(G.mlbStats)
     .filter(([name, m]) => {
       if(!isFAInLeague(name)) return false;
-      if(!activeBullpenNames.has(stripAccents(normName(name)))) return false;
+      const nn = stripAccents(normName(name));
+      if(!activeBullpenNames.has(nn)) return false;
       
       const ipNum = m.ipNum || 0;
       const gp = m.gamesPlayed || 0;
+      
+      // Get previous year data from bullpen-watch
+      const bpP = bpPitcherMap.get(nn);
+      const prev = bpP?.prev || null;
+      
+      // Calculate effective IP/G with fallback
+      const currentIpPerGame = gp > 0 ? ipNum / gp : 0;
+      let effectiveIpPerGame = currentIpPerGame;
+      if(gp < GP_THRESHOLD && prev?.ipPerGame) {
+        effectiveIpPerGame = prev.ipPerGame;
+      }
+      
+      // Minimum usage check (current year only - need SOME data)
       if(ipNum < 3.0 || gp < 2) return false;
       
-      const ipPerGame = gp > 0 ? ipNum / gp : 0;
-      if(ipPerGame < 1.4) return false;
+      // Use effective IP/G for multi-inning threshold
+      if(effectiveIpPerGame < 1.4) return false;
       
-      const sv = svMap.get(stripAccents(normName(name)));
+      const sv = svMap.get(nn);
       const ld = G.liveData?.[name.toLowerCase()];
       const kbb = sv?.kbb ?? ld?.kbb ?? (m.k9 && m.bb9 ? ((m.k9-m.bb9)/9*100) : 0);
       const whiff = sv?.whiff ?? ld?.whiff ?? 0;
@@ -2656,7 +2685,8 @@ function renderBPMultiInning() {
       const bpTeam = G_bpData?.find(t => t.pitchers.some(r =>
         stripAccents(normName(r.name.toLowerCase())) === nn
       ));
-      const bpP = bpTeam?.pitchers.find(r => stripAccents(normName(r.name.toLowerCase())) === nn);
+      const bpP = bpPitcherMap.get(nn);
+      const prev = bpP?.prev || null;
       
       const restKey = stripAccents(normName(m.name || name));
       const restInfo = restData[restKey];
@@ -2669,11 +2699,18 @@ function renderBPMultiInning() {
       
       const ipNum = m.ipNum || 0;
       const gp = m.gamesPlayed || 0;
-      const ipPerGameNum = gp > 0 ? ipNum / gp : 0;
-      const ipPerGame = ipPerGameNum.toFixed(1);
+      const currentIpPerGame = gp > 0 ? ipNum / gp : 0;
       
-      // Probable: bulk arm (>=2.0 IP/G) + on rest cycle (4-6 days) + plays today
-      const isProbable = ipPerGameNum >= 2.0 && 
+      // Fallback logic: use prev year IP/G if current GP < threshold
+      let effectiveIpPerGame = currentIpPerGame;
+      let usingPrevYear = false;
+      if(gp < GP_THRESHOLD && prev?.ipPerGame) {
+        effectiveIpPerGame = prev.ipPerGame;
+        usingPrevYear = true;
+      }
+      
+      // Use effective IP/G for all thresholds
+      const isProbable = effectiveIpPerGame >= 2.0 && 
                          daysRest !== null && daysRest >= 4 && daysRest <= 6 && 
                          playsToday;
       
@@ -2681,15 +2718,16 @@ function renderBPMultiInning() {
         { kbb: sv?.kbb ?? ld?.kbb, xwoba: sv?.xwoba ?? ld?.xwoba },
         oppRank,
         daysRest || 0,
-        ipPerGameNum
+        effectiveIpPerGame
       ) : 0;
       
       return {
         name: m.name||name,
         gp: gp,
         ip: m.ip||'—',
-        ipPerGame: ipPerGame,
-        ipPerGameNum: ipPerGameNum,
+        ipPerGame: effectiveIpPerGame.toFixed(1),
+        ipPerGameNum: effectiveIpPerGame,
+        usingPrevYear: usingPrevYear,
         era: m.era || null,
         whip: m.whip || null,
         xera: sv?.xera ?? ld?.xera ?? null,
@@ -2705,7 +2743,7 @@ function renderBPMultiInning() {
         oppRank: oppRank,
         isProbable: isProbable,
         streamScore: streamScore,
-        is3IPCapable: ipPerGameNum >= 2.5
+        is3IPCapable: effectiveIpPerGame >= 2.5
       };
     })
     // Filter: must play today AND have 2+ days rest
@@ -2761,12 +2799,17 @@ function renderBPMultiInning() {
       ? `<span style="font-size:11px;font-weight:700;color:var(--text)">${p.streamScore.toFixed(1)}</span>`
       : '';
     
+    // IP/G display with year suffix when using fallback
+    const ipPerGameDisplay = p.usingPrevYear 
+      ? `${p.ipPerGame} IP/G <span style="color:var(--text3);font-size:9px">${PREV_YEAR_SUFFIX}</span>`
+      : `${p.ipPerGame} IP/G`;
+    
     return `<div class="role-card">
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
         <div class="role-name">${plusPlus}${p.name}${probableBadge}</div>
         <div class="role-name-sub">${teamNickname(p.teamName)}${oppInfo ? ` · <span style="color:var(--text3)">${oppInfo}</span>` : ''}</div>
-        <div class="role-team">${p.ipPerGame} IP/G · ${p.ip}IP · WHIP ${p.whip?.toFixed(2)||'—'}</div>
+        <div class="role-team">${ipPerGameDisplay} · ${p.ip}IP · WHIP ${p.whip?.toFixed(2)||'—'}</div>
         <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb.toFixed(1)+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
