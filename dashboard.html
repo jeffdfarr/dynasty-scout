@@ -2746,12 +2746,14 @@ function renderBPMultiInning() {
       const ld = G.liveData?.[p.name.toLowerCase()];
       const mlbS = G.mlbStats?.[p.name.toLowerCase()];
       
-      // Simplified criteria: K/9 and xwOBA only
+      // Simplified criteria: K/9, xwOBA, WHIP
       const k9 = sv?.k9 ?? ld?.k9 ?? mlbS?.k9 ?? 0;
       const xwoba = sv?.xwoba ?? ld?.xwoba ?? null;
+      const whip = p.whip ?? mlbS?.whip ?? null;
       
-      if(k9 < 7.5) return false;                        // K/9 >= 7.5 (command floor)
+      if(k9 < 7.5) return false;                        // K/9 >= 7.5 (strikeout floor)
       if(xwoba != null && xwoba > 0.320) return false;  // xwOBA <= .320 (contact quality)
+      if(whip != null && whip > 1.20) return false;     // WHIP <= 1.20 (ratio quality)
       
       return true;
     })
@@ -2969,7 +2971,7 @@ function setupExpandButton(containerId) {
       </div>
       <div class="bp-col">
         <div class="bp-col-title">📊 Multi-Inning Streamers</div>
-        <div class="bp-col-desc">Bulk relievers (K/9 ≥7.5, xwOBA ≤.320) sorted by opponent wRC+. <span style="color:#059669">●</span>=weak <span style="color:#d97706">●</span>=mid <span style="color:#dc2626">●</span>=tough. <b>++</b> = 3+ IP ceiling.</div>
+        <div class="bp-col-desc">Bulk relievers (K/9 ≥7.5, xwOBA ≤.320, WHIP ≤1.20) sorted by opponent wRC+. <b>++</b> = 3+ IP ceiling.</div>
         <div id="bpMultiInning" class="bp-col-cards"></div>
         <button class="bp-expand-btn" onclick="toggleExpand(this)" style="display:none">Show more ▼</button>
       </div>
