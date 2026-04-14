@@ -2671,10 +2671,8 @@ function renderBPMultiInning() {
     const total = withWrc.reduce((sum, g) => sum + g.wrcPlus, 0);
     return Math.round(total / withWrc.length);
   };
-    return Math.round(totalRank / upcomingGames.length);
-  };
 
-  // Helper: calculate streaming score
+  // Helper: calculate streaming score (simplified - xwOBA focused)
   const calcStreamScore = (p, oppRank, daysRest, ipPerGame) => {
     let score = 0;
     
@@ -2684,16 +2682,11 @@ function renderBPMultiInning() {
     else if(oppRank >= 15) score += 2;
     else if(oppRank >= 10) score += 1;
     
-    // K-BB% bonus
-    const kbb = p.kbb || 0;
-    if(kbb >= 25) score += 3;
-    else if(kbb >= 20) score += 2;
-    else if(kbb >= 15) score += 1;
-    
-    // xwOBA bonus
+    // xwOBA bonus (primary quality metric)
     const xwoba = p.xwoba;
-    if(xwoba != null && xwoba <= 0.260) score += 2;
-    else if(xwoba != null && xwoba <= 0.280) score += 1;
+    if(xwoba != null && xwoba <= 0.260) score += 3;
+    else if(xwoba != null && xwoba <= 0.280) score += 2;
+    else if(xwoba != null && xwoba <= 0.300) score += 1;
     
     // Rest bonus
     if(daysRest >= 5) score += 1.5;
@@ -2753,14 +2746,12 @@ function renderBPMultiInning() {
       const ld = G.liveData?.[p.name.toLowerCase()];
       const mlbS = G.mlbStats?.[p.name.toLowerCase()];
       
-      const kbb = sv?.kbb ?? ld?.kbb ?? (mlbS?.k9 && mlbS?.bb9 ? ((mlbS.k9-mlbS.bb9)/9*100) : 0);
-      const whiff = sv?.whiff ?? ld?.whiff ?? 0;
-      const xera = sv?.xera ?? ld?.xera ?? 99;
+      // Simplified criteria: K/9 and xwOBA only
+      const k9 = sv?.k9 ?? ld?.k9 ?? mlbS?.k9 ?? 0;
       const xwoba = sv?.xwoba ?? ld?.xwoba ?? null;
       
-      if(kbb < 15) return false;
-      if(whiff < 22 && xera > 5.0) return false;
-      if(xwoba != null && xwoba > 0.320) return false;
+      if(k9 < 7.5) return false;                        // K/9 >= 7.5 (command floor)
+      if(xwoba != null && xwoba > 0.320) return false;  // xwOBA <= .320 (contact quality)
       
       return true;
     })
@@ -2803,8 +2794,12 @@ function renderBPMultiInning() {
                          daysRest !== null && daysRest >= 4 && daysRest <= 6 && 
                          playsToday;
       
+      // Get K/9 and xwOBA for display
+      const k9 = sv?.k9 ?? ld?.k9 ?? mlbS?.k9 ?? null;
+      const xwoba = sv?.xwoba ?? ld?.xwoba ?? null;
+      
       const streamScore = playsToday ? calcStreamScore(
-        { kbb: sv?.kbb ?? ld?.kbb, xwoba: sv?.xwoba ?? ld?.xwoba },
+        { xwoba: xwoba },
         oppRank,
         daysRest || 0,
         effectiveIpPerGame
@@ -2820,10 +2815,8 @@ function renderBPMultiInning() {
         usingPrevYear: usingPrevYear,
         era: p.era ?? mlbS?.era ?? null,
         whip: p.whip ?? mlbS?.whip ?? null,
-        xera: sv?.xera ?? ld?.xera ?? null,
-        xwoba: sv?.xwoba ?? ld?.xwoba ?? null,
-        kbb: sv?.kbb ?? ld?.kbb ?? (mlbS?.k9 && mlbS?.bb9 ? parseFloat(((mlbS.k9-mlbS.bb9)/9*100).toFixed(1)) : null),
-        whiff: sv?.whiff ?? ld?.whiff ?? null,
+        k9: k9,
+        xwoba: xwoba,
         mlbId: p.mlbId || sv?.mlbId || ld?.mlbId || null,
         teamName: p.teamName || '',
         teamAbbr: p.teamAbbr,
@@ -2906,13 +2899,18 @@ function renderBPMultiInning() {
       ? `${p.ipPerGame} IP/G <span style="color:var(--text3);font-size:9px">${PREV_YEAR_SUFFIX}</span>`
       : `${p.ipPerGame} IP/G`;
     
+    // xwOBA color coding
+    const xwobaColor = p.xwoba != null 
+      ? (p.xwoba <= 0.280 ? '#059669' : p.xwoba <= 0.310 ? '#d97706' : 'var(--text2)')
+      : 'var(--text2)';
+    
     return `<div class="role-card">
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
         <div class="role-name">${plusPlus}${p.name} <span style="font-size:9px;font-weight:600;color:${handColor}">${hand}</span>${probableBadge}</div>
         <div class="role-name-sub">${teamNickname(p.teamName)} · <span style="font-size:9px;${restBadgeStyle};padding:1px 4px;border-radius:3px">${restLabel} rest</span></div>
         <div class="role-team">${ipPerGameDisplay} · ${p.ip}IP · WHIP ${p.whip?.toFixed(2)||'—'}</div>
-        <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb.toFixed(1)+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
+        <div class="role-stats">K/9 ${p.k9!=null?p.k9.toFixed(1):'—'} · <span style="color:${xwobaColor}">xwOBA ${p.xwoba!=null?'.'+String(p.xwoba).split('.')[1]?.slice(0,3):'—'}</span></div>
         <div style="margin-top:4px;display:flex;gap:3px;flex-wrap:wrap;align-items:center">
           ${scheduleHtml}
           ${sosBadge ? `<span style="margin-left:4px">·</span> ${sosBadge}` : ''}
@@ -2971,7 +2969,7 @@ function setupExpandButton(containerId) {
       </div>
       <div class="bp-col">
         <div class="bp-col-title">📊 Multi-Inning Streamers</div>
-        <div class="bp-col-desc">Bulk relievers sorted by avg opponent wRC+ (lower = easier). Hover for details. <span style="color:#059669">●</span>=weak <span style="color:#d97706">●</span>=mid <span style="color:#dc2626">●</span>=tough. <b>++</b> = 3+ IP ceiling.</div>
+        <div class="bp-col-desc">Bulk relievers (K/9 ≥7.5, xwOBA ≤.320) sorted by opponent wRC+. <span style="color:#059669">●</span>=weak <span style="color:#d97706">●</span>=mid <span style="color:#dc2626">●</span>=tough. <b>++</b> = 3+ IP ceiling.</div>
         <div id="bpMultiInning" class="bp-col-cards"></div>
         <button class="bp-expand-btn" onclick="toggleExpand(this)" style="display:none">Show more ▼</button>
       </div>
