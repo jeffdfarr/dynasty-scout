@@ -856,12 +856,102 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // /team-offense -> get team offensive rankings (runs per game, OPS)
+  // /team-offense -> get team offensive rankings using FanGraphs wRC+
   if (path === '/team-offense') {
     const currentYear = new Date().getFullYear();
-    const statsUrl = `/api/v1/teams/stats?sportId=1&season=${currentYear}&stats=season&group=hitting`;
-    console.log(`[proxy] fetching team offense stats...`);
+    // FanGraphs API for team batting stats with wRC+
+    const fgUrl = `/api/leaders/major-league/data?pos=all&stats=bat&lg=all&qual=0&season=${currentYear}&season1=${currentYear}&month=0&team=0,ts&pageitems=50&ind=0&type=8`;
+    console.log(`[proxy] fetching team wRC+ from FanGraphs...`);
 
+    const opts = {
+      hostname: 'www.fangraphs.com', port: 443, path: fgUrl, method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Referer': 'https://www.fangraphs.com/leaders/major-league'
+      }
+    };
+    
+    const pr = https.request(opts, sr => {
+      let body = '';
+      sr.on('data', c => body += c);
+      sr.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          const teamStats = {};
+          
+          // FanGraphs team abbreviation mapping (some differ from MLB)
+          const fgToStandard = {
+            'ANA': 'LAA', 'ARI': 'ARI', 'BAL': 'BAL', 'BOS': 'BOS', 'CHC': 'CHC',
+            'CHW': 'CWS', 'CIN': 'CIN', 'CLE': 'CLE', 'COL': 'COL', 'DET': 'DET',
+            'HOU': 'HOU', 'KCR': 'KC', 'LAD': 'LAD', 'MIA': 'MIA', 'MIL': 'MIL',
+            'MIN': 'MIN', 'NYM': 'NYM', 'NYY': 'NYY', 'OAK': 'OAK', 'PHI': 'PHI',
+            'PIT': 'PIT', 'SDP': 'SD', 'SEA': 'SEA', 'SFG': 'SF', 'STL': 'STL',
+            'TBR': 'TB', 'TEX': 'TEX', 'TOR': 'TOR', 'WSN': 'WSH', 'ATL': 'ATL',
+            // Also handle if they already use standard abbrevs
+            'LAA': 'LAA', 'CWS': 'CWS', 'KC': 'KC', 'SD': 'SD', 'SF': 'SF',
+            'TB': 'TB', 'WSH': 'WSH'
+          };
+          
+          (data.data || data || []).forEach(team => {
+            const fgAbbr = team.AbbName || team.Team || team.teamid;
+            const abbr = fgToStandard[fgAbbr] || fgAbbr;
+            if(!abbr || abbr.length > 3) return;
+            
+            // wRC+ is the key stat - 100 is league average
+            const wrcPlus = team['wRC+'] ?? team.wRC ?? team['wRC+'] ?? null;
+            const ops = team.OPS ?? null;
+            const avg = team.AVG ?? null;
+            
+            if(wrcPlus !== null) {
+              teamStats[abbr] = {
+                wrcPlus: parseFloat(wrcPlus),
+                ops: ops ? parseFloat(ops) : null,
+                avg: avg ? parseFloat(avg) : null,
+                gamesPlayed: team.G || team.Games || 0
+              };
+            }
+          });
+          
+          // Rank teams by wRC+ (1 = highest wRC+ = toughest offense)
+          const sorted = Object.entries(teamStats)
+            .sort((a, b) => (b[1].wrcPlus || 0) - (a[1].wrcPlus || 0));
+          sorted.forEach(([abbr, stats], idx) => {
+            teamStats[abbr].offenseRank = idx + 1; // 1 = best offense
+          });
+          
+          console.log(`[proxy] team-offense (wRC+): found ${Object.keys(teamStats).length} teams`);
+          // Log top/bottom for verification
+          if(sorted.length >= 3) {
+            console.log(`[proxy] Top 3: ${sorted.slice(0,3).map(([a,s])=>`${a}:${s.wrcPlus}`).join(', ')}`);
+            console.log(`[proxy] Bottom 3: ${sorted.slice(-3).map(([a,s])=>`${a}:${s.wrcPlus}`).join(', ')}`);
+          }
+          
+          setCORS(res, reqOrigin);
+          res.writeHead(200, {'Content-Type':'application/json'});
+          res.end(JSON.stringify(teamStats));
+        } catch(e) {
+          console.error('[proxy] team-offense (FanGraphs) parse error:', e.message);
+          // Fallback to MLB Stats API if FanGraphs fails
+          console.log('[proxy] Falling back to MLB Stats API for team offense...');
+          fetchMLBTeamOffense(res, reqOrigin);
+        }
+      });
+    });
+    pr.on('error', e => {
+      console.error('[proxy] FanGraphs request error:', e.message);
+      // Fallback to MLB Stats API
+      fetchMLBTeamOffense(res, reqOrigin);
+    });
+    pr.end();
+    return;
+  }
+
+  // Fallback function for MLB Stats API (runs per game)
+  function fetchMLBTeamOffense(res, reqOrigin) {
+    const currentYear = new Date().getFullYear();
+    const statsUrl = `/api/v1/teams/stats?sportId=1&season=${currentYear}&stats=season&group=hitting`;
+    
     const opts = {
       hostname: 'statsapi.mlb.com', port: 443, path: statsUrl, method: 'GET',
       headers: {'User-Agent':'Mozilla/5.0','Accept':'application/json'}
@@ -875,7 +965,6 @@ const server = http.createServer(async (req, res) => {
           const data = JSON.parse(body);
           const teamStats = {};
           
-          // Team ID to abbreviation mapping
           const teamAbbrev = {
             108: 'LAA', 109: 'ARI', 110: 'BAL', 111: 'BOS', 112: 'CHC',
             113: 'CIN', 114: 'CLE', 115: 'COL', 116: 'DET', 117: 'HOU',
@@ -896,29 +985,28 @@ const server = http.createServer(async (req, res) => {
               const runs = s.runs || 0;
               
               teamStats[abbr] = {
+                wrcPlus: null, // Not available from MLB API
                 runsPerGame: parseFloat((runs / gamesPlayed).toFixed(2)),
                 ops: parseFloat(s.ops) || 0,
                 avg: parseFloat(s.avg) || 0,
-                hits: s.hits || 0,
-                homeRuns: s.homeRuns || 0,
                 gamesPlayed: gamesPlayed
               };
             });
           });
           
-          // Rank teams by runs per game (1 = most runs = toughest)
+          // Rank by runs per game as fallback
           const sorted = Object.entries(teamStats)
             .sort((a, b) => b[1].runsPerGame - a[1].runsPerGame);
           sorted.forEach(([abbr, stats], idx) => {
-            teamStats[abbr].offenseRank = idx + 1; // 1 = best offense
+            teamStats[abbr].offenseRank = idx + 1;
           });
           
-          console.log(`[proxy] team-offense: found stats for ${Object.keys(teamStats).length} teams`);
+          console.log(`[proxy] team-offense (MLB fallback): found ${Object.keys(teamStats).length} teams`);
           setCORS(res, reqOrigin);
           res.writeHead(200, {'Content-Type':'application/json'});
           res.end(JSON.stringify(teamStats));
         } catch(e) {
-          console.error('[proxy] team-offense parse error:', e.message);
+          console.error('[proxy] MLB team-offense parse error:', e.message);
           res.writeHead(500);
           res.end('{}');
         }
@@ -926,7 +1014,6 @@ const server = http.createServer(async (req, res) => {
     });
     pr.on('error', e => { res.writeHead(502); res.end('{}'); });
     pr.end();
-    return;
   }
 
   // /savant-debuts -> detect pitchers appearing in current year Statcast for first time

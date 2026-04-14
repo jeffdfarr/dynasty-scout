@@ -2639,13 +2639,16 @@ function renderBPMultiInning() {
       const game = schedules[teamAbbr].find(g => g.date === dateStr);
       
       if(game) {
-        const oppRank = offense[game.opponent]?.offenseRank || 15;
+        const oppData = offense[game.opponent] || {};
+        const oppRank = oppData.offenseRank || 15;
+        const wrcPlus = oppData.wrcPlus || null;
         upcoming.push({
           date: dateStr,
           dayLabel: i === 0 ? 'Today' : ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][checkDate.getDay()],
           opponent: game.opponent,
           home: game.home,
           oppRank: oppRank,
+          wrcPlus: wrcPlus,
           difficulty: oppRank >= 21 ? 'easy' : oppRank >= 11 ? 'mixed' : 'tough'
         });
       }
@@ -2658,6 +2661,16 @@ function renderBPMultiInning() {
   const calcSOS = (upcomingGames) => {
     if(!upcomingGames || !upcomingGames.length) return null;
     const totalRank = upcomingGames.reduce((sum, g) => sum + g.oppRank, 0);
+    return Math.round(totalRank / upcomingGames.length);
+  };
+  
+  // Helper: calculate average wRC+ of opponents
+  const calcAvgWrcPlus = (upcomingGames) => {
+    const withWrc = upcomingGames.filter(g => g.wrcPlus != null);
+    if(!withWrc.length) return null;
+    const total = withWrc.reduce((sum, g) => sum + g.wrcPlus, 0);
+    return Math.round(total / withWrc.length);
+  };
     return Math.round(totalRank / upcomingGames.length);
   };
 
@@ -2783,6 +2796,7 @@ function renderBPMultiInning() {
       // Get upcoming games for schedule display
       const upcomingGames = getUpcomingGames(p.teamAbbr, 4);
       const sos = calcSOS(upcomingGames);
+      const avgWrcPlus = calcAvgWrcPlus(upcomingGames);
       
       // Use effective IP/G for all thresholds
       const isProbable = effectiveIpPerGame >= 2.0 && 
@@ -2821,16 +2835,19 @@ function renderBPMultiInning() {
         streamScore: streamScore,
         is3IPCapable: effectiveIpPerGame >= 2.5,
         upcomingGames: upcomingGames,
-        sos: sos
+        sos: sos,
+        avgWrcPlus: avgWrcPlus
       };
     })
     // Filter: must have upcoming games AND have 2+ days rest
     .filter(p => p.upcomingGames.length > 0 && p.daysRest !== null && p.daysRest >= 2)
-    // Sort by SOS (higher = weaker opponents = better), then by streamScore
+    // Sort by avg wRC+ (lower = weaker opponents = better), fallback to SOS rank
     .sort((a, b) => {
-      // Primary: SOS (higher rank = easier schedule)
-      const sosDiff = (b.sos || 15) - (a.sos || 15);
-      if(Math.abs(sosDiff) >= 3) return sosDiff;
+      // Primary: avg wRC+ (lower = easier schedule)
+      const aWrc = a.avgWrcPlus || (a.sos ? (130 - a.sos) : 100); // Fallback estimate
+      const bWrc = b.avgWrcPlus || (b.sos ? (130 - b.sos) : 100);
+      const wrcDiff = aWrc - bWrc; // Lower is better, so a-b puts lower first
+      if(Math.abs(wrcDiff) >= 5) return wrcDiff;
       // Secondary: stream score for today
       return b.streamScore - a.streamScore;
     });
@@ -2865,20 +2882,23 @@ function renderBPMultiInning() {
       }
     }
     
-    // Build upcoming schedule display
+    // Build upcoming schedule display with wRC+ in tooltip
     const scheduleHtml = p.upcomingGames.map(g => {
       const diffColor = g.difficulty === 'easy' ? '#059669' : g.difficulty === 'mixed' ? '#d97706' : '#dc2626';
       const diffBg = g.difficulty === 'easy' ? '#d1fae5' : g.difficulty === 'mixed' ? '#fef3c7' : '#fee2e2';
       const prefix = g.home ? 'v' : '@';
-      return `<span style="font-size:9px;padding:2px 4px;border-radius:3px;background:${diffBg};color:${diffColor};font-weight:500" title="${g.dayLabel}: ${prefix}${g.opponent} (#${g.oppRank} offense)">${prefix}${g.opponent}</span>`;
+      const wrcDisplay = g.wrcPlus ? ` (${g.wrcPlus} wRC+)` : '';
+      return `<span style="font-size:9px;padding:2px 4px;border-radius:3px;background:${diffBg};color:${diffColor};font-weight:500" title="${g.dayLabel}: ${prefix}${g.opponent}${wrcDisplay}">${prefix}${g.opponent}</span>`;
     }).join(' ');
     
-    // SOS badge - color based on average opponent rank
+    // SOS badge - show avg wRC+ if available, otherwise rank
     let sosBadge = '';
-    if(p.sos) {
+    if(p.avgWrcPlus || p.sos) {
       const sosColor = p.sos >= 21 ? '#059669' : p.sos >= 11 ? '#d97706' : '#dc2626';
+      // wRC+: 100 is average, lower is weaker offense (easier matchup)
+      const wrcLabel = p.avgWrcPlus ? `${p.avgWrcPlus} wRC+` : '';
       const sosLabel = p.sos >= 21 ? 'Easy' : p.sos >= 11 ? 'Mixed' : 'Tough';
-      sosBadge = `<span style="font-size:9px;font-weight:600;color:${sosColor}" title="Avg opponent rank: #${p.sos}">${sosLabel} SOS</span>`;
+      sosBadge = `<span style="font-size:9px;font-weight:600;color:${sosColor}" title="Avg opponent wRC+: ${p.avgWrcPlus || 'N/A'}">${wrcLabel || sosLabel}</span>`;
     }
     
     // IP/G display with year suffix when using fallback
@@ -2951,7 +2971,7 @@ function setupExpandButton(containerId) {
       </div>
       <div class="bp-col">
         <div class="bp-col-title">📊 Multi-Inning Streamers</div>
-        <div class="bp-col-desc">Bulk relievers sorted by SOS (strength of schedule). Shows next 4 days: <span style="color:#059669">green</span>=weak offense, <span style="color:#d97706">amber</span>=mid, <span style="color:#dc2626">red</span>=tough. <b>++</b> = 3+ IP ceiling.</div>
+        <div class="bp-col-desc">Bulk relievers sorted by avg opponent wRC+ (lower = easier). Hover for details. <span style="color:#059669">●</span>=weak <span style="color:#d97706">●</span>=mid <span style="color:#dc2626">●</span>=tough. <b>++</b> = 3+ IP ceiling.</div>
         <div id="bpMultiInning" class="bp-col-cards"></div>
         <button class="bp-expand-btn" onclick="toggleExpand(this)" style="display:none">Show more ▼</button>
       </div>
