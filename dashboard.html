@@ -2714,10 +2714,29 @@ function renderBPMultiInning() {
     });
   });
 
+  // DEBUG: Check if target players exist in bullpen data at all
+  const DEBUG_PLAYERS = ['senzatela', 'weiss'];
+  DEBUG_PLAYERS.forEach(name => {
+    const found = allRelievers.find(p => p.name.toLowerCase().includes(name));
+    if(found) {
+      console.log(`[MI DEBUG] Found ${found.name} in bullpen data:`, {
+        team: found.teamName, ip: found.ip, gp: found.gp, era: found.era, whip: found.whip
+      });
+    } else {
+      console.log(`[MI DEBUG] ⚠️ ${name} NOT FOUND in bullpen-watch data`);
+    }
+  });
+
   // Find all multi-inning relievers
+  
   const multiInning = allRelievers
     .filter(p => {
-      if(!isFAInLeague(p.name)) return false;
+      const isDebugPlayer = DEBUG_PLAYERS.some(d => p.name.toLowerCase().includes(d));
+      
+      if(!isFAInLeague(p.name)) {
+        if(isDebugPlayer) console.log(`[MI DEBUG] ${p.name}: FILTERED - not FA in league`);
+        return false;
+      }
       
       // Parse IP from bullpen data (e.g., "5.0" → 5.0, "12.2" → 12.67)
       const ipRaw = p.ip || '0';
@@ -2735,12 +2754,6 @@ function renderBPMultiInning() {
         effectiveIpPerGame = prev.ipPerGame;
       }
       
-      // Minimum usage check (current year only - need SOME data)
-      if(ipNum < 3.0 || gp < 2) return false;
-      
-      // Use effective IP/G for multi-inning threshold
-      if(effectiveIpPerGame < 1.4) return false;
-      
       // Get Savant/liveData stats for stuff metrics
       const sv = svMap.get(p.nn);
       const ld = G.liveData?.[p.name.toLowerCase()];
@@ -2751,10 +2764,44 @@ function renderBPMultiInning() {
       const xwoba = sv?.xwoba ?? ld?.xwoba ?? null;
       const whip = p.whip ?? mlbS?.whip ?? null;
       
-      if(k9 < 7.5) return false;                        // K/9 >= 7.5 (strikeout floor)
-      if(xwoba != null && xwoba > 0.320) return false;  // xwOBA <= .320 (contact quality)
-      if(whip != null && whip > 1.20) return false;     // WHIP <= 1.20 (ratio quality)
+      // DEBUG: Log all stats for players we're investigating
+      if(isDebugPlayer) {
+        console.log(`[MI DEBUG] ${p.name}:`, {
+          ip: ipRaw, ipNum, gp, ipPerGame: effectiveIpPerGame.toFixed(2),
+          k9, xwoba, whip,
+          svMap: sv ? 'found' : 'missing',
+          liveData: ld ? 'found' : 'missing', 
+          mlbStats: mlbS ? 'found' : 'missing',
+          teamAbbr: p.teamAbbr
+        });
+      }
       
+      // Minimum usage check (current year only - need SOME data)
+      if(ipNum < 3.0 || gp < 2) {
+        if(isDebugPlayer) console.log(`[MI DEBUG] ${p.name}: FILTERED - IP ${ipNum} < 3.0 or GP ${gp} < 2`);
+        return false;
+      }
+      
+      // Use effective IP/G for multi-inning threshold
+      if(effectiveIpPerGame < 1.4) {
+        if(isDebugPlayer) console.log(`[MI DEBUG] ${p.name}: FILTERED - IP/G ${effectiveIpPerGame.toFixed(2)} < 1.4`);
+        return false;
+      }
+      
+      if(k9 < 7.5) {
+        if(isDebugPlayer) console.log(`[MI DEBUG] ${p.name}: FILTERED - K/9 ${k9} < 7.5`);
+        return false;
+      }
+      if(xwoba != null && xwoba > 0.320) {
+        if(isDebugPlayer) console.log(`[MI DEBUG] ${p.name}: FILTERED - xwOBA ${xwoba} > 0.320`);
+        return false;
+      }
+      if(whip != null && whip > 1.20) {
+        if(isDebugPlayer) console.log(`[MI DEBUG] ${p.name}: FILTERED - WHIP ${whip} > 1.20`);
+        return false;
+      }
+      
+      if(isDebugPlayer) console.log(`[MI DEBUG] ${p.name}: ✅ PASSED all filters`);
       return true;
     })
     .map(p => {
@@ -2835,7 +2882,23 @@ function renderBPMultiInning() {
       };
     })
     // Filter: must have upcoming games AND have 2+ days rest
-    .filter(p => p.upcomingGames.length > 0 && p.daysRest !== null && p.daysRest >= 2)
+    .filter(p => {
+      const isDebugPlayer = DEBUG_PLAYERS.some(d => p.name.toLowerCase().includes(d));
+      const hasGames = p.upcomingGames.length > 0;
+      const hasRest = p.daysRest !== null && p.daysRest >= 2;
+      
+      if(isDebugPlayer) {
+        console.log(`[MI DEBUG] ${p.name} POST-FILTER:`, {
+          upcomingGames: p.upcomingGames.length,
+          daysRest: p.daysRest,
+          teamAbbr: p.teamAbbr,
+          hasGames, hasRest,
+          result: hasGames && hasRest ? '✅ PASSED' : '❌ FILTERED'
+        });
+      }
+      
+      return hasGames && hasRest;
+    })
     // Sort by avg wRC+ (lower = weaker opponents = better), fallback to SOS rank
     .sort((a, b) => {
       // Primary: avg wRC+ (lower = easier schedule)
@@ -2920,6 +2983,15 @@ function renderBPMultiInning() {
       </div>
     </div>`;
   };
+
+  // DEBUG: Log final list
+  console.log(`[MI DEBUG] Final multiInning array: ${multiInning.length} players`);
+  const debugInFinal = multiInning.filter(p => DEBUG_PLAYERS.some(d => p.name.toLowerCase().includes(d)));
+  if(debugInFinal.length > 0) {
+    console.log(`[MI DEBUG] Debug players in final list:`, debugInFinal.map(p => p.name));
+  } else {
+    console.log(`[MI DEBUG] ⚠️ No debug players in final list!`);
+  }
 
   // Render single combined list
   if(multiInning.length === 0) {
