@@ -2626,6 +2626,41 @@ function renderBPMultiInning() {
     return game ? { opponent: game.opponent, home: game.home } : null;
   };
 
+  // Helper: get next N days of games (including today)
+  const getUpcomingGames = (teamAbbr, numDays = 4) => {
+    if(!teamAbbr || !schedules[teamAbbr]) return [];
+    const today = new Date();
+    const upcoming = [];
+    
+    for(let i = 0; i < numDays; i++) {
+      const checkDate = new Date(today);
+      checkDate.setDate(today.getDate() + i);
+      const dateStr = checkDate.toISOString().split('T')[0];
+      const game = schedules[teamAbbr].find(g => g.date === dateStr);
+      
+      if(game) {
+        const oppRank = offense[game.opponent]?.offenseRank || 15;
+        upcoming.push({
+          date: dateStr,
+          dayLabel: i === 0 ? 'Today' : ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][checkDate.getDay()],
+          opponent: game.opponent,
+          home: game.home,
+          oppRank: oppRank,
+          difficulty: oppRank >= 21 ? 'easy' : oppRank >= 11 ? 'mixed' : 'tough'
+        });
+      }
+    }
+    return upcoming;
+  };
+
+  // Helper: calculate Strength of Schedule score (lower = easier)
+  // Returns average opponent rank (1-30, higher = weaker offense = easier)
+  const calcSOS = (upcomingGames) => {
+    if(!upcomingGames || !upcomingGames.length) return null;
+    const totalRank = upcomingGames.reduce((sum, g) => sum + g.oppRank, 0);
+    return Math.round(totalRank / upcomingGames.length);
+  };
+
   // Helper: calculate streaming score
   const calcStreamScore = (p, oppRank, daysRest, ipPerGame) => {
     let score = 0;
@@ -2745,6 +2780,10 @@ function renderBPMultiInning() {
         usingPrevYear = true;
       }
       
+      // Get upcoming games for schedule display
+      const upcomingGames = getUpcomingGames(p.teamAbbr, 4);
+      const sos = calcSOS(upcomingGames);
+      
       // Use effective IP/G for all thresholds
       const isProbable = effectiveIpPerGame >= 2.0 && 
                          daysRest !== null && daysRest >= 4 && daysRest <= 6 && 
@@ -2780,13 +2819,21 @@ function renderBPMultiInning() {
         oppRank: oppRank,
         isProbable: isProbable,
         streamScore: streamScore,
-        is3IPCapable: effectiveIpPerGame >= 2.5
+        is3IPCapable: effectiveIpPerGame >= 2.5,
+        upcomingGames: upcomingGames,
+        sos: sos
       };
     })
-    // Filter: must play today AND have 2+ days rest
-    .filter(p => p.playsToday && p.daysRest !== null && p.daysRest >= 2)
-    // Sort by streaming score (highest first)
-    .sort((a, b) => b.streamScore - a.streamScore);
+    // Filter: must have upcoming games AND have 2+ days rest
+    .filter(p => p.upcomingGames.length > 0 && p.daysRest !== null && p.daysRest >= 2)
+    // Sort by SOS (higher = weaker opponents = better), then by streamScore
+    .sort((a, b) => {
+      // Primary: SOS (higher rank = easier schedule)
+      const sosDiff = (b.sos || 15) - (a.sos || 15);
+      if(Math.abs(sosDiff) >= 3) return sosDiff;
+      // Secondary: stream score for today
+      return b.streamScore - a.streamScore;
+    });
 
   // Render card helper
   const renderCard = (p) => {
@@ -2808,37 +2855,31 @@ function renderBPMultiInning() {
     if(p.daysRest !== null) {
       if(p.daysRest >= 4) {
         restBadgeStyle = 'background:#d1fae5;color:#059669';
-        restLabel = `${p.daysRest}d rest`;
+        restLabel = `${p.daysRest}d`;
       } else if(p.daysRest >= 3) {
         restBadgeStyle = 'background:#fef3c7;color:#d97706';
-        restLabel = `${p.daysRest}d rest`;
+        restLabel = `${p.daysRest}d`;
       } else {
         restBadgeStyle = 'background:#e5e7eb;color:#6b7280';
-        restLabel = `${p.daysRest}d rest`;
+        restLabel = `${p.daysRest}d`;
       }
     }
     
-    // Opponent info
-    const oppInfo = p.todayGame 
-      ? `${p.todayGame.home ? 'vs' : '@'} ${p.todayGame.opponent}` 
-      : '';
+    // Build upcoming schedule display
+    const scheduleHtml = p.upcomingGames.map(g => {
+      const diffColor = g.difficulty === 'easy' ? '#059669' : g.difficulty === 'mixed' ? '#d97706' : '#dc2626';
+      const diffBg = g.difficulty === 'easy' ? '#d1fae5' : g.difficulty === 'mixed' ? '#fef3c7' : '#fee2e2';
+      const prefix = g.home ? 'v' : '@';
+      return `<span style="font-size:9px;padding:2px 4px;border-radius:3px;background:${diffBg};color:${diffColor};font-weight:500" title="${g.dayLabel}: ${prefix}${g.opponent} (#${g.oppRank} offense)">${prefix}${g.opponent}</span>`;
+    }).join(' ');
     
-    // Opponent rank badge
-    let oppBadge = '';
-    if(p.todayGame && p.oppRank) {
-      if(p.oppRank >= 21) {
-        oppBadge = `<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;background:#d1fae5;color:#059669">Easy</span>`;
-      } else if(p.oppRank >= 11) {
-        oppBadge = `<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;background:#fef3c7;color:#d97706">Mixed</span>`;
-      } else {
-        oppBadge = `<span style="font-size:9px;font-weight:600;padding:2px 6px;border-radius:3px;background:#fee2e2;color:#dc2626">Tough</span>`;
-      }
+    // SOS badge - color based on average opponent rank
+    let sosBadge = '';
+    if(p.sos) {
+      const sosColor = p.sos >= 21 ? '#059669' : p.sos >= 11 ? '#d97706' : '#dc2626';
+      const sosLabel = p.sos >= 21 ? 'Easy' : p.sos >= 11 ? 'Mixed' : 'Tough';
+      sosBadge = `<span style="font-size:9px;font-weight:600;color:${sosColor}" title="Avg opponent rank: #${p.sos}">${sosLabel} SOS</span>`;
     }
-    
-    // Score badge
-    const scoreBadge = p.streamScore > 0
-      ? `<span style="font-size:11px;font-weight:700;color:var(--text)">${p.streamScore.toFixed(1)}</span>`
-      : '';
     
     // IP/G display with year suffix when using fallback
     const ipPerGameDisplay = p.usingPrevYear 
@@ -2849,21 +2890,20 @@ function renderBPMultiInning() {
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
         <div class="role-name">${plusPlus}${p.name} <span style="font-size:9px;font-weight:600;color:${handColor}">${hand}</span>${probableBadge}</div>
-        <div class="role-name-sub">${teamNickname(p.teamName)}${oppInfo ? ` · <span style="color:var(--text3)">${oppInfo}</span>` : ''}</div>
+        <div class="role-name-sub">${teamNickname(p.teamName)} · <span style="font-size:9px;${restBadgeStyle};padding:1px 4px;border-radius:3px">${restLabel} rest</span></div>
         <div class="role-team">${ipPerGameDisplay} · ${p.ip}IP · WHIP ${p.whip?.toFixed(2)||'—'}</div>
         <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb.toFixed(1)+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-        ${scoreBadge}
-        ${oppBadge}
-        <span class="role-badge" style="${restBadgeStyle};font-size:9px;padding:2px 6px">${restLabel}</span>
+        <div style="margin-top:4px;display:flex;gap:3px;flex-wrap:wrap;align-items:center">
+          ${scheduleHtml}
+          ${sosBadge ? `<span style="margin-left:4px">·</span> ${sosBadge}` : ''}
+        </div>
       </div>
     </div>`;
   };
 
   // Render single combined list
   if(multiInning.length === 0) {
-    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No multi-inning streamers available today.</span>';
+    el.innerHTML = '<span style="font-size:12px;color:var(--text2)">No multi-inning streamers available.</span>';
   } else {
     el.innerHTML = multiInning.map(p => renderCard(p)).join('');
   }
@@ -2911,7 +2951,7 @@ function setupExpandButton(containerId) {
       </div>
       <div class="bp-col">
         <div class="bp-col-title">📊 Multi-Inning Streamers</div>
-        <div class="bp-col-desc">Bulk relievers sorted by streaming value. <b>++</b> = 3+ IP ceiling. <b>✓</b> = Probable bulk outing.</div>
+        <div class="bp-col-desc">Bulk relievers sorted by SOS (strength of schedule). Shows next 4 days: <span style="color:#059669">green</span>=weak offense, <span style="color:#d97706">amber</span>=mid, <span style="color:#dc2626">red</span>=tough. <b>++</b> = 3+ IP ceiling.</div>
         <div id="bpMultiInning" class="bp-col-cards"></div>
         <button class="bp-expand-btn" onclick="toggleExpand(this)" style="display:none">Show more ▼</button>
       </div>
