@@ -2267,6 +2267,7 @@ function renderBPWaiting() {
         kbb: sv?.kbb ?? ld?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
         whiff: sv?.whiff ?? ld?.whiff ?? null,
         mlbId: sv?.mlbId || ld?.mlbId || bpP?.mlbId || null,
+        throws: bpP?.throws || 'R',
         teamSit: bpTeam?.situation||'', teamName: bpTeam?.name||'',
         sustainScore: sustainScore
       };
@@ -2283,21 +2284,22 @@ function renderBPWaiting() {
   if(section) section.style.display = '';
   
   el.innerHTML = waiting.map(p => {
-    const sit = p.teamSit ? `<span class="bp-sit ${p.teamSit}" style="font-size:10px">${p.teamSit}</span>` : '';
+    // Small team situation tag
+    const sit = p.teamSit ? `<span style="font-size:8px;font-weight:600;padding:1px 4px;border-radius:2px;background:var(--surface2);color:var(--text3);margin-left:4px">${p.teamSit}</span>` : '';
+    // Handedness badge
+    const hand = p.throws === 'L' ? 'LHP' : 'RHP';
+    const handColor = p.throws === 'L' ? '#7c3aed' : '#2563eb';  // Purple for L, blue for R
     // Sustainability score badge color based on score
     const scoreColor = p.sustainScore >= 1.0 ? '#059669' : p.sustainScore >= 0.85 ? '#d97706' : '#6b7280';
     return `<div class="role-card">
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
-        <div class="role-name">${p.name} ${sit}</div>
+        <div class="role-name">${p.name} <span style="font-size:9px;font-weight:600;color:${handColor}">${hand}</span>${sit}</div>
         <div class="role-name-sub">${teamNickname(p.teamName)}</div>
         <div class="role-team">${p.holds}HLD · ${p.gf}GF · ${p.ip}IP · WHIP ${p.whip?.toFixed(2)||'—'}</div>
         <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'} · xWOBA ${p.xwoba!=null?'.'+Math.round(p.xwoba*1000):'—'}</div>
       </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-        <span class="role-badge waiting">Elite Stuff</span>
-        <span style="font-size:11px;font-weight:700;color:${scoreColor}">${p.sustainScore.toFixed(2)}</span>
-      </div>
+      <span style="font-size:12px;font-weight:700;color:${scoreColor}">${p.sustainScore.toFixed(2)}</span>
     </div>`;
   }).join('');
 }
@@ -2386,6 +2388,7 @@ function renderBPEliteArms() {
       return {
         name: m.name||name,
         age,
+        throws: bpP?.throws || 'R',
         gp: m.gamesPlayed||0,
         ip: m.ip||'—', xera: sv?.xera||null,
         kbb,
@@ -2408,11 +2411,14 @@ function renderBPEliteArms() {
   
   el.innerHTML = eliteArms.map(p => {
     const ageDisplay = p.age ? `, ${p.age}` : '';
+    // Handedness badge
+    const hand = p.throws === 'L' ? 'LHP' : 'RHP';
+    const handColor = p.throws === 'L' ? '#7c3aed' : '#2563eb';
     const scoreDisplay = p.compositeScore ? p.compositeScore.toFixed(0) : '—';
     return `<div class="role-card">
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
-        <div class="role-name">${p.name}${ageDisplay}</div>
+        <div class="role-name">${p.name}${ageDisplay} <span style="font-size:9px;font-weight:600;color:${handColor}">${hand}</span></div>
         <div class="role-name-sub">${teamNickname(p.teamName)}</div>
         <div class="role-team">${p.gp}GP · ${p.ip}IP · xERA ${p.xera?.toFixed(2)||'—'}</div>
         <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb.toFixed?p.kbb.toFixed(1)+'%':p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>
@@ -2519,6 +2525,7 @@ function renderBPVultures() {
       const sv = svMap.get(stripAccents(normName(p.name)));
       vultures.push({
         name: p.name,
+        throws: p.throws || 'R',
         teamName: team.name,
         holds: p.holds || 0,
         saves: p.saves || 0,
@@ -2549,11 +2556,14 @@ function renderBPVultures() {
     const badgeClass = p.vultureScore >= 5 ? 'hot' : 'warm';
     const badgeText = p.vultureScore >= 5 ? '🔥 Hot' : 'Warm';
     const posTag = p.position ? `<span style="font-size:9px;background:#dbeafe;color:#1e40af;padding:1px 4px;border-radius:3px;margin-left:4px">${p.position}</span>` : '';
+    // Handedness badge
+    const hand = p.throws === 'L' ? 'LHP' : 'RHP';
+    const handColor = p.throws === 'L' ? '#7c3aed' : '#2563eb';
     
     return `<div class="role-card">
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
-        <div class="role-name">${p.name}${posTag}</div>
+        <div class="role-name">${p.name} <span style="font-size:9px;font-weight:600;color:${handColor}">${hand}</span>${posTag}</div>
         <div class="role-name-sub">${teamNickname(p.teamName)}</div>
         <div class="role-team">${p.holds}HLD · ${p.saves}SV · ${p.ip}IP</div>
         <div class="role-stats" style="font-size:10px;color:#dc2626">${p.reason}</div>
@@ -2749,6 +2759,7 @@ function renderBPMultiInning() {
       
       return {
         name: p.name,
+        throws: p.throws || 'R',
         gp: gp,
         ip: p.ip||'—',
         ipPerGame: effectiveIpPerGame.toFixed(1),
@@ -2781,6 +2792,10 @@ function renderBPMultiInning() {
   const renderCard = (p) => {
     // ++ flag for 3+ IP capable
     const plusPlus = p.is3IPCapable ? '<span style="color:#059669;font-weight:700;margin-right:2px">++</span>' : '';
+    
+    // Handedness badge
+    const hand = p.throws === 'L' ? 'LHP' : 'RHP';
+    const handColor = p.throws === 'L' ? '#7c3aed' : '#2563eb';
     
     // ✓ Probable badge
     const probableBadge = p.isProbable 
@@ -2833,7 +2848,7 @@ function renderBPMultiInning() {
     return `<div class="role-card">
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
-        <div class="role-name">${plusPlus}${p.name}${probableBadge}</div>
+        <div class="role-name">${plusPlus}${p.name} <span style="font-size:9px;font-weight:600;color:${handColor}">${hand}</span>${probableBadge}</div>
         <div class="role-name-sub">${teamNickname(p.teamName)}${oppInfo ? ` · <span style="color:var(--text3)">${oppInfo}</span>` : ''}</div>
         <div class="role-team">${ipPerGameDisplay} · ${p.ip}IP · WHIP ${p.whip?.toFixed(2)||'—'}</div>
         <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb.toFixed(1)+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'}</div>

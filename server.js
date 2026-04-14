@@ -1413,6 +1413,7 @@ const server = http.createServer(async (req, res) => {
         teams[teamId].pitchers.push({
           name:      s.player?.fullName || '',
           mlbId:     String(pid),
+          throws:    s.player?.pitchHand?.code || 'R',  // L or R
           saves, holds, gf, gp,
           blownSaves: st.blownSaves || 0,
           ip:        ipRaw,
@@ -1444,6 +1445,7 @@ const server = http.createServer(async (req, res) => {
         teams[tid].pitchers.unshift({
           name: leader.name,
           mlbId: String(leader.pid),
+          throws: 'R',  // Default - prior closers don't have hydrated data
           saves: 0, holds: 0, gf: 0, gp: 0,
           ip: '0.0', era: null, whip: null,
           injured: true,
