@@ -90,6 +90,11 @@ function parseCSVLine(line) {
   return fields;
 }
 
+// Helper: strip accents for consistent name lookups (Suárez -> Suarez)
+function stripAccents(str) {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 // FIX #7: Photo cache with size limit
 const MAX_PHOTO_CACHE_SIZE = 500;
 function addToPhotoCache(server, playerId, data, type) {
@@ -225,7 +230,8 @@ const server = http.createServer(async (req, res) => {
 
           if(p.mlbId) mlbIds.push(p.mlbId);
           
-          result[normalized.toLowerCase()] = {
+          // Use stripped accents for consistent lookup (Suárez -> suarez)
+          result[stripAccents(normalized.toLowerCase())] = {
             name: normalized,
             mlbId: p.mlbId || '',
             ip: ipStr,
@@ -341,7 +347,7 @@ const server = http.createServer(async (req, res) => {
           const barrel = iBarrel >= 0 ? parseFloat(cols[iBarrel]) || null : null;
           const bbe = iBBE >= 0 ? parseInt(cols[iBBE]) || 0 : 0;
           
-          result[name.toLowerCase()] = {
+          result[stripAccents(name.toLowerCase())] = {
             name,
             mlbId: playerId,
             avgEV,
@@ -514,7 +520,7 @@ const server = http.createServer(async (req, res) => {
           if(isNaN(whiff)) continue;
           
           const playerId = iPlayerId >= 0 ? row[iPlayerId] : null;
-          const key = name.toLowerCase();
+          const key = stripAccents(name.toLowerCase());
           
           // Debug logging for specific players
           if(debugPlayers.some(d => key.includes(d))) {
@@ -618,7 +624,7 @@ const server = http.createServer(async (req, res) => {
             ? name.split(',').map(s=>s.trim()).reverse().join(' ')
             : name;
           const team = Object.entries(p.teams).sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
-          result[normalized.toLowerCase()] = {
+          result[stripAccents(normalized.toLowerCase())] = {
             name: normalized,
             k_pct:    p.bf > 0 ? parseFloat((p.k/p.bf*100).toFixed(1)) : 0,
             bb_pct:   p.bf > 0 ? parseFloat((p.bb/p.bf*100).toFixed(1)) : 0,
@@ -1028,7 +1034,7 @@ const server = http.createServer(async (req, res) => {
         const bb  = st.baseOnBalls || 0;
         const go  = st.groundOuts || 0;
         const ao  = st.airOuts || 0;
-        result[name.toLowerCase()] = {
+        result[stripAccents(name.toLowerCase())] = {
           name,
           era:   parseFloat(st.era)  || null,
           whip:  parseFloat(st.whip) || null,
@@ -1098,7 +1104,7 @@ const server = http.createServer(async (req, res) => {
           const go    = st.groundOuts || 0;
           const ao    = st.airOuts    || 0;
           const gbPct = (go + ao) > 0 ? parseFloat((go/(go+ao)*100).toFixed(1)) : null;
-          result[name.toLowerCase()] = {
+          result[stripAccents(name.toLowerCase())] = {
             name,
             mlbId:     String(s.player?.id || ''),
             mlbOrg:    s.team?.parentOrgName || '',
@@ -1318,12 +1324,57 @@ const server = http.createServer(async (req, res) => {
 
       // Build prior year saves lookup (use string keys for consistency with mlbId)
       const prevSaves = {};
+      const prevStats = {};  // Full previous year stats for fallback
       const prevTeamLeader = {};
       prevSplits.forEach(s => {
         const pid = s.player?.id;
         if(!pid) return;
-        const sv = s.stat?.saves || 0;
+        const st = s.stat || {};
+        const sv = st.saves || 0;
+        const ipRaw = st.inningsPitched || '0';
+        const gp = st.gamesPlayed || 0;
+        const gs = st.gamesStarted || 0;
+        
+        // Skip starters
+        if(gs > gp * 0.5) return;
+        
         prevSaves[String(pid)] = sv;
+        
+        // Calculate IP as number
+        const ipParts = String(ipRaw).split('.');
+        const ipNum = (parseInt(ipParts[0]) || 0) + ((parseInt(ipParts[1]) || 0) / 3);
+        const ipPerGame = gp > 0 ? parseFloat((ipNum / gp).toFixed(2)) : 0;
+        
+        // K% and BB% from stats
+        const strikeOuts = st.strikeOuts || 0;
+        const walks = st.baseOnBalls || 0;
+        const bf = st.battersFaced || 1;
+        const kPct = bf > 0 ? parseFloat(((strikeOuts / bf) * 100).toFixed(1)) : null;
+        const bbPct = bf > 0 ? parseFloat(((walks / bf) * 100).toFixed(1)) : null;
+        const kbb = (kPct != null && bbPct != null) ? parseFloat((kPct - bbPct).toFixed(1)) : null;
+        
+        // Derive role from usage
+        let role = 'SHORT_RELIEF';
+        if(sv >= 10) role = 'CLOSER';
+        else if((st.holds || 0) >= 10) role = 'SETUP';
+        else if(ipPerGame >= 2.0) role = 'BULK';
+        else if(ipPerGame >= 1.4) role = 'LONG_RELIEF';
+        
+        prevStats[String(pid)] = {
+          ip: ipRaw,
+          ipNum: ipNum,
+          gp: gp,
+          ipPerGame: ipPerGame,
+          saves: sv,
+          holds: st.holds || 0,
+          blownSaves: st.blownSaves || 0,
+          kPct: kPct,
+          bbPct: bbPct,
+          kbb: kbb,
+          era: parseFloat(st.era) || null,
+          role: role
+        };
+        
         const tid = s.team?.id;
         if(tid && (!prevTeamLeader[tid] || sv > prevTeamLeader[tid].saves)) {
           prevTeamLeader[tid] = { pid: String(pid), saves: sv, name: s.player?.fullName };
@@ -1358,6 +1409,7 @@ const server = http.createServer(async (req, res) => {
         if(!teamName) return;
         if(!teams[teamId]) teams[teamId] = { name: teamName, abbr: teamAbbr, id: teamId, pitchers: [] };
         const ipRaw = st.inningsPitched || '0';
+        const prevData = prevStats[String(pid)] || null;
         teams[teamId].pitchers.push({
           name:      s.player?.fullName || '',
           mlbId:     String(pid),
@@ -1368,6 +1420,7 @@ const server = http.createServer(async (req, res) => {
           whip:      parseFloat(st.whip) || null,
           injured:   injuredIds.has(pid),
           prevSaves: prevSaves[String(pid)] || 0,
+          prev:      prevData,  // Full previous year stats for fallback
         });
       });
 

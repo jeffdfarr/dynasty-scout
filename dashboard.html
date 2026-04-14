@@ -2205,6 +2205,16 @@ function renderBPWaiting() {
     });
   });
 
+  // Sustainability score: IP × (0.350 - xWOBA)
+  // Rewards more innings with sustained low xWOBA
+  // Example: 10 IP @ .260 = 0.90, 5 IP @ .220 = 0.65, 15 IP @ .280 = 1.05
+  const MIN_IP = 5.0;
+  const MIN_SUSTAINABILITY_SCORE = 0.70;
+  const calcSustainabilityScore = (ip, xwoba) => {
+    if(xwoba == null || ip < MIN_IP) return 0;
+    return ip * (0.350 - xwoba);
+  };
+
   const waiting = Object.entries(G.mlbStats)
     .filter(([name, m]) => {
       if(!isFAInLeague(name)) return false;
@@ -2212,25 +2222,27 @@ function renderBPWaiting() {
       if(!activeBullpenNames.has(stripAccents(normName(name)))) return false;
       // Must have meaningful relief appearances — at least 2 holds OR 3 games finished
       if((m.holds||0) < 2 && (m.gamesFinished||0) < 3) return false;
-      // Must have actually pitched — minimum 3 IP per mlbStats
-      if((m.ipNum||0) < 2.0) return false;
+      // Minimum IP for sustainability score to be meaningful
+      if((m.ipNum||0) < MIN_IP) return false;
       // Use savant data if available, fall back to liveData, then mlbStats K9/BB9
       const sv = svMap.get(stripAccents(normName(name)));
       const ld = G.liveData?.[name.toLowerCase()];
       
       // Get xwoba from savant array or liveData
       const xwoba = sv?.xwoba ?? ld?.xwoba ?? null;
+      const ipNum = m.ipNum || 0;
+      
+      // Calculate sustainability score
+      const sustainScore = calcSustainabilityScore(ipNum, xwoba);
+      if(sustainScore < MIN_SUSTAINABILITY_SCORE) return false;
       
       if(sv) {
         if((sv.kbb||0) < 18) return false;   // K-BB% >= 18%
         if((sv.whiff||0) < 27) return false;  // Whiff% >= 27%
-        // Only apply xWOBA filter if data exists
-        if(xwoba != null && xwoba > 0.280) return false;  // xWOBA <= .280
       } else if(ld) {
         // Use liveData stats
         if((ld.kbb||0) < 18) return false;
         if((ld.whiff||0) < 27) return false;
-        if(xwoba != null && xwoba > 0.280) return false;
       } else {
         if((m.k9||0) < 10.0) return false;   // K/9 >= 10.0
         if((m.bb9||99) > 3.0) return false;  // BB/9 <= 3.0
@@ -2245,18 +2257,22 @@ function renderBPWaiting() {
         stripAccents(normName(r.name.toLowerCase())) === nn
       ));
       const bpP = bpTeam?.pitchers.find(r => stripAccents(normName(r.name.toLowerCase())) === nn);
+      const xwoba = sv?.xwoba ?? ld?.xwoba ?? null;
+      const sustainScore = calcSustainabilityScore(m.ipNum||0, xwoba);
       return {
         name: m.name||name, holds: m.holds||0, gf: m.gamesFinished||0,
-        ip: m.ip||'—', era: m.era||null,
+        ip: m.ip||'—', ipNum: m.ipNum||0, era: m.era||null,
         whip: m.whip||null,
-        xwoba: sv?.xwoba ?? ld?.xwoba ?? null,
+        xwoba: xwoba,
         kbb: sv?.kbb ?? ld?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
         whiff: sv?.whiff ?? ld?.whiff ?? null,
         mlbId: sv?.mlbId || ld?.mlbId || bpP?.mlbId || null,
-        teamSit: bpTeam?.situation||'', teamName: bpTeam?.name||''
+        teamSit: bpTeam?.situation||'', teamName: bpTeam?.name||'',
+        sustainScore: sustainScore
       };
     })
-    .sort((a,b) => ((b.kbb||0)+(b.whiff||0)) - ((a.kbb||0)+(a.whiff||0)));
+    // Sort by sustainability score (highest first)
+    .sort((a,b) => b.sustainScore - a.sustainScore);
   
   // Hide entire section if no results
   const section = el.parentElement;
@@ -2268,6 +2284,8 @@ function renderBPWaiting() {
   
   el.innerHTML = waiting.map(p => {
     const sit = p.teamSit ? `<span class="bp-sit ${p.teamSit}" style="font-size:10px">${p.teamSit}</span>` : '';
+    // Sustainability score badge color based on score
+    const scoreColor = p.sustainScore >= 1.0 ? '#059669' : p.sustainScore >= 0.85 ? '#d97706' : '#6b7280';
     return `<div class="role-card">
       <img class="bp-avatar" style="width:36px;height:36px" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
       <div class="role-info">
@@ -2276,7 +2294,10 @@ function renderBPWaiting() {
         <div class="role-team">${p.holds}HLD · ${p.gf}GF · ${p.ip}IP · WHIP ${p.whip?.toFixed(2)||'—'}</div>
         <div class="role-stats">K-BB% ${p.kbb!=null?p.kbb+'%':'—'} · Whiff% ${p.whiff!=null?p.whiff+'%':'—'} · xWOBA ${p.xwoba!=null?'.'+Math.round(p.xwoba*1000):'—'}</div>
       </div>
-      <span class="role-badge waiting">Elite Stuff</span>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <span class="role-badge waiting">Elite Stuff</span>
+        <span style="font-size:11px;font-weight:700;color:${scoreColor}">${p.sustainScore.toFixed(2)}</span>
+      </div>
     </div>`;
   }).join('');
 }
@@ -2627,30 +2648,34 @@ function renderBPMultiInning() {
     return parseFloat(score.toFixed(1));
   };
 
-  // Build Set of pitchers confirmed active in MLB bullpens
-  const activeBullpenNames = new Set();
-  const bpPitcherMap = new Map(); // name -> pitcher object with prev data
+  // Build list of all FA relievers from bullpen-watch data (primary source)
+  // This catches ALL relievers, unlike G.mlbStats which only has high-K pitchers
+  const allRelievers = [];
   (G_bpData||[]).forEach(team => {
     (team.pitchers||[]).forEach(p => {
       const nn = stripAccents(normName(p.name.toLowerCase()));
-      activeBullpenNames.add(nn);
-      bpPitcherMap.set(nn, p); // Store full pitcher object including prev
+      allRelievers.push({
+        ...p,
+        nn,
+        teamName: team.name,
+        teamAbbr: getTeamAbbr(team.name)
+      });
     });
   });
 
   // Find all multi-inning relievers
-  const multiInning = Object.entries(G.mlbStats)
-    .filter(([name, m]) => {
-      if(!isFAInLeague(name)) return false;
-      const nn = stripAccents(normName(name));
-      if(!activeBullpenNames.has(nn)) return false;
+  const multiInning = allRelievers
+    .filter(p => {
+      if(!isFAInLeague(p.name)) return false;
       
-      const ipNum = m.ipNum || 0;
-      const gp = m.gamesPlayed || 0;
+      // Parse IP from bullpen data (e.g., "5.0" → 5.0, "12.2" → 12.67)
+      const ipRaw = p.ip || '0';
+      const ipParts = String(ipRaw).split('.');
+      const ipNum = (parseInt(ipParts[0]) || 0) + ((parseInt(ipParts[1]) || 0) / 3);
+      const gp = parseInt(p.gp) || 0;
       
-      // Get previous year data from bullpen-watch
-      const bpP = bpPitcherMap.get(nn);
-      const prev = bpP?.prev || null;
+      // Get previous year data
+      const prev = p.prev || null;
       
       // Calculate effective IP/G with fallback
       const currentIpPerGame = gp > 0 ? ipNum / gp : 0;
@@ -2665,9 +2690,12 @@ function renderBPMultiInning() {
       // Use effective IP/G for multi-inning threshold
       if(effectiveIpPerGame < 1.4) return false;
       
-      const sv = svMap.get(nn);
-      const ld = G.liveData?.[name.toLowerCase()];
-      const kbb = sv?.kbb ?? ld?.kbb ?? (m.k9 && m.bb9 ? ((m.k9-m.bb9)/9*100) : 0);
+      // Get Savant/liveData stats for stuff metrics
+      const sv = svMap.get(p.nn);
+      const ld = G.liveData?.[p.name.toLowerCase()];
+      const mlbS = G.mlbStats?.[p.name.toLowerCase()];
+      
+      const kbb = sv?.kbb ?? ld?.kbb ?? (mlbS?.k9 && mlbS?.bb9 ? ((mlbS.k9-mlbS.bb9)/9*100) : 0);
       const whiff = sv?.whiff ?? ld?.whiff ?? 0;
       const xera = sv?.xera ?? ld?.xera ?? 99;
       const xwoba = sv?.xwoba ?? ld?.xwoba ?? null;
@@ -2678,27 +2706,25 @@ function renderBPMultiInning() {
       
       return true;
     })
-    .map(([name, m]) => {
-      const sv = svMap.get(stripAccents(normName(name)));
-      const ld = G.liveData?.[name.toLowerCase()];
-      const nn = stripAccents(normName((m.name||name).toLowerCase()));
-      const bpTeam = G_bpData?.find(t => t.pitchers.some(r =>
-        stripAccents(normName(r.name.toLowerCase())) === nn
-      ));
-      const bpP = bpPitcherMap.get(nn);
-      const prev = bpP?.prev || null;
+    .map(p => {
+      const sv = svMap.get(p.nn);
+      const ld = G.liveData?.[p.name.toLowerCase()];
+      const mlbS = G.mlbStats?.[p.name.toLowerCase()];
+      const prev = p.prev || null;
       
-      const restKey = stripAccents(normName(m.name || name));
+      const restKey = stripAccents(normName(p.name));
       const restInfo = restData[restKey];
       const daysRest = restInfo?.daysRest ?? null;
       
-      const teamAbbr = getTeamAbbr(bpTeam?.name);
-      const playsToday = teamPlaysToday(teamAbbr);
-      const todayGame = getTodayOpponent(teamAbbr);
+      const playsToday = teamPlaysToday(p.teamAbbr);
+      const todayGame = getTodayOpponent(p.teamAbbr);
       const oppRank = todayGame ? (offense[todayGame.opponent]?.offenseRank || 15) : 15;
       
-      const ipNum = m.ipNum || 0;
-      const gp = m.gamesPlayed || 0;
+      // Parse IP from bullpen data
+      const ipRaw = p.ip || '0';
+      const ipParts = String(ipRaw).split('.');
+      const ipNum = (parseInt(ipParts[0]) || 0) + ((parseInt(ipParts[1]) || 0) / 3);
+      const gp = parseInt(p.gp) || 0;
       const currentIpPerGame = gp > 0 ? ipNum / gp : 0;
       
       // Fallback logic: use prev year IP/G if current GP < threshold
@@ -2722,21 +2748,21 @@ function renderBPMultiInning() {
       ) : 0;
       
       return {
-        name: m.name||name,
+        name: p.name,
         gp: gp,
-        ip: m.ip||'—',
+        ip: p.ip||'—',
         ipPerGame: effectiveIpPerGame.toFixed(1),
         ipPerGameNum: effectiveIpPerGame,
         usingPrevYear: usingPrevYear,
-        era: m.era || null,
-        whip: m.whip || null,
+        era: p.era ?? mlbS?.era ?? null,
+        whip: p.whip ?? mlbS?.whip ?? null,
         xera: sv?.xera ?? ld?.xera ?? null,
         xwoba: sv?.xwoba ?? ld?.xwoba ?? null,
-        kbb: sv?.kbb ?? ld?.kbb ?? (m.k9 && m.bb9 ? parseFloat(((m.k9-m.bb9)/9*100).toFixed(1)) : null),
+        kbb: sv?.kbb ?? ld?.kbb ?? (mlbS?.k9 && mlbS?.bb9 ? parseFloat(((mlbS.k9-mlbS.bb9)/9*100).toFixed(1)) : null),
         whiff: sv?.whiff ?? ld?.whiff ?? null,
-        mlbId: sv?.mlbId || ld?.mlbId || bpP?.mlbId || null,
-        teamName: bpTeam?.name || '',
-        teamAbbr: teamAbbr,
+        mlbId: p.mlbId || sv?.mlbId || ld?.mlbId || null,
+        teamName: p.teamName || '',
+        teamAbbr: p.teamAbbr,
         daysRest: daysRest,
         playsToday: playsToday,
         todayGame: todayGame,
@@ -2878,7 +2904,7 @@ function setupExpandButton(containerId) {
     
     <div style="margin-bottom:20px">
       <div style="font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.2px;margin-bottom:4px">Elite Setup Arms Available</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with late-inning usage (2+ HLD/GF), elite stuff (K-BB% ≥18%, Whiff% ≥27%, xWOBA ≤.280)</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:10px">FAs with late-inning usage, elite stuff (K-BB% ≥18%, Whiff% ≥27%), and sustained contact suppression. Sorted by sustainability score: IP × (0.350 − xWOBA). Higher = more innings with lower xWOBA.</div>
       <div id="bpWaiting" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
     </div>
     <div style="margin-bottom:20px">
