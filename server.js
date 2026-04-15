@@ -1879,6 +1879,136 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // /transactions -> recent MLB transactions (callups, IL, DFA, options, etc.)
+  if (path === '/transactions') {
+    const params = new URLSearchParams(req.url.includes('?') ? req.url.split('?')[1] : '');
+    const days = parseInt(params.get('days') || '7');
+    const today = new Date();
+    const startDate = new Date(today - days * 24 * 60 * 60 * 1000);
+    const fmt = d => d.toISOString().split('T')[0];
+    const txUrl = `/api/v1/transactions?startDate=${fmt(startDate)}&endDate=${fmt(today)}`;
+    console.log(`[proxy] fetching MLB transactions (${fmt(startDate)} to ${fmt(today)})...`);
+
+    const opts = {
+      hostname: 'statsapi.mlb.com', port: 443, path: txUrl, method: 'GET',
+      headers: {'User-Agent':'Mozilla/5.0','Accept':'application/json'}
+    };
+    const pr = https.request(opts, sr => {
+      let body = '';
+      sr.on('data', c => body += c);
+      sr.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          // MLB team IDs (108-158)
+          const MLB_IDS = new Set();
+          for(let i = 108; i <= 158; i++) MLB_IDS.add(i);
+
+          // Fantasy-relevant transaction types
+          const RELEVANT = new Set(['CU','SC','OPT','SE','DES','CLW','RTN','REL','TR','ASG','SU']);
+
+          // Categorize transactions for fantasy relevance
+          const transactions = (data.transactions || []).filter(t => {
+            if(!RELEVANT.has(t.typeCode)) return false;
+            const toId = t.toTeam?.id || 0;
+            const fromId = t.fromTeam?.id || 0;
+            const isMLB = MLB_IDS.has(toId) || MLB_IDS.has(fromId);
+            // For ASG, only include rehab assignments (MLB player sent to minors for rehab)
+            if(t.typeCode === 'ASG') {
+              return isMLB && /rehab/i.test(t.description || '');
+            }
+            return isMLB;
+          }).map(t => {
+            const desc = t.description || '';
+            // Detect pitcher from description (RHP/LHP)
+            const isPitcher = /\b[RL]HP\b/.test(desc);
+            // Categorize the move
+            let category = 'other';
+            let signal = 'neutral'; // bullish, bearish, neutral
+            const tc = t.typeCode;
+            const descLower = desc.toLowerCase();
+            if(tc === 'CU' || tc === 'SE') {
+              category = 'callup';
+              signal = 'bullish';
+            } else if(tc === 'OPT') {
+              category = 'optioned';
+              signal = 'bearish';
+            } else if(tc === 'DES' || tc === 'REL') {
+              category = 'dfa';
+              signal = 'bearish';
+            } else if(tc === 'CLW') {
+              category = 'claimed';
+              signal = 'bullish';
+            } else if(tc === 'TR') {
+              category = 'trade';
+              signal = 'neutral';
+            } else if(tc === 'SC') {
+              if(descLower.includes('injured list') || descLower.includes('disabled list')) {
+                if(descLower.includes('activated') || descLower.includes('reinstated')) {
+                  category = 'activated';
+                  signal = 'bullish';
+                } else if(descLower.includes('transferred') && descLower.includes('60-day')) {
+                  category = 'il_60';
+                  signal = 'bearish';
+                } else {
+                  category = 'injured';
+                  signal = 'bearish';
+                }
+              } else if(descLower.includes('paternity')) {
+                category = descLower.includes('activated') ? 'activated' : 'paternity';
+                signal = descLower.includes('activated') ? 'bullish' : 'neutral';
+              } else if(descLower.includes('suspended')) {
+                category = 'suspended';
+                signal = 'bearish';
+              } else {
+                category = 'status_change';
+              }
+            } else if(tc === 'ASG' && descLower.includes('rehab')) {
+              category = 'rehab';
+              signal = 'bullish';
+            } else if(tc === 'SU') {
+              category = 'suspended';
+              signal = 'bearish';
+            }
+
+            return {
+              id: t.id,
+              date: t.date,
+              name: t.person?.fullName || '',
+              mlbId: String(t.person?.id || ''),
+              team: t.toTeam?.name || t.fromTeam?.name || '',
+              teamId: t.toTeam?.id || t.fromTeam?.id || 0,
+              typeCode: tc,
+              typeDesc: t.typeDesc || '',
+              category,
+              signal,
+              isPitcher,
+              description: desc,
+            };
+          });
+
+          // Sort by date descending
+          transactions.sort((a,b) => b.date.localeCompare(a.date) || b.id - a.id);
+
+          console.log(`[proxy] transactions: ${transactions.length} MLB-level moves (${transactions.filter(t=>t.isPitcher).length} pitchers)`);
+          setCORS(res, reqOrigin);
+          res.writeHead(200, {'Content-Type':'application/json'});
+          res.end(JSON.stringify(transactions));
+        } catch(e) {
+          console.error('[proxy] transactions parse error:', e.message);
+          setCORS(res, reqOrigin);
+          res.writeHead(500, {'Content-Type':'application/json'});
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+    });
+    pr.on('error', e => {
+      console.error('[proxy] transactions error:', e.message);
+      res.writeHead(502); res.end('[]');
+    });
+    pr.end();
+    return;
+  }
+
   // /fxea/* -> www.fantrax.com
   if (path.startsWith('/fxea/')) {
     const body = await readBody(req);

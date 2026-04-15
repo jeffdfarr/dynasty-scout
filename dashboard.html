@@ -258,7 +258,7 @@
     tr:hover td:nth-child(2) { background: var(--bg2); }
     /* Tighter player cell on mobile */
     .p-avatar { width: 24px; height: 24px; margin-right: 5px; }
-    .p-cell span { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px; display: inline-block; vertical-align: middle; }
+    .p-cell span:not(.fa-tx-badge) { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px; display: inline-block; vertical-align: middle; }
   }
   tr:nth-child(even) td { background: var(--bg-row-alt); }
   tr:hover td { background: var(--blue-light) !important; }
@@ -485,6 +485,76 @@
   .metric-label { font-size: 11px; color: var(--text2); margin-bottom: 3px; }
   .metric-val { font-size: 22px; font-weight: 500; }
   .ai-btn { padding:5px 10px; border-radius:var(--radius); border:1px solid var(--border2); background:var(--bg2); color:var(--text); font-size:12px; font-family:inherit; cursor:pointer; white-space:nowrap; }
+
+  /* ── News / Transaction cards ── */
+  .tx-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 10px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .tx-card.bullish { border-left: 3px solid var(--green); }
+  .tx-card.bearish { border-left: 3px solid var(--accent); }
+  .tx-card.neutral { border-left: 3px solid var(--border2); }
+  .tx-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+    width: 28px;
+    text-align: center;
+    line-height: 1.4;
+  }
+  .tx-body { flex: 1; min-width: 0; }
+  .tx-name {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .tx-name .tx-fa-badge {
+    background: var(--green-bg);
+    color: var(--green-text);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .tx-desc {
+    font-size: 12px;
+    color: var(--text2);
+    margin-top: 2px;
+    line-height: 1.4;
+  }
+  .tx-meta {
+    font-size: 10px;
+    color: var(--text3);
+    margin-top: 4px;
+  }
+  .tx-date-header {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text2);
+    padding: 8px 0 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 6px;
+  }
+  /* Inline transaction badge on FA tab */
+  .fa-tx-badge {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-left: 6px;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .fa-tx-badge.bullish { background: var(--green-bg); color: var(--green-text); }
+  .fa-tx-badge.bearish { background: var(--red-bg); color: var(--red-text); }
+  .fa-tx-badge.neutral { background: var(--gray-bg); color: var(--gray-text); }
 </style>
 </head>
 <body>
@@ -512,7 +582,7 @@
   <div class="tabs">
     <button class="tab active" onclick="sw('bullpen');fetchBullpenWatch()">Bullpen Watch</button>
     <button class="tab" onclick="sw('freeagents')">Free Agents</button>
-
+    <button class="tab" onclick="sw('news');fetchTransactions()">News <span id="newsBadge" style="background:#c41e3a;color:#fff;font-size:9px;padding:1px 5px;border-radius:8px;margin-left:4px;display:none"></span></button>
   </div>
 
   
@@ -553,6 +623,34 @@
       <tbody id="faBody"></tbody>
     </table></div>
     <p id="faEmpty" style="font-size:13px;color:var(--text2);margin-top:14px;display:none">No FA pitchers found — load your league first.</p>
+  </div>
+
+  <div id="pane-news" class="pane">
+    <div class="filter-row">
+      <label>Show:</label>
+      <select id="newsFilter" onchange="renderTransactions()">
+        <option value="all">All Moves</option>
+        <option value="pitchers">Pitchers Only</option>
+        <option value="fa">My League FAs</option>
+      </select>
+      <label>Type:</label>
+      <select id="newsType" onchange="renderTransactions()">
+        <option value="all">All Types</option>
+        <option value="callup">⬆️ Callups</option>
+        <option value="injured">🏥 IL Moves</option>
+        <option value="activated">✅ Activated</option>
+        <option value="rehab">🏃 Rehab</option>
+        <option value="optioned">⬇️ Optioned</option>
+        <option value="dfa">🚫 DFA/Released</option>
+        <option value="trade">🔄 Trades</option>
+      </select>
+      <input id="newsSearch" type="text" placeholder="Search player..." oninput="renderTransactions()" style="padding:4px 8px;font-size:12px;font-family:inherit;border:1px solid var(--border2);border-radius:var(--radius);background:var(--bg);color:var(--text);width:140px"/>
+    </div>
+    <div style="margin-bottom:8px">
+      <span style="font-size:11px;color:var(--text2)">MLB transactions · last 7 days · <span id="newsCount">—</span> moves · <span id="newsUpdated"></span></span>
+    </div>
+    <div id="newsCards" style="display:grid;gap:8px"></div>
+    <p id="newsEmpty" style="font-size:13px;color:var(--text2);margin-top:14px;display:none">No transactions found.</p>
   </div>
 
 <script>
@@ -1120,7 +1218,7 @@ function renderFA(){
       .join(', ') || '—';
     return `<tr>
       <td>${i+1}</td>
-      <td><div class="p-cell"><img class="p-avatar" src="${PROXY}/mlb-photo/${p.mlbId || 'generic'}" onerror="this.style.display='none'" /><span style="font-weight:500">${p.name}</span></div></td>
+      <td><div class="p-cell"><img class="p-avatar" src="${PROXY}/mlb-photo/${p.mlbId || 'generic'}" onerror="this.style.display='none'" /><span style="font-weight:500">${p.name}</span>${typeof getTxBadge==='function'?getTxBadge(p.name):''}</div></td>
       <td><span class="tpill">${p.mlb}</span></td>
       <td>${p.role}</td>
       <td data-col="ip">${p.ip || '—'}</td>
@@ -3095,5 +3193,128 @@ function setupExpandButton(containerId) {
       <div id="bpTeams" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
     </div>
   </div>
+
+<script>
+// ── Transactions / News Feed ──────────────────────────────────────────────
+let txData = [];
+let txLoaded = false;
+
+const TX_ICONS = {
+  callup: '⬆️', activated: '✅', claimed: '🔄', rehab: '🏃',
+  optioned: '⬇️', dfa: '🚫', injured: '🏥',
+  il_60: '🔴', trade: '🔄', paternity: '👶',
+  suspended: '⛔', status_change: 'ℹ️', other: '📋'
+};
+const TX_LABELS = {
+  callup: 'Called Up', activated: 'Activated', claimed: 'Claimed', rehab: 'Rehab Assignment',
+  optioned: 'Optioned', dfa: 'DFA/Released', injured: 'Injured List',
+  il_60: '60-Day IL', trade: 'Traded', paternity: 'Paternity',
+  suspended: 'Suspended', status_change: 'Status Change', other: 'Other'
+};
+
+async function fetchTransactions() {
+  if(txLoaded) return; // only fetch once per session
+  const container = document.getElementById('newsCards');
+  container.innerHTML = '<div style="color:var(--text2);font-size:12px;padding:20px 0">Loading transactions...</div>';
+  try {
+    const resp = await fetch(`${PROXY}/transactions?days=7`);
+    txData = await resp.json();
+    txLoaded = true;
+    // Update badge on News tab
+    const pitcherCallups = txData.filter(t => t.isPitcher && (t.category === 'callup' || t.category === 'activated' || t.category === 'rehab'));
+    const badge = document.getElementById('newsBadge');
+    if(pitcherCallups.length > 0) {
+      badge.textContent = pitcherCallups.length;
+      badge.style.display = 'inline';
+    }
+    renderTransactions();
+    // Also re-render FA tab if it has data, to show inline badges
+    if(savant.length > 0) renderFA();
+  } catch(e) {
+    container.innerHTML = `<div style="color:var(--red-text);font-size:12px">Failed to load transactions: ${e.message}</div>`;
+  }
+}
+
+function renderTransactions() {
+  const filter = document.getElementById('newsFilter')?.value || 'all';
+  const typeFilter = document.getElementById('newsType')?.value || 'all';
+  const search = (document.getElementById('newsSearch')?.value || '').toLowerCase().trim();
+
+  let list = txData.filter(t => {
+    if(filter === 'pitchers' && !t.isPitcher) return false;
+    if(filter === 'fa') {
+      const nn = stripAccents(normName(t.name));
+      if(!G.faNames.has(nn)) return false;
+    }
+    if(typeFilter !== 'all') {
+      if(typeFilter === 'injured' && t.category !== 'injured' && t.category !== 'il_60') return false;
+      if(typeFilter !== 'injured' && t.category !== typeFilter) return false;
+    }
+    if(search && !t.name.toLowerCase().includes(search) && !t.description.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  document.getElementById('newsCount').textContent = list.length;
+  document.getElementById('newsUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+  const container = document.getElementById('newsCards');
+  const empty = document.getElementById('newsEmpty');
+
+  if(!list.length) {
+    container.innerHTML = '';
+    empty.style.display = 'block';
+    empty.textContent = txData.length ? 'No transactions match your filters.' : 'No transactions found.';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Group by date
+  const grouped = {};
+  list.forEach(t => {
+    if(!grouped[t.date]) grouped[t.date] = [];
+    grouped[t.date].push(t);
+  });
+
+  const dates = Object.keys(grouped).sort((a,b) => b.localeCompare(a));
+  let html = '';
+  dates.forEach(date => {
+    const d = new Date(date + 'T12:00:00');
+    const label = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    html += `<div class="tx-date-header">${label}</div>`;
+    grouped[date].forEach(t => {
+      const icon = TX_ICONS[t.category] || '📋';
+      const nn = stripAccents(normName(t.name));
+      const isFA = G.faNames.has(nn);
+      const faBadge = isFA ? '<span class="tx-fa-badge">FA in league</span>' : '';
+      html += `<div class="tx-card ${t.signal}">
+        <div class="tx-icon">${icon}</div>
+        <div class="tx-body">
+          <div class="tx-name">${t.name}${faBadge}</div>
+          <div class="tx-desc">${t.description}</div>
+          <div class="tx-meta">${TX_LABELS[t.category] || t.typeDesc} · ${t.team}</div>
+        </div>
+      </div>`;
+    });
+  });
+  container.innerHTML = html;
+}
+
+// Build a lookup of recent transactions by normalized player name
+function getTxBadge(playerName) {
+  if(!txData.length) return '';
+  const nn = stripAccents(normName(playerName));
+  // Find most recent transaction for this player
+  const tx = txData.find(t => stripAccents(normName(t.name)) === nn);
+  if(!tx) return '';
+  const icon = TX_ICONS[tx.category] || '';
+  const label = TX_LABELS[tx.category] || tx.typeDesc;
+  const d = new Date(tx.date + 'T12:00:00');
+  const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `<span class="fa-tx-badge ${tx.signal}">${icon} ${label} ${dateStr}</span>`;
+}
+
+// Auto-fetch transactions on page load (background, non-blocking)
+setTimeout(() => { fetchTransactions(); }, 2000);
+</script>
 </body>
 </html>
