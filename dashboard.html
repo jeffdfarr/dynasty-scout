@@ -2183,8 +2183,12 @@ function renderBPTeams() {
       
       const injTag   = isIL ? '<span class="bp-inj">IL</span>' : '';
       
-      // Blown saves badge
-      const blownSaves = candidate?.blownSaves || p.blownSaves || 0;
+      // Blown saves - prefer recent (14d) over season total for volatility display
+      const recentBS = candidate?.recentBlownSaves ?? 0;
+      const seasonBS = candidate?.blownSaves || p.blownSaves || 0;
+      // Show recent if available and > 0, otherwise show season (dimmer)
+      const bsToShow = recentBS > 0 ? recentBS : seasonBS;
+      const bsIsRecent = recentBS > 0;
       
       // Long reliever indicator (from allRanked data - includes all pitchers, not just those with roles)
       const isLongReliever = allRanked?.isLongReliever || allRanked?.ipPerGame > 1.4 || candidate?.isLongReliever;
@@ -2214,10 +2218,17 @@ function renderBPTeams() {
         emergingTag = `<span class="bp-flag-success" title="${sig.msg}">↑</span>`;
       }
       
-      // Blown saves for stats line (red text, no background)
-      const bsStatDisplay = blownSaves > 0 
-        ? `<span style="margin:0 3px">·</span><span class="bp-stat-bs">${blownSaves}</span>BS` 
-        : '';
+      // Blown saves for stats line - red text for recent (14d), dimmer for old season BS
+      let bsStatDisplay = '';
+      if(bsToShow > 0) {
+        if(bsIsRecent) {
+          // Recent BS - bright red, show "14d" suffix
+          bsStatDisplay = `<span style="margin:0 3px">·</span><span class="bp-stat-bs" title="${recentBS} blown save${recentBS>1?'s':''} in last 14 days">${bsToShow}</span>BS`;
+        } else {
+          // Old season BS only - dimmer, show "szn" suffix to indicate not recent
+          bsStatDisplay = `<span style="margin:0 3px">·</span><span style="color:#9ca3af" title="${seasonBS} blown save${seasonBS>1?'s':''} this season (none in last 14d)">${bsToShow}BS</span>`;
+        }
+      }
       
       return `<div class="bp-pitcher">
         <img class="bp-avatar" src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" />
@@ -3178,7 +3189,8 @@ function setupExpandButton(containerId) {
             <div class="bp-key-title">Status</div>
             <div class="bp-key-item"><span class="bp-fa" style="font-size:9px;padding:1px 4px">FA</span> Free agent in league</div>
             <div class="bp-key-item"><span class="bp-inj" style="font-size:9px;padding:1px 4px">IL</span> Injured list</div>
-            <div class="bp-key-item"><span class="bp-stat-bs">2</span>BS Blown saves</div>
+            <div class="bp-key-item"><span class="bp-stat-bs">2</span>BS Blown saves (last 14d)</div>
+            <div class="bp-key-item"><span style="color:#9ca3af">2BS</span> Old blown saves (no recent)</div>
             <div class="bp-key-item"><span class="bp-vuln high" style="font-size:9px;padding:1px 4px">⚠</span> Vulnerable closer</div>
           </div>
           <div class="bp-key-section">

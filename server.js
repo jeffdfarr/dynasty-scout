@@ -1394,6 +1394,42 @@ const server = http.createServer(async (req, res) => {
       pr.on('error',()=>resolve([])); pr.end();
     });
 
+    // Helper: fetch game log for a pitcher and count blown saves in last N days
+    const RECENT_DAYS = 14;
+    const fetchRecentBlownSaves = (playerId, year) => new Promise((resolve) => {
+      const path = `/api/v1/people/${playerId}/stats?stats=gameLog&group=pitching&season=${year}&gameType=R`;
+      const opts = {hostname:'statsapi.mlb.com',port:443,path,method:'GET',headers:{'User-Agent':'Mozilla/5.0'}};
+      const pr = https.request(opts, sr => {
+        let body=''; sr.on('data',c=>body+=c);
+        sr.on('end',()=>{ 
+          try {
+            const data = JSON.parse(body);
+            const splits = data.stats?.[0]?.splits || [];
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - RECENT_DAYS);
+            
+            let recentBS = 0;
+            let recentGames = [];
+            splits.forEach(g => {
+              const gameDate = new Date(g.date);
+              if(gameDate >= cutoff) {
+                const bs = g.stat?.blownSaves || 0;
+                recentBS += bs;
+                if(bs > 0) {
+                  recentGames.push({ date: g.date, bs });
+                }
+              }
+            });
+            resolve({ playerId, recentBS, recentGames });
+          } catch(e){ 
+            resolve({ playerId, recentBS: 0, recentGames: [] }); 
+          } 
+        });
+      });
+      pr.on('error',()=>resolve({ playerId, recentBS: 0, recentGames: [] })); 
+      pr.end();
+    });
+
     const fetchInjuries = () => Promise.resolve([]);
 
     const bpStart = Date.now();
@@ -1401,7 +1437,7 @@ const server = http.createServer(async (req, res) => {
       fetchStats(bpYear, 0), fetchStats(bpYear, 500),
       fetchStats(bpPrevYear, 0), fetchStats(bpPrevYear, 500),
       fetchInjuries()
-    ]).then(([cur1, cur2, prev1, prev2, injuries]) => {
+    ]).then(async ([cur1, cur2, prev1, prev2, injuries]) => {
       console.log(`[proxy] bullpen-watch: all fetches done in ${Date.now()-bpStart}ms`);
       const curSplits  = [...cur1,  ...cur2];
       const prevSplits = [...prev1, ...prev2];
@@ -1541,6 +1577,45 @@ const server = http.createServer(async (req, res) => {
         });
       });
 
+      // ===== FETCH RECENT BLOWN SAVES =====
+      // Collect all pitcher IDs with any blown saves (season) to check recent activity
+      const pitchersWithBS = [];
+      Object.values(teams).forEach(t => {
+        t.pitchers.forEach(p => {
+          if((p.blownSaves || 0) > 0) {
+            pitchersWithBS.push(p.mlbId);
+          }
+        });
+      });
+      
+      console.log(`[proxy] bullpen-watch: fetching game logs for ${pitchersWithBS.length} pitchers with blown saves`);
+      
+      // Fetch game logs in parallel (limit to 20 concurrent to avoid overwhelming API)
+      const recentBSMap = {};
+      const batchSize = 20;
+      for(let i = 0; i < pitchersWithBS.length; i += batchSize) {
+        const batch = pitchersWithBS.slice(i, i + batchSize);
+        const results = await Promise.all(batch.map(pid => fetchRecentBlownSaves(pid, bpYear)));
+        results.forEach(r => {
+          recentBSMap[r.playerId] = r;
+        });
+      }
+      console.log(`[proxy] bullpen-watch: recent BS data fetched for ${Object.keys(recentBSMap).length} pitchers`);
+
+      // Update pitchers with recent blown saves data
+      Object.values(teams).forEach(t => {
+        t.pitchers.forEach(p => {
+          const recent = recentBSMap[p.mlbId];
+          if(recent) {
+            p.recentBlownSaves = recent.recentBS;
+            p.recentBSGames = recent.recentGames;
+          } else {
+            p.recentBlownSaves = 0;
+            p.recentBSGames = [];
+          }
+        });
+      });
+
       // Classify each team
       Object.entries(teams).forEach(([tid, t]) => {
         t.pitchers.sort((a,b) => (b.saves - a.saves) || (b.holds - a.holds));
@@ -1672,10 +1747,11 @@ const server = http.createServer(async (req, res) => {
               closerScore -= longRelieverPenalty;
             }
             
-            // Blown saves penalty: -4 per BS (huge red flag for closer role)
-            const bs = p.blownSaves || 0;
-            if(bs > 0) {
-              penalties.blownSaves = bs * 4;
+            // Blown saves penalty: use RECENT blown saves (last 14 days) for current volatility
+            const recentBS = p.recentBlownSaves || 0;
+            const seasonBS = p.blownSaves || 0;
+            if(recentBS > 0) {
+              penalties.blownSaves = recentBS * 4;
               closerScore -= penalties.blownSaves;
             }
             
@@ -1686,11 +1762,18 @@ const server = http.createServer(async (req, res) => {
               closerScore -= penalties.era;
             }
             
-            // ===== RED FLAGS (for display) =====
+            // ===== RED FLAGS (for display) - use RECENT blown saves =====
             const redFlags = [];
             if(ipPerGame > 1.4) redFlags.push({ type: 'longRP', value: ipPerGame.toFixed(1), msg: 'Long relief role' });
-            if(bs >= 2) redFlags.push({ type: 'BS', value: bs, msg: `${bs} blown saves` });
-            else if(bs === 1) redFlags.push({ type: 'BS', value: bs, msg: '1 blown save' });
+            
+            // Recent blown saves red flag (last 14 days)
+            if(recentBS >= 2) {
+              redFlags.push({ type: 'BS', value: recentBS, msg: `${recentBS} blown saves (14d)`, recent: true });
+            } else if(recentBS === 1) {
+              redFlags.push({ type: 'BS', value: recentBS, msg: '1 blown save (14d)', recent: true });
+            }
+            // If no recent BS but has season BS, show as context (not a red flag for volatility)
+            // This is informational only - not counted toward volatile status
             
             // ERA red flag: require 4+ IP to avoid one bad outing skewing everything
             // (e.g., 4 ER in 1 IP = 36.00 ERA, but with 3 other clean IP it's only 9.00)
@@ -1737,11 +1820,12 @@ const server = http.createServer(async (req, res) => {
         const topMeetsMinimum = topCloser && (topCloser.gf >= 2 || topCloser.saves >= 1 || topIsPriorCloser);
         
         // ===== VOLATILE DETECTION =====
-        // Flag situations where top closer has significant red flags
+        // Flag situations where top closer has significant red flags (using RECENT data)
         const topHasRedFlags = topCloser?.redFlags?.length >= 1;
         const topCloserIp = topCloser ? ipToDec(topCloser.ip) : 0;
+        const topRecentBS = topCloser?.recentBlownSaves || 0;
         const topHasSeriousRedFlags = topCloser?.redFlags?.length >= 2 || 
-          (topCloser?.blownSaves >= 2) ||
+          (topRecentBS >= 2) ||  // 2+ blown saves in last 14 days
           (topCloser?.era && topCloser.era > 10.0 && topCloserIp >= 4.0); // Require 4+ IP
         
         // Find emerging arm: someone with strong signals but no saves
@@ -1755,7 +1839,8 @@ const server = http.createServer(async (req, res) => {
           t.closerName = topCloser.name;
           t.closerScore = topCloser.closerScore;
           t.closerRedFlags = topCloser.redFlags || [];
-          t.closerBlownSaves = topCloser.blownSaves || 0;
+          t.closerBlownSaves = topCloser.blownSaves || 0;  // Season total for display
+          t.closerRecentBS = topRecentBS;  // Recent for volatility
           
           // If top closer has serious red flags, mark as volatile
           if(topHasSeriousRedFlags) {
@@ -1779,7 +1864,8 @@ const server = http.createServer(async (req, res) => {
           saves: c.saves,
           holds: c.holds,
           gf: c.gf,
-          blownSaves: c.blownSaves || 0,
+          blownSaves: c.blownSaves || 0,        // Season total
+          recentBlownSaves: c.recentBlownSaves || 0,  // Last 14 days
           era: c.era,
           closerScore: c.closerScore,
           redFlags: c.redFlags || [],
