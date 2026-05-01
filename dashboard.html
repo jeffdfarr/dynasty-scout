@@ -1801,6 +1801,16 @@ function isFAInLeague(name) {
   if(!name) return false;
   const nn = stripAccents(normName(name.toLowerCase()));
   const status = getSavantStatusMap().get(nn);
+  const isDebug = name.toLowerCase().includes('morillo');
+  if(isDebug) {
+    console.log('[DEBUG] isFAInLeague Morillo:', {
+      name, nn, 
+      savantStatus: status,
+      inRosteredSet: getRosteredSet().has(nn),
+      rosteredSetSize: getRosteredSet().size,
+      rosteredSetSample: Array.from(getRosteredSet()).slice(0,5)
+    });
+  }
   if(status) return status === 'fa';
   return !isRosteredInLeague(name);
 }
