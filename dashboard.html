@@ -858,6 +858,30 @@ async function loadLeague(){
     G.teams = teams; G.rosters = rosters; G.faNames = faNames; G.playerInfo = playerInfo; G.nameToTeam = nameToTeam;
     _rosteredSet = null; 
     clearSavantStatusCache(); // Clear cached FA/rostered status
+    
+    // Re-tag all savant entries with fresh roster status
+    savant.forEach(p => {
+      const ln = normName(p.name.toLowerCase());
+      const isDebug = p.name.toLowerCase().includes('morillo');
+      if(isDebug) console.log('[DEBUG] Morillo check:', {
+        name: p.name, ln,
+        inFaNames: G.faNames.has(ln),
+        inFaNamesRaw: G.faNames.has(p.name.toLowerCase()),
+        inRosteredNames: G.rosteredNames?.has(p.name.toLowerCase()),
+        inRosteredNamesNorm: G.rosteredNames?.has(ln),
+        isRostered: isRosteredInLeague(p.name),
+        prevStatus: p.fxStatus
+      });
+      if(G.faNames.has(ln) || G.faNames.has(p.name.toLowerCase())){ 
+        p.fxStatus='fa'; 
+      } else if(G.rosteredNames?.has(p.name.toLowerCase()) || G.rosteredNames?.has(ln)){ 
+        p.fxStatus='rostered'; 
+      } else {
+        // Check with isRosteredInLeague for fuzzy matching
+        p.fxStatus = isRosteredInLeague(p.name) ? 'rostered' : 'unknown';
+      }
+      if(isDebug) console.log('[DEBUG] Morillo result:', p.fxStatus);
+    });
 
     renderFA();
 
@@ -2234,7 +2258,10 @@ function renderBPWaiting() {
 
   const waiting = Object.entries(G.mlbStats)
     .filter(([name, m]) => {
-      if(!isFAInLeague(name)) return false;
+      const isDebug = name.toLowerCase().includes('morillo');
+      const faCheck = isFAInLeague(name);
+      if(isDebug) console.log('[DEBUG] Morillo in Elite Setup Arms:', { name, faCheck, mlbStats: m });
+      if(!faCheck) return false;
       // Must be confirmed active in an MLB bullpen this year
       if(!activeBullpenNames.has(stripAccents(normName(name)))) return false;
       // Must have meaningful relief appearances — at least 2 holds OR 3 games finished
