@@ -1394,9 +1394,9 @@ const server = http.createServer(async (req, res) => {
       pr.on('error',()=>resolve([])); pr.end();
     });
 
-    // Helper: fetch game log for a pitcher and count blown saves in last N days
+    // Helper: fetch game log for a pitcher and count recent activity (last N days)
     const RECENT_DAYS = 14;
-    const fetchRecentBlownSaves = (playerId, year) => new Promise((resolve) => {
+    const fetchRecentActivity = (playerId, year) => new Promise((resolve) => {
       const path = `/api/v1/people/${playerId}/stats?stats=gameLog&group=pitching&season=${year}&gameType=R`;
       const opts = {hostname:'statsapi.mlb.com',port:443,path,method:'GET',headers:{'User-Agent':'Mozilla/5.0'}};
       const pr = https.request(opts, sr => {
@@ -1409,26 +1409,34 @@ const server = http.createServer(async (req, res) => {
             cutoff.setDate(cutoff.getDate() - RECENT_DAYS);
             
             let recentBS = 0;
+            let recentSaves = 0;
+            let recentGF = 0;
             let recentGames = [];
             splits.forEach(g => {
               const gameDate = new Date(g.date);
               if(gameDate >= cutoff) {
                 const bs = g.stat?.blownSaves || 0;
+                const sv = g.stat?.saves || 0;
+                const gf = g.stat?.gamesFinished || 0;
                 recentBS += bs;
-                if(bs > 0) {
-                  recentGames.push({ date: g.date, bs });
+                recentSaves += sv;
+                recentGF += gf;
+                if(bs > 0 || sv > 0) {
+                  recentGames.push({ date: g.date, bs, sv });
                 }
               }
             });
-            resolve({ playerId, recentBS, recentGames });
+            resolve({ playerId, recentBS, recentSaves, recentGF, recentGames });
           } catch(e){ 
-            resolve({ playerId, recentBS: 0, recentGames: [] }); 
+            resolve({ playerId, recentBS: 0, recentSaves: 0, recentGF: 0, recentGames: [] }); 
           } 
         });
       });
-      pr.on('error',()=>resolve({ playerId, recentBS: 0, recentGames: [] })); 
+      pr.on('error',()=>resolve({ playerId, recentBS: 0, recentSaves: 0, recentGF: 0, recentGames: [] })); 
       pr.end();
     });
+    // Alias for backwards compatibility
+    const fetchRecentBlownSaves = fetchRecentActivity;
 
     const fetchInjuries = () => Promise.resolve([]);
 
@@ -1578,23 +1586,26 @@ const server = http.createServer(async (req, res) => {
       });
 
       // ===== FETCH RECENT BLOWN SAVES =====
-      // Collect all pitcher IDs with any blown saves (season) to check recent activity
-      const pitchersWithBS = [];
+      // Collect all potential closer candidates (saves OR games finished) to check recent activity
+      // This ensures we catch recent BS even if season totals haven't updated
+      const closerCandidateIds = new Set();
       Object.values(teams).forEach(t => {
         t.pitchers.forEach(p => {
-          if((p.blownSaves || 0) > 0) {
-            pitchersWithBS.push(p.mlbId);
+          // Include anyone with saves, games finished, or existing BS
+          if((p.saves || 0) > 0 || (p.gf || 0) >= 2 || (p.blownSaves || 0) > 0) {
+            if(p.mlbId) closerCandidateIds.add(p.mlbId);
           }
         });
       });
       
-      console.log(`[proxy] bullpen-watch: fetching game logs for ${pitchersWithBS.length} pitchers with blown saves`);
+      console.log(`[proxy] bullpen-watch: fetching game logs for ${closerCandidateIds.size} closer candidates`);
       
       // Fetch game logs in parallel (limit to 20 concurrent to avoid overwhelming API)
       const recentBSMap = {};
+      const idsArray = Array.from(closerCandidateIds);
       const batchSize = 20;
-      for(let i = 0; i < pitchersWithBS.length; i += batchSize) {
-        const batch = pitchersWithBS.slice(i, i + batchSize);
+      for(let i = 0; i < idsArray.length; i += batchSize) {
+        const batch = idsArray.slice(i, i + batchSize);
         const results = await Promise.all(batch.map(pid => fetchRecentBlownSaves(pid, bpYear)));
         results.forEach(r => {
           recentBSMap[r.playerId] = r;
@@ -1602,15 +1613,19 @@ const server = http.createServer(async (req, res) => {
       }
       console.log(`[proxy] bullpen-watch: recent BS data fetched for ${Object.keys(recentBSMap).length} pitchers`);
 
-      // Update pitchers with recent blown saves data
+      // Update pitchers with recent activity data (BS, saves, GF)
       Object.values(teams).forEach(t => {
         t.pitchers.forEach(p => {
           const recent = recentBSMap[p.mlbId];
           if(recent) {
             p.recentBlownSaves = recent.recentBS;
+            p.recentSaves = recent.recentSaves;
+            p.recentGF = recent.recentGF;
             p.recentBSGames = recent.recentGames;
           } else {
             p.recentBlownSaves = 0;
+            p.recentSaves = 0;
+            p.recentGF = 0;
             p.recentBSGames = [];
           }
         });
@@ -1734,6 +1749,17 @@ const server = http.createServer(async (req, res) => {
             // Base score: GF + Saves - Holds
             const priorCloserBonus = (prevSaves[p.mlbId] || 0) >= 8 ? 10 : 0;
             let closerScore = (p.gf * 2) + (p.saves * 3) - (p.holds * 0.5) + priorCloserBonus;
+            
+            // RECENT ACTIVITY BONUS: Heavily weight recent saves (last 14 days)
+            // This ensures current closer is identified even if acquired mid-season
+            const recentSaves = p.recentSaves || 0;
+            const recentGF = p.recentGF || 0;
+            if(recentSaves > 0) {
+              closerScore += recentSaves * 8; // Big bonus for recent saves
+            }
+            if(recentGF >= 2) {
+              closerScore += recentGF * 2; // Bonus for recent games finished
+            }
             
             // ===== PENALTIES =====
             const penalties = {};
@@ -1866,6 +1892,8 @@ const server = http.createServer(async (req, res) => {
           gf: c.gf,
           blownSaves: c.blownSaves || 0,        // Season total
           recentBlownSaves: c.recentBlownSaves || 0,  // Last 14 days
+          recentSaves: c.recentSaves || 0,      // Last 14 days
+          recentGF: c.recentGF || 0,            // Last 14 days
           era: c.era,
           closerScore: c.closerScore,
           redFlags: c.redFlags || [],
@@ -1961,136 +1989,6 @@ const server = http.createServer(async (req, res) => {
       });
     });
     pr.on('error', () => { res.writeHead(404); res.end(); });
-    pr.end();
-    return;
-  }
-
-  // /transactions -> recent MLB transactions (callups, IL, DFA, options, etc.)
-  if (path === '/transactions') {
-    const params = new URLSearchParams(req.url.includes('?') ? req.url.split('?')[1] : '');
-    const days = parseInt(params.get('days') || '7');
-    const today = new Date();
-    const startDate = new Date(today - days * 24 * 60 * 60 * 1000);
-    const fmt = d => d.toISOString().split('T')[0];
-    const txUrl = `/api/v1/transactions?startDate=${fmt(startDate)}&endDate=${fmt(today)}`;
-    console.log(`[proxy] fetching MLB transactions (${fmt(startDate)} to ${fmt(today)})...`);
-
-    const opts = {
-      hostname: 'statsapi.mlb.com', port: 443, path: txUrl, method: 'GET',
-      headers: {'User-Agent':'Mozilla/5.0','Accept':'application/json'}
-    };
-    const pr = https.request(opts, sr => {
-      let body = '';
-      sr.on('data', c => body += c);
-      sr.on('end', () => {
-        try {
-          const data = JSON.parse(body);
-          // MLB team IDs (108-158)
-          const MLB_IDS = new Set();
-          for(let i = 108; i <= 158; i++) MLB_IDS.add(i);
-
-          // Fantasy-relevant transaction types
-          const RELEVANT = new Set(['CU','SC','OPT','SE','DES','CLW','RTN','REL','TR','ASG','SU']);
-
-          // Categorize transactions for fantasy relevance
-          const transactions = (data.transactions || []).filter(t => {
-            if(!RELEVANT.has(t.typeCode)) return false;
-            const toId = t.toTeam?.id || 0;
-            const fromId = t.fromTeam?.id || 0;
-            const isMLB = MLB_IDS.has(toId) || MLB_IDS.has(fromId);
-            // For ASG, only include rehab assignments (MLB player sent to minors for rehab)
-            if(t.typeCode === 'ASG') {
-              return isMLB && /rehab/i.test(t.description || '');
-            }
-            return isMLB;
-          }).map(t => {
-            const desc = t.description || '';
-            // Detect pitcher from description (RHP/LHP)
-            const isPitcher = /\b[RL]HP\b/.test(desc);
-            // Categorize the move
-            let category = 'other';
-            let signal = 'neutral'; // bullish, bearish, neutral
-            const tc = t.typeCode;
-            const descLower = desc.toLowerCase();
-            if(tc === 'CU' || tc === 'SE') {
-              category = 'callup';
-              signal = 'bullish';
-            } else if(tc === 'OPT') {
-              category = 'optioned';
-              signal = 'bearish';
-            } else if(tc === 'DES' || tc === 'REL') {
-              category = 'dfa';
-              signal = 'bearish';
-            } else if(tc === 'CLW') {
-              category = 'claimed';
-              signal = 'bullish';
-            } else if(tc === 'TR') {
-              category = 'trade';
-              signal = 'neutral';
-            } else if(tc === 'SC') {
-              if(descLower.includes('injured list') || descLower.includes('disabled list')) {
-                if(descLower.includes('activated') || descLower.includes('reinstated')) {
-                  category = 'activated';
-                  signal = 'bullish';
-                } else if(descLower.includes('transferred') && descLower.includes('60-day')) {
-                  category = 'il_60';
-                  signal = 'bearish';
-                } else {
-                  category = 'injured';
-                  signal = 'bearish';
-                }
-              } else if(descLower.includes('paternity')) {
-                category = descLower.includes('activated') ? 'activated' : 'paternity';
-                signal = descLower.includes('activated') ? 'bullish' : 'neutral';
-              } else if(descLower.includes('suspended')) {
-                category = 'suspended';
-                signal = 'bearish';
-              } else {
-                category = 'status_change';
-              }
-            } else if(tc === 'ASG' && descLower.includes('rehab')) {
-              category = 'rehab';
-              signal = 'bullish';
-            } else if(tc === 'SU') {
-              category = 'suspended';
-              signal = 'bearish';
-            }
-
-            return {
-              id: t.id,
-              date: t.date,
-              name: t.person?.fullName || '',
-              mlbId: String(t.person?.id || ''),
-              team: t.toTeam?.name || t.fromTeam?.name || '',
-              teamId: t.toTeam?.id || t.fromTeam?.id || 0,
-              typeCode: tc,
-              typeDesc: t.typeDesc || '',
-              category,
-              signal,
-              isPitcher,
-              description: desc,
-            };
-          });
-
-          // Sort by date descending
-          transactions.sort((a,b) => b.date.localeCompare(a.date) || b.id - a.id);
-
-          console.log(`[proxy] transactions: ${transactions.length} MLB-level moves (${transactions.filter(t=>t.isPitcher).length} pitchers)`);
-          setCORS(res, reqOrigin);
-          res.writeHead(200, {'Content-Type':'application/json'});
-          res.end(JSON.stringify(transactions));
-        } catch(e) {
-          console.error('[proxy] transactions parse error:', e.message);
-          setCORS(res, reqOrigin);
-          res.writeHead(500, {'Content-Type':'application/json'});
-          res.end(JSON.stringify({ error: e.message }));
-        }
-      });
-    });
-    pr.on('error', e => {
-      console.error('[proxy] transactions error:', e.message);
-      res.writeHead(502); res.end('[]');
-    });
     pr.end();
     return;
   }
