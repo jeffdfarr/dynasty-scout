@@ -512,10 +512,40 @@
   <div class="tabs">
     <button class="tab active" onclick="sw('bullpen');fetchBullpenWatch()">Bullpen Watch</button>
     <button class="tab" onclick="sw('freeagents')">Free Agents</button>
+    <button class="tab" onclick="sw('fastash');initFAStash()">🎯 FA Stash</button>
 
   </div>
 
   
+  <!-- ── FA STASH PANE ────────────────────────────────────── -->
+  <div id="pane-fastash" class="pane">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:var(--text)">🎯 FA Stash Finder</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">Free agents on the 40-man roster · ranked by Savant metrics</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:12px;color:var(--text2)">Role:</label>
+        <select id="fsRole" onchange="renderFAStash()" style="font-size:12px;padding:4px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
+          <option value="all">All</option>
+          <option value="SP">SP only</option>
+          <option value="RP">RP only</option>
+        </select>
+        <label style="font-size:12px;color:var(--text2)">Min IP:</label>
+        <select id="fsMinIP" onchange="renderFAStash()" style="font-size:12px;padding:4px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text)">
+          <option value="0">Any</option>
+          <option value="5">5+</option>
+          <option value="10" selected>10+</option>
+          <option value="20">20+</option>
+        </select>
+        <button id="fsRefreshBtn" onclick="loadFAStash()" style="padding:5px 14px;font-size:12px;border-radius:var(--radius);border:1px solid var(--blue);background:var(--blue);color:#fff;cursor:pointer;font-family:inherit">Refresh 40-man</button>
+      </div>
+    </div>
+    <div id="fsStatus" style="font-size:12px;color:var(--text2);margin-bottom:10px"></div>
+    <div id="fsSummary" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"></div>
+    <div id="fsResults" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px"></div>
+  </div>
+
   <div id="pane-freeagents" class="pane">
     <div class="filter-row">
       <label>Pos:</label>
@@ -3010,6 +3040,161 @@ function setupExpandButton(containerId) {
     btn.style.display = 'none';
   }
 }
+
+// ── FA STASH ─────────────────────────────────────────────────────────────────
+// Uses existing savant[] (already tagged with fxStatus) + existing /forty-man route.
+
+let _fsFortyMan = null;
+let _fsInitialized = false;
+
+async function initFAStash() {
+  if (_fsInitialized) { renderFAStash(); return; }
+  await loadFAStash();
+}
+
+async function loadFAStash() {
+  const statusEl   = document.getElementById('fsStatus');
+  const refreshBtn = document.getElementById('fsRefreshBtn');
+  if (statusEl) statusEl.textContent = '⏳ Fetching 40-man rosters from MLB…';
+  if (refreshBtn) refreshBtn.disabled = true;
+  try {
+    const res = await fetch(`${PROXY}/forty-man`);
+    _fsFortyMan = await res.json();
+    _fsInitialized = true;
+    if (statusEl) statusEl.textContent = `✅ ${Object.keys(_fsFortyMan).length} players on 40-man rosters · updated ${new Date().toLocaleTimeString()}`;
+  } catch(e) {
+    if (statusEl) statusEl.textContent = `❌ Could not load 40-man data: ${e.message}`;
+    console.error('[FA Stash]', e);
+  } finally {
+    if (refreshBtn) refreshBtn.disabled = false;
+  }
+  renderFAStash();
+}
+
+function isOn40Man(playerName) {
+  if (!_fsFortyMan) return false;
+  const norm = normName(playerName);
+  if (_fsFortyMan[norm]) return true;
+  const stripped = stripAccents(norm);
+  if (_fsFortyMan[stripped]) return true;
+  // Try matching on first two name parts (handles Jr./suffix mismatches)
+  const parts = norm.split(' ');
+  if (parts.length >= 2) {
+    const key = `${parts[0]} ${parts[1]}`;
+    if (Object.keys(_fsFortyMan).some(k => normName(k).startsWith(key))) return true;
+  }
+  return false;
+}
+
+function fsMetricColor(val, metric) {
+  if (val === null || val === undefined || isNaN(val)) return 'var(--text2)';
+  const cfg = {
+    xera:    { good: 3.50, ok: 4.20, lower: true  },
+    kbb:     { good: 15,   ok: 8,    lower: false  },
+    whiff:   { good: 30,   ok: 22,   lower: false  },
+    hardHit: { good: 30,   ok: 36,   lower: true   },
+    barrel:  { good: 5,    ok: 8,    lower: true   },
+  };
+  const t = cfg[metric]; if (!t) return 'var(--text)';
+  if (t.lower) {
+    return val <= t.good ? '#4caf7d' : val <= t.ok ? '#f9a825' : '#ef5350';
+  } else {
+    return val >= t.good ? '#4caf7d' : val >= t.ok ? '#f9a825' : '#ef5350';
+  }
+}
+
+function renderFAStash() {
+  const resultsEl = document.getElementById('fsResults');
+  const summaryEl = document.getElementById('fsSummary');
+  if (!resultsEl) return;
+
+  if (!G.savantLoaded) {
+    resultsEl.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:20px">⏳ Savant data not loaded yet — click <strong>Free Agents</strong> tab first to trigger the data load, then come back here.</div>';
+    return;
+  }
+
+  const roleFilter  = document.getElementById('fsRole')?.value || 'all';
+  const minIPFilter = parseFloat(document.getElementById('fsMinIP')?.value || 0);
+
+  const faAll = savant.filter(p => {
+    if (p.fxStatus !== 'fa') return false;
+    if (roleFilter !== 'all' && p.role !== roleFilter) return false;
+    if (minIPFilter > 0 && (p.ipNum || parseFloat(p.ip) || 0) < minIPFilter) return false;
+    return true;
+  });
+
+  const loaded = _fsFortyMan !== null;
+  const on40   = loaded ? faAll.filter(p => isOn40Man(p.name))  : faAll;
+  const not40  = loaded ? faAll.filter(p => !isOn40Man(p.name)) : [];
+
+  const sortFn = (a,b) => (b.score||0) - (a.score||0);
+  on40.sort(sortFn);
+  not40.sort(sortFn);
+
+  if (summaryEl) {
+    summaryEl.innerHTML = [
+      `<span style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:3px 10px;font-size:11px;color:var(--text2)">FA pitchers: <strong style="color:var(--text)">${faAll.length}</strong></span>`,
+      loaded ? `<span style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:3px 10px;font-size:11px;color:var(--text2)">On 40-man: <strong style="color:#4caf7d">${on40.length}</strong></span>` : '',
+      loaded ? `<span style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:3px 10px;font-size:11px;color:var(--text2)">Not on 40-man: <strong style="color:var(--text2)">${not40.length}</strong></span>` : '',
+    ].join('');
+  }
+
+  if (!faAll.length) {
+    resultsEl.innerHTML = `<div style="color:var(--text2);font-size:13px;padding:20px">No FA pitchers found. Make sure your league is loaded.</div>`;
+    return;
+  }
+
+  const fmt = (v, d=2) => (v !== null && v !== undefined && !isNaN(v)) ? Number(v).toFixed(d) : '—';
+
+  function card(p, rank) {
+    const sc = p.score || 0;
+    const scColor  = sc >= 65 ? '#4caf7d' : sc >= 40 ? '#f9a825' : 'var(--text)';
+    const accent   = sc >= 65 ? '#4caf7d' : sc >= 40 ? '#f9a825' : sc >= 20 ? 'var(--blue)' : 'var(--border)';
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${accent};border-radius:var(--radius);padding:12px 14px;position:relative">
+      <div style="position:absolute;top:8px;right:10px;font-size:10px;color:var(--text2);font-weight:700">#${rank}</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <img src="${PROXY}/mlb-photo/${p.mlbId||'generic'}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;background:var(--bg)" onerror="this.style.display='none'">
+        <div>
+          <div style="font-weight:700;font-size:13px;color:var(--text)">${p.name}</div>
+          <div style="font-size:11px;color:var(--text2);display:flex;gap:6px;margin-top:2px">
+            <span>${p.mlb||'—'}</span>
+            <span style="background:rgba(99,125,255,.15);border:1px solid rgba(99,125,255,.3);color:#9aa7ff;border-radius:3px;padding:0 5px;font-size:10px;font-weight:600">${p.role||'P'}</span>
+            <span>${p.ip||'—'} IP</span>
+          </div>
+        </div>
+        <div style="margin-left:auto;text-align:center;background:var(--bg);border-radius:6px;padding:4px 8px;min-width:38px">
+          <div style="font-size:16px;font-weight:800;color:${scColor};line-height:1">${sc}</div>
+          <div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Score</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px">
+        ${[
+          ['xERA',     fmt(p.xera),             fsMetricColor(p.xera,    'xera')],
+          ['K-BB%',    fmt(p.kbb,1)+'%',         fsMetricColor(p.kbb,     'kbb')],
+          ['Whiff%',   fmt(p.whiff,1)+'%',       fsMetricColor(p.whiff,   'whiff')],
+          ['HardHit%', fmt(p.hardHit,1)+'%',     fsMetricColor(p.hardHit, 'hardHit')],
+          ['Barrel%',  fmt(p.barrel,1)+'%',      fsMetricColor(p.barrel,  'barrel')],
+          ['xBA',      fmt(p.xba,3),             'var(--text)'],
+        ].map(([label, val, color]) =>
+          `<div style="background:var(--bg);border-radius:5px;padding:5px;text-align:center">
+            <div style="font-size:12px;font-weight:700;color:${color}">${val}</div>
+            <div style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em">${label}</div>
+          </div>`
+        ).join('')}
+      </div>
+    </div>`;
+  }
+
+  let html = '';
+  if (loaded) html += `<div style="grid-column:1/-1;font-size:11px;font-weight:700;color:#4caf7d;text-transform:uppercase;letter-spacing:.07em;padding-bottom:4px">✅ On 40-Man Roster (${on40.length})</div>`;
+  html += on40.map((p,i) => card(p, i+1)).join('');
+  if (not40.length) {
+    html += `<div style="grid-column:1/-1;font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.07em;padding:${on40.length?'16px':'0'} 0 4px">Not on 40-Man (${not40.length})</div>`;
+    html += not40.slice(0,15).map((p,i) => card(p, i+1)).join('');
+  }
+  resultsEl.innerHTML = html;
+}
+// ── END FA STASH ──────────────────────────────────────────────────────────────
 
 </script>
   <div id="pane-bullpen" class="pane active">
